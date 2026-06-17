@@ -1,0 +1,14 @@
+excel_column,target_model,target_field,notes
+dataset,DatasetMetadata,name,Nombre del inventario o fuente
+fuente,DatasetMetadata,source,Entidad o archivo origen
+region,Region,name,Departamento municipio pais o cuenca
+codigo_region,Region,code,Codigo DANE u otro identificador
+sector,Sector,name,Categoria sectorial
+codigo_ipcc,Sector,ipcc_code,Codigo IPCC si existe
+fuente_emisora,EmissionSource,name,Actividad o fuente de emision
+gas,Gas,chemical_formula,CO2 CH4 N2O u otro gas
+ano,EmissionRecord,year,Ano de observacion
+toneladas,EmissionRecord,value_tonnes,Valor original en toneladas del gas
+toneladas_co2e,EmissionRecord,co2e_tonnes,Valor convertido a CO2 equivalente
+metodo,EmissionRecord,method,Metodo factor o supuesto usado
+calidad,EmissionRecord,data_quality,activity measured estimated

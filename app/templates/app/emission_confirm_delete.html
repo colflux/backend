@@ -1,0 +1,11 @@
+{% extends "app/base.html" %}
+{% block title %}Eliminar registro{% endblock %}
+{% block content %}
+<form class="panel p-3" method="post">
+  {% csrf_token %}
+  <h1 class="h4">Eliminar registro</h1>
+  <p>Vas a eliminar el registro de {{ object.region }} para {{ object.gas }} en {{ object.year }}.</p>
+  <button class="btn btn-danger">Eliminar</button>
+  <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">Cancelar</a>
+</form>
+{% endblock %}

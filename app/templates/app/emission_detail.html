@@ -1,0 +1,20 @@
+{% extends "app/base.html" %}
+{% block title %}Detalle de emision{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h4 mb-0">{{ record.year }} · {{ record.region }} · {{ record.gas }}</h1>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-secondary" href="{% url 'emission-update' record.pk %}">Editar</a>
+    <a class="btn btn-outline-danger" href="{% url 'emission-delete' record.pk %}">Eliminar</a>
+  </div>
+</div>
+<dl class="panel p-3 row">
+  <dt class="col-sm-3">Dataset</dt><dd class="col-sm-9">{{ record.dataset }}</dd>
+  <dt class="col-sm-3">Sector</dt><dd class="col-sm-9">{{ record.sector }}</dd>
+  <dt class="col-sm-3">Fuente</dt><dd class="col-sm-9">{{ record.source }}</dd>
+  <dt class="col-sm-3">Valor original</dt><dd class="col-sm-9">{{ record.value_tonnes }} {{ record.unit }}</dd>
+  <dt class="col-sm-3">CO2e</dt><dd class="col-sm-9">{{ record.co2e_tonnes }} toneladas</dd>
+  <dt class="col-sm-3">Metodo</dt><dd class="col-sm-9">{{ record.method|default:"Sin metodo registrado" }}</dd>
+  <dt class="col-sm-3">Notas</dt><dd class="col-sm-9">{{ record.notes|default:"Sin notas" }}</dd>
+</dl>
+{% endblock %}

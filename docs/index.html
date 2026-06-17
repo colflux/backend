@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Modelo de datos GEI</title>
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; color: #18231f; background: #fbfcfc; }
+    header { background: #0d4f40; color: white; padding: 56px 24px 48px; }
+    main { max-width: 1040px; margin: 0 auto; padding: 32px 24px; }
+    h1 { font-size: clamp(2rem, 5vw, 4rem); margin: 0 0 16px; }
+    h2 { margin-top: 36px; }
+    .lead { max-width: 760px; font-size: 1.2rem; line-height: 1.55; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+    .card { border: 1px solid #dfe7e4; border-radius: 8px; padding: 18px; background: white; }
+    .schema { overflow-x: auto; border: 1px solid #dfe7e4; border-radius: 8px; background: white; }
+    table { border-collapse: collapse; width: 100%; min-width: 760px; }
+    th, td { text-align: left; border-bottom: 1px solid #e8efec; padding: 12px; vertical-align: top; }
+    th { background: #eef5f2; }
+    code { background: #eef5f2; padding: 2px 5px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Modelo de datos para inventario GEI</h1>
+    <p class="lead">Una base Django para registrar gases de efecto invernadero, convertirlos a CO2 equivalente y explorar resultados por territorio, sector, fuente y ano.</p>
+  </header>
+  <main>
+    <section class="grid">
+      <article class="card"><h2>CRUD</h2><p>Gestiona registros de emisiones y catalogos maestros desde vistas Django y el panel admin.</p></article>
+      <article class="card"><h2>Docker</h2><p>El entorno incluye Django, Gunicorn y PostgreSQL para una demo reproducible.</p></article>
+      <article class="card"><h2>Visualizador</h2><p>Graficas preliminares con agregaciones por ano, sector y gas usando un endpoint JSON.</p></article>
+    </section>
+
+    <h2>Entidades principales</h2>
+    <div class="schema">
+      <table>
+        <thead><tr><th>Entidad</th><th>Proposito</th><th>Campos clave</th></tr></thead>
+        <tbody>
+          <tr><td><code>DatasetMetadata</code></td><td>Describe origen, version, licencia y ano de publicacion del dataset.</td><td>name, source, version, publication_year</td></tr>
+          <tr><td><code>Region</code></td><td>Permite jerarquia territorial: pais, departamento, municipio o cuenca.</td><td>name, code, region_type, parent</td></tr>
+          <tr><td><code>Sector</code></td><td>Clasifica emisiones segun sector o codigo IPCC.</td><td>name, ipcc_code, description</td></tr>
+          <tr><td><code>Gas</code></td><td>Define gas y potencial de calentamiento global a 100 anos.</td><td>chemical_formula, name, gwp_100</td></tr>
+          <tr><td><code>EmissionSource</code></td><td>Representa actividades o fuentes emisoras dentro de un sector.</td><td>name, sector, description</td></tr>
+          <tr><td><code>EmissionRecord</code></td><td>Tabla factual con observaciones anuales y toneladas CO2e.</td><td>dataset, region, sector, source, gas, year, value_tonnes, co2e_tonnes</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>Flujo de datos</h2>
+    <p>Los Excel se mapean a catalogos maestros y a la tabla factual <code>EmissionRecord</code>. La plantilla <code>data/excel_mapping_template.csv</code> documenta una convencion inicial para cargar metadatos, territorios, gases, sectores y observaciones.</p>
+
+    <h2>Como probar</h2>
+    <p>Ejecuta <code>docker compose up --build</code> y abre <code>http://localhost:8000</code>. El comando de arranque carga datos de ejemplo para validar el CRUD y las graficas.</p>
+  </main>
+</body>
+</html>

@@ -1,0 +1,35 @@
+{% extends "app/base.html" %}
+{% block title %}Visualizador GEI{% endblock %}
+{% block content %}
+<div class="mb-4">
+  <h1 class="h4 mb-1">Visualizador preliminar</h1>
+  <p class="text-secondary mb-0">Exploracion rapida de emisiones agregadas por ano, sector y gas.</p>
+</div>
+<div class="row g-3">
+  <div class="col-lg-8"><div class="panel p-3"><h2 class="h6">CO2e por ano</h2><canvas id="yearChart"></canvas></div></div>
+  <div class="col-lg-4"><div class="panel p-3"><h2 class="h6">CO2e por gas</h2><canvas id="gasChart"></canvas></div></div>
+  <div class="col-12"><div class="panel p-3"><h2 class="h6">CO2e por sector</h2><canvas id="sectorChart"></canvas></div></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+  const palette = ["#18735d", "#4f7cac", "#d18b2f", "#8f5f9f", "#c94c4c", "#6f7d3c"];
+  const makeChart = (id, type, rows, label) => new Chart(document.getElementById(id), {
+    type,
+    data: {
+      labels: rows.map(row => row.label),
+      datasets: [{ label, data: rows.map(row => row.value), backgroundColor: palette, borderColor: "#18735d", tension: 0.25 }]
+    },
+    options: { responsive: true, plugins: { legend: { display: type === "doughnut" } } }
+  });
+
+  fetch("{% url 'chart-data' %}")
+    .then(response => response.json())
+    .then(data => {
+      makeChart("yearChart", "line", data.by_year, "t CO2e");
+      makeChart("gasChart", "doughnut", data.by_gas, "t CO2e");
+      makeChart("sectorChart", "bar", data.by_sector, "t CO2e");
+    });
+</script>
+{% endblock %}

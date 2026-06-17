@@ -1,0 +1,28 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ghg
+      POSTGRES_USER: ghg
+      POSTGRES_PASSWORD: ghg
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  web:
+    build: .
+    command: sh -c "python manage.py migrate && python manage.py seed_ghg_data && python manage.py collectstatic --noinput && gunicorn colfux.wsgi:application --bind 0.0.0.0:8000"
+    environment:
+      DATABASE_URL: postgres://ghg:ghg@db:5432/ghg
+      DJANGO_DEBUG: "1"
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,0.0.0.0
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    volumes:
+      - .:/app
+
+volumes:
+  postgres_data:

@@ -1,0 +1,178 @@
+Informacion_proyecto			Informacion_sitio 										Disturbio 							Caracterizacion 				Vegetacion_anillo						Distancias 			
+nombre_proyecto 	codigo_proyecto 	codigo_metadatos	region 	ecosistema 	sitio 	unidad_de_muestro	latitud 	longitud 	sistema_referencia	altitud 	pendiente 	topografia 	tipo_disturbio	anios_disturbio 	anios_desde_fin_disturbio	uso_actual 	estado_actual 	proteccion_legal 	tipo_de_suelo	microtopografia	diametro_anillo 	tratamiento	pozo_nivel_freatico	cobertura_vegetal_primaria	porcentaje_cob_veg_pri	cobertura_vegetal_secundaria	porcentaje_cob_veg_sec	cobertura_vegetal_terciaria 	porcentaje_cob_veg_ter	distancia_drenaje	distancia_fuego	distancia_pastoreo	distancia _cultivo
+texto	codigo	codigo	lista	lista	codigo	codigo	decimal 	decimal	codigo 	m.s.n.m.	%	lista	lista	anios	anios	lista	lista	lista	lista	lista	cm 	texto	codigo	texto	numero	texto	numero	texto	numero	numero	numero 	numero	numero
+texto	texto	texto	texto	texto	texto	texto	numero	numero	texto	numero	numero	texto	texto	numero	numero	texto	texto	texto	texto	texto	numero	texto	texto	texto	%	texto	%	texto	%	metros	metros	metros	metros
+
+
+Variable 	Nomenclatura Español 	Descripción
+region_natural	Andes	Andes
+	Orinoquia	Orinoquia
+	Amazonas	Amazonas
+	Caribe	Caribe
+	Pacifico	Pacifico
+ecosistema	Paramo_seco	Ecosistema altoandino frío con vegetación adaptada a baja humedad y alta radiación.
+	Turbera_de_alta_elevacion	Humedal de montaña donde se acumula materia orgánica saturada de agua.
+	Bosque_humedo_tropical	Bosque cálido y lluvioso con alta biodiversidad y vegetación densa.
+	Bosque_de_niebla	Bosque montano húmedo con presencia frecuente de neblina y alta humedad.
+	Bosque_seco_tropical	Bosque cálido con temporada seca marcada y vegetación adaptada a la escasez de agua
+	Sabana_seca	Ecosistema abierto de pastizales y árboles dispersos con baja disponibilidad de agua.
+	Sabana_inundable	Sabana que se inunda temporalmente por lluvias o desbordamientos.
+	Turbera_de_baja_elevacion	Humedal en zonas bajas con suelos saturados y acumulación de materia orgánica.
+	Pantano/cienaga	Humedal de aguas poco profundas con vegetación acuática o semiacuática.
+	Lago_superficial	Cuerpo de agua continental poco profundo con interacción directa entre agua, sedimentos y vegetación.
+	Manglar	Ecosistema costero tropical con árboles tolerantes a la salinidad e influencia de mareas.
+cobertura_CLC		"Cobertura Corine Land Cover Nivel 4
+https://www.corpocesar.gov.co/files/Ref_UnicoyPersistente/Corine_Land_Cover.pdf"
+tipo_disturbio	Agricultura	Agricultura: Manejo agrícola de cualquier tipo, como cultivo (incluye labranza, arado o rastra), cosecha, riego, aplicación de pesticidas, siembra o encalado.
+	Sequia	Sequía: Deficiencia prolongada de agua; sequía hidrológica o climática.
+	Fuego	Fuego: Incendios forestales o quemas controladas.
+	Silvicultura	Silvicultura: Manejo forestal como aprovechamiento maderero de cualquier tipo, establecimiento de plantaciones o aplicación de herbicidas.
+	Pastoreo	Pastoreo: Herbivoría o ramoneo por mamíferos, manejados o silvestres.
+	Evento_hidrologico	Evento hidrológico: Drenaje, inundación persistente o inundación crónica. No incluye eventos de tormenta ni riego.
+	Cambio_en_cobertura_del_suelo	Cambio en cobertura del suelo: Cambios en el uso y la cobertura del suelo; invasiones biológicas; expansión leñosa o urbana.
+	Plagas_y_enfermedades	Plagas y enfermedades: Daño a plantas o suelos causado por plagas, insectos, patógenos, tizones u otras enfermedades.
+	Tormenta_o_viento	Tormenta o viento: Tormentas mayores, incluidos eventos de precipitación inusualmente alta o vientos extremos (p. ej., huracanes, tornados, granizadas, inundaciones asociadas a tormentas).
+	Extremos_de_temperatura	Extremos de temperatura: Olas de calor o heladas.
+	Sin_disturbio	Sin disturbio: No se ha registrado disturbio ni manejo en el sitio.
+topografia 	cresta_cima	Parte más alta del relieve; zona de divergencia de escorrentía.
+	ladera_superior	Tramo alto de la ladera; drenaje rápido y baja acumulación.
+	ladera_media	Tramo intermedio de la ladera; tránsito de agua y sedimentos.
+	ladera_inferior	Tramo bajo de la ladera; mayor acumulación de agua y materiales.
+	valle_fondo	Zona baja del relieve; acumulación de agua y sedimentos.
+	plano	Superficie con pendiente mínima y escasa redistribución lateral.
+formato_coordenadas	grados_decimales	grados decimales: latitud y longitud expresadas como numeros decimales 
+	grados_minutos_segundos	grados-minutos-segundos: coordenadas expresadas en grados, minutos y segundos 
+	grados_minutos_decimales	grados-minutos decimales: grados y minutos con decimales. 
+sistema_referencia	EPSG:4326	Sistema geodésico global estándar; coordenadas geográficas en latitud y longitud. (WGS84)
+	EPSG:4686	Sistema geodésico oficial de Colombia, compatible con WGS84. (MAGNA-SIRGAS)
+	EPSG:4674	Sistema geodésico regional usado en América del Sur. (SIRGAS2000)
+		Sistema de referencia distinto; se debe indicar el código EPSG.
+propiedad_tierra	publica	Terreno de propiedad del Estado o entidad pública.
+	privada	Terreno de propiedad privada o comunitaria no estatal.
+Pendiente	plano	Superficie con pendiente mínima.
+	ondulado_variable	Relieve irregular con pendientes variables.
+	valle_fondo	Zona baja del relieve con acumulación.
+	pendiente_suave	Pendiente muy baja (<2%).
+	pendiente_media	Pendiente moderada (2–5%).
+	pendiente_significativa	Pendiente marcada (5–10%).
+	pendiente_fuerte	Pendiente pronunciada (>10%).
+	cresta_cima	Parte alta o divisoria del relieve.
+Departamento 	Amazonas	Amazonas
+	Antioquia	Antioquia
+	Arauca	Arauca
+	Atlantico	Atlántico
+	Bolivar	Bolívar
+	Boyaca	Boyacá
+	Caldas	Caldas
+	Caqueta	Caquetá
+	Casanare	Casanare
+	Cauca	Cauca
+	Cesar	Cesar
+	Choco	Chocó
+	Cordoba	Córdoba
+	Cundinamarca	Cundinamarca
+	Guainia	Guainía
+	Guaviare	Guaviare
+	Huila	Huila
+	La_Guajira	La Guajira
+	Magdalena	Magdalena
+	Meta	Meta
+	Narinio	Nariño
+	Norte_de_Santander	Norte de Santander
+	Putumayo	Putumayo
+	Quindio	Quindío
+	Risaralda	Risaralda
+	San_Andres	San Andrés, Providencia y Santa Catalina
+	Santander	Santander
+	Sucre	Sucre
+	Tolima	Tolima
+	Valle_del_Cauca	Valle del Cauca
+	Vaupes	Vaupés
+	Vichada	Vichada
+uso_actual 	Bosque_primario	Bosque nativo que no ha sufrido intervención humana significativa reciente y mantiene su estructura ecológica original.
+	Bosque_secundario	Bosque que se ha regenerado naturalmente después de un disturbio.
+	Plantacion_forestal	Área forestada artificialmente con una o pocas especies, generalmente con fines productivos.
+	Agricultura_intensiva	Terreno destinado al cultivo agrícola anual o permanente. Incluyendo el uso de fertilizantes o mecanización
+	Agricultura_tradicional	Terreno destinado al cultivo agrícola anual o permanente.
+	Pastura 	Área dominada por gramíneas usada para pastoreo.
+	Humedal_natural	Ecosistema con suelos saturados o inundados periódicamente.
+	Humedal_intervenido	Humedal con alteraciones hidrológicas (drenaje, canalización, compactación).
+	Area_protegida	Territorio legalmente designado para la conservación de biodiversidad, servicios ecosistémicos o valores culturales, bajo una categoría oficial de protección.
+	Sistema_agroforestal	Sistema de uso del suelo que integra intencionalmente árboles con cultivos agrícolas y/o ganado en la misma unidad espacial.
+	Abandonado	Área previamente usada para agricultura o pastura que ya no tiene manejo activo.
+	Restauracion_activa	Área en proceso formal de restauración ecológica con intervención humana planificada.
+estado_actual 	Intacto	Ecosistema sin señales evidentes de degradación estructural o funcional.
+	Ligeramente_degradado	Alteraciones leves sin pérdida significativa de funciones ecológicas.
+	Moderadamente_degradado	Reducción clara en biodiversidad, compactación del suelo o cambios hidrológicos parciales.
+	Severamente_degradado	Pérdida significativa de cobertura vegetal, erosión visible, alteración fuerte del ciclo hidrológico.
+	En_recuperacion_natural	Ecosistema en proceso de regeneración tras disturbio sin intervención intensiva.
+	En restauración activa	Ecosistema con intervención planificada que ha alcanzado estabilidad funcional.
+	Estable	Sistema que mantiene estructura y función constantes bajo el régimen actual.
+	En_transicion	Ecosistema en cambio activo entre estados (ej. pastura → bosque secundario).
+clima_koeppen	Selva_tropical_lluviosa	Clima cálido y húmedo durante todo el año, con temperaturas medias mensuales superiores a 18 °C y precipitaciones abundantes sin estación seca definida. Presenta alta humedad relativa y baja variabilidad térmica anual. Favorece bosques densos y siempreverdes.
+	Monzon_tropical	Clima cálido todo el año con precipitaciones muy abundantes concentradas en una estación húmeda intensa y una estación seca corta. La lluvia anual es elevada, pero existe una ligera disminución estacional.
+	Sabana_tropical	Clima cálido durante todo el año con una estación seca bien definida. Las lluvias se concentran en una temporada húmeda. Predominan pastizales y bosques abiertos adaptados a la estacionalidad hídrica.
+	Desierto_IC	Clima extremadamente árido con precipitaciones muy bajas (<250 mm anuales). Temperaturas altas durante todo el año, con gran amplitud térmica diaria. Vegetación escasa o xerofítica.
+	Desierto_IF	Clima árido con inviernos fríos y veranos cálidos. Precipitaciones muy escasas. Amplia variabilidad térmica anual. Vegetación muy limitada.
+	Oceanico_de_la_costa_occidental_VC	Clima templado con precipitaciones constantes durante el año y veranos moderadamente cálidos. Baja amplitud térmica anual. Influencia marítima marcada.
+	Oceanico_de_la_costa_occidental_VF	Clima templado-frío con veranos frescos e inviernos suaves. Precipitaciones regulares durante todo el año. Frecuente nubosidad.
+	Templado_de_montania_VC	Clima templado de altitud con marcada estacionalidad de lluvias. Invierno seco y verano lluvioso. Temperaturas moderadas debido a la altitud.
+	Templado_de_montania_VF	Clima de montaña más frío, con inviernos secos y veranos frescos. Se presenta en altitudes elevadas.
+	Continental_humedo	Clima con inviernos fríos y veranos calurosos. Precipitaciones distribuidas durante todo el año. Amplia amplitud térmica anual.
+	Continental_de_verano_calido	Clima continental con inviernos fríos y veranos templados a cálidos. Lluvias relativamente constantes a lo largo del año.
+	Continental_seco_VC	Clima continental con estación seca marcada (generalmente en invierno) y veranos calurosos. Alta amplitud térmica anual.
+	Continental_de_verano_calido_2	Variante continental con veranos templados a cálidos e inviernos fríos, sin estación seca marcada.
+	Continental_seco_VF	Clima continental con estación seca y veranos frescos. Inviernos fríos y amplitud térmica considerable.
+	Continental_humedo_1	Clima con inviernos fríos prolongados y veranos moderadamente cálidos. Precipitación anual distribuida regularmente.
+	Continental_de_verano_calido_3	Clima continental con invierno seco y verano húmedo. Amplitud térmica anual alta.
+	Casquete_de_hielo	Clima polar extremo donde la temperatura media mensual nunca supera los 0 °C. Presencia permanente de hielo o nieve.
+	Tundra	Clima polar frío donde la temperatura del mes más cálido no supera los 10 °C. Veranos cortos y frescos; vegetación baja como musgos y líquenes.
+tipo_de_suelo	Mineral	Suelo dominado por partículas minerales (arena, limo y arcilla) con bajo contenido de materia orgánica.
+	Organico	Suelo con alto contenido de materia orgánica acumulada (restos vegetales), generalmente formado en condiciones saturadas de agua.
+microtopografia	Hummock	Cojines.
+	Hollow	Depresiones húmedas. 
+	Pool	Charcos, piscina o mediciones sobre agua directamente 
+	Lawns	Lugares planos. 
+
+
+Paquete	Variable 	Descripción corta
+informacion_proyecto	nombre_proyecto	Nombre oficial del proyecto.
+	codigo_proyecto	Identificador único del proyecto.
+	codigo_metadatos	Código único del registro de metadatos.
+informacion_sitio	región _natural	Región biogeográfica o administrativa.
+	ecosistema	Conjunto de seres vivos y factores ambientales que interactúan en un lugar determinado.
+	sitio	Nombre o código del sitio de monitoreo.
+	departamento	Departamento 
+	parcela	Identificador de la parcela o unidad espacial.
+	latitud	Coordenada latitudinal del sitio.
+	longitud	Coordenada longitudinal del sitio.
+	sistema_referencia	Sistema de coordenadas utilizado.
+	altitud	Elevación sobre el nivel del mar.
+	pendiente	Inclinación del terreno.
+	topografía	Forma general del relieve local.
+	sitio_ubrano_cercano	Sitio urbano más cercano al punto de muestreo 
+Cobertura	cobertura_IPCC	Categoría de cobertura según el IPCC
+	cobertura_CLC	Categoría de cobertura según el Corine land cover
+	cobertura_IGBP	Categoría de cobertura según el International Geosphere-Biosphere Programme 
+	cobertura_nom_comun	Nombre local o nacional de la cobertura
+	clima_koeppen	La clasificación climática de Köppen es un sistema que divide los climas mundiales en cinco grupos principales basado en temperaturas, precipitaciones y vegetación nativa.
+disturbio	tipo_disturbio	Tipo principal de disturbio ocurrido.
+	anios_disturbio	Duración o periodo del disturbio.
+	anios_desde_fin_disturbio	Tiempo transcurrido desde el fin del disturbio.
+	uso_actual	Uso actual del suelo.
+	estado_actual	Condición ecológica actual del sitio.
+	propiedad_tierra	Figura de propiedad o régimen legal.
+Caracterizacion	microtopografia	escribe las variaciones del relieve a pequeña escala dentro de la parcela.
+	diametro_anillo 	En diseños de muestreo concéntricos o circulares, registra la medida lineal del diámetro del anillo evaluado.
+	tratamiento	Define la condición experimental o de manejo aplicada al sitio.
+	pozo_nivel_freatico	Indica la profundidad medida (usualmente en metros) desde la superficie del suelo hasta el nivel donde el agua satura completamente los poros del suelo.
+Vegetacion_anillo 	cobertura_vegetal_primaria	Identifica el estrato o tipo de cobertura dominante en la unidad de muestreo.
+	porcentaje_cob_veg_pri	Valor numérico que representa la proporción de suelo cubierto por la proyección vertical de la cobertura primaria.
+	cobertura_vegetal_secundaria	Identifica el segundo estrato o tipo de cobertura en importancia.
+	porcentaje_cob_veg_sec	Proporción de ocupación espacial del segundo estrato identificado.
+	cobertura_vegetal_terciaria 	Identifica un tercer nivel de cobertura, usualmente herbáceo o rasante.
+	porcentaje_cob_veg_ter	Proporción de ocupación espacial del tercer estrato identificado.
+Distancias 	distancia_drenaje	Distancia lineal (m) desde el centro de la parcela hasta el cuerpo de agua o canal de drenaje más cercano. Determina el gradiente de humedad.
+	distancia_fuego	Distancia (m) a la evidencia más cercana de quema o cicatriz de incendio forestal.
+	distancia_pastoreo	Proximidad (m) a zonas de actividad ganadera o presencia de senderos de ganado, que afectan la compactación del suelo y la regeneración.
+	distancia _cultivo	Distancia (m) desde el borde de la parcela hasta la frontera agrícola activa más cercana, indicando el grado de fragmentación o efecto de borde.

@@ -1,0 +1,472 @@
+{% extends "app/base.html" %}
+{% block title %}Modelo de Datos{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-2">
+  <div>
+    <h1 class="h3 mb-1">Modelo de Datos</h1>
+    <p class="text-secondary mb-0">Haz clic en cualquier campo para ver su descripción.</p>
+  </div>
+  <button class="btn btn-sm btn-outline-secondary" id="toggle-arrows" onclick="toggleArrows()">
+    Ocultar relaciones
+  </button>
+</div>
+
+<div class="canvas-wrapper mb-4">
+  <div class="model-canvas" id="model-canvas">
+    {% for group in groups %}
+    <div class="model-group" id="grp-{{ group.id }}" style="--group-color: {{ group.color }};">
+
+      <div class="model-group-header">
+        <span class="model-label">{{ group.model }}</span>
+        {% if group.fk %}
+          <span class="fk-badge">↑ {{ group.fk.field }}</span>
+        {% endif %}
+      </div>
+      <div class="model-group-title">{{ group.name }}</div>
+
+      <div class="model-group-scroll">
+      {% if group.sections %}
+        {% for section in group.sections %}
+          <div class="section-header">{{ section.name }}</div>
+          {% for field in section.fields %}
+            <div class="model-field"
+                 data-name="{{ field.name }}"
+                 data-type="{{ field.type }}"
+                 data-desc="{{ field.desc }}"
+                 data-model="{{ group.model }}"
+                 data-section="{{ section.name }}"
+                 data-color="{{ group.color }}"
+                 data-choices='{{ field.choices_json }}'
+                 onclick="showDetail(this)">
+              <span class="field-name">{{ field.name }}</span>
+              <span class="field-type">{{ field.type }}</span>
+            </div>
+          {% endfor %}
+        {% endfor %}
+      {% else %}
+        {% for field in group.fields %}
+          <div class="model-field"
+               data-name="{{ field.name }}"
+               data-type="{{ field.type }}"
+               data-desc="{{ field.desc }}"
+               data-model="{{ group.model }}"
+               data-section=""
+               data-color="{{ group.color }}"
+               data-choices='{{ field.choices_json }}'
+               onclick="showDetail(this)">
+            <span class="field-name">{{ field.name }}</span>
+            <span class="field-type">{{ field.type }}</span>
+          </div>
+        {% endfor %}
+      {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  <svg id="rel-svg" aria-hidden="true"></svg>
+</div>
+
+<!-- Leyenda -->
+<div class="legend mb-4">
+  <span class="legend-item"><svg width="28" height="10"><line x1="0" y1="5" x2="28" y2="5" stroke="#555" stroke-width="2" marker-end="url(#arr-leg)"/><defs><marker id="arr-leg" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,6 2.5,0 5" fill="#555"/></marker></defs></svg> FK (ForeignKey)</span>
+  <span class="legend-item"><svg width="28" height="10"><line x1="0" y1="5" x2="28" y2="5" stroke="#555" stroke-width="2" stroke-dasharray="4,2" marker-end="url(#arr-leg2)"/><defs><marker id="arr-leg2" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,6 2.5,0 5" fill="#555"/></marker></defs></svg> O2O (OneToOne)</span>
+</div>
+
+<!-- Panel de detalle -->
+<div id="detail-panel" class="detail-panel" style="display:none;">
+  <div class="detail-inner">
+    <button class="detail-close" onclick="closeDetail()">✕</button>
+    <div class="detail-meta">
+      <span class="detail-model-badge" id="detail-model"></span>
+      <span class="detail-section" id="detail-section"></span>
+    </div>
+    <h2 class="detail-name" id="detail-name"></h2>
+    <div class="detail-type-pill" id="detail-type"></div>
+    <p class="detail-desc" id="detail-desc"></p>
+    <div id="detail-choices-wrap" style="display:none;">
+      <div class="choices-label">Opciones permitidas</div>
+      <div id="detail-choices"></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+  /* ── Layout ── */
+  .canvas-wrapper {
+    position: relative;
+  }
+
+  #rel-svg {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    overflow: visible;
+  }
+
+  .model-canvas {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  /* ── Cards ── */
+  .model-group {
+    border: 2px solid var(--group-color);
+    border-radius: 10px;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,.06);
+    transition: box-shadow .2s, transform .15s;
+    display: flex;
+    flex-direction: column;
+    max-height: 520px;
+    position: relative;
+    z-index: 1;
+  }
+  .model-group:hover {
+    box-shadow: 0 6px 20px rgba(0,0,0,.14);
+    transform: translateY(-2px);
+  }
+
+  .model-group-scroll { overflow-y: auto; flex: 1; }
+  .model-group-scroll::-webkit-scrollbar { width: 4px; }
+  .model-group-scroll::-webkit-scrollbar-track { background: transparent; }
+  .model-group-scroll::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--group-color) 35%, #ccc);
+    border-radius: 2px;
+  }
+
+  .model-group-header {
+    background: var(--group-color);
+    display: flex; justify-content: space-between; align-items: center;
+    padding: .4rem .85rem; gap: .5rem;
+  }
+  .model-label {
+    font-family: monospace; font-size: .78rem;
+    color: rgba(255,255,255,.92); letter-spacing: .04em; font-weight: 700;
+  }
+  .fk-badge {
+    font-size: .66rem; background: rgba(0,0,0,.25);
+    color: #fff; border-radius: 4px; padding: .1rem .4rem; white-space: nowrap;
+  }
+  .model-group-title {
+    background: color-mix(in srgb, var(--group-color) 10%, #fff);
+    font-weight: 600; font-size: .88rem;
+    padding: .45rem .85rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--group-color) 20%, #eee);
+    color: var(--group-color);
+  }
+  .section-header {
+    font-size: .7rem; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; color: #888;
+    padding: .4rem .85rem .15rem; background: #fafafa;
+    border-top: 1px solid #f0f0f0;
+  }
+  .model-field {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: .38rem .85rem; border-bottom: 1px solid #f0f0f0;
+    cursor: pointer; transition: background .15s; gap: .5rem;
+  }
+  .model-field:last-child { border-bottom: none; }
+  .model-field:hover { background: color-mix(in srgb, var(--group-color) 7%, #fff); }
+  .model-field.active { background: color-mix(in srgb, var(--group-color) 14%, #fff); }
+  .field-name {
+    font-size: .8rem; font-family: monospace; color: #1a2028; word-break: break-all;
+  }
+  .field-type {
+    font-size: .65rem; color: var(--group-color);
+    background: color-mix(in srgb, var(--group-color) 12%, #fff);
+    border: 1px solid color-mix(in srgb, var(--group-color) 30%, #fff);
+    border-radius: 4px; padding: .12rem .38rem;
+    white-space: nowrap; flex-shrink: 0; font-weight: 600;
+  }
+
+  /* ── Legend ── */
+  .legend {
+    display: flex; gap: 1.5rem; flex-wrap: wrap;
+    font-size: .8rem; color: #555; align-items: center;
+  }
+  .legend-item { display: flex; align-items: center; gap: .4rem; }
+
+  /* ── Detail panel ── */
+  .detail-panel {
+    position: fixed; bottom: 0; right: 0;
+    width: min(440px, 100vw);
+    background: #fff;
+    border-top: 1px solid #dfe7e4;
+    border-left: 1px solid #dfe7e4;
+    border-radius: 12px 0 0 0;
+    box-shadow: -4px -4px 28px rgba(0,0,0,.13);
+    z-index: 1000;
+    animation: slideUp .2s ease;
+  }
+  @keyframes slideUp {
+    from { transform: translateY(16px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+  }
+  .detail-inner { padding: 1.4rem 1.5rem 1.6rem; position: relative; }
+  .detail-close {
+    position: absolute; top: .9rem; right: 1rem;
+    background: none; border: none; font-size: 1rem;
+    color: #999; cursor: pointer; border-radius: 4px; padding: .2rem .4rem;
+  }
+  .detail-close:hover { background: #f0f0f0; }
+  .detail-meta { display: flex; align-items: center; gap: .5rem; margin-bottom: .65rem; flex-wrap: wrap; }
+  .detail-model-badge {
+    font-family: monospace; font-size: .72rem; font-weight: 700;
+    color: #fff; background: var(--active-color, #333);
+    border-radius: 5px; padding: .2rem .55rem;
+  }
+  .detail-section { font-size: .72rem; color: #888; font-style: italic; }
+  .detail-name {
+    font-family: monospace; font-size: 1.1rem; font-weight: 700;
+    color: #17202a; margin-bottom: .5rem; word-break: break-all;
+  }
+  .detail-type-pill {
+    display: inline-block; font-size: .72rem; font-weight: 600;
+    color: var(--active-color, #333);
+    background: color-mix(in srgb, var(--active-color, #333) 10%, #fff);
+    border: 1px solid color-mix(in srgb, var(--active-color, #333) 25%, #fff);
+    border-radius: 5px; padding: .2rem .6rem; margin-bottom: .75rem;
+  }
+  .detail-desc { font-size: .88rem; color: #3a4a5a; line-height: 1.65; margin: 0 0 .75rem; }
+  .choices-label {
+    font-size: .68rem; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; color: #888; margin-bottom: .4rem;
+  }
+  .choices-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+  .choices-table tr { border-bottom: 1px solid #f0f0f0; }
+  .choices-table tr:last-child { border-bottom: none; }
+  .choices-table td { padding: .3rem .4rem; vertical-align: top; line-height: 1.4; }
+  .choices-table td:first-child {
+    font-family: monospace; font-weight: 600; white-space: nowrap;
+    color: var(--active-color, #333); width: 38%;
+  }
+  .choices-table td:last-child { color: #3a4a5a; }
+</style>
+
+<script>
+/* ── Relaciones FK/O2O ───────────────────────────────────────────────────── */
+const RELATIONS = [
+  { from: 'grp-sitio',                    to: 'grp-proyecto',         type: 'FK',  color: '#1a6e9b' },
+  { from: 'grp-registro',                 to: 'grp-sitio',            type: 'FK',  color: '#6b4f9e' },
+  { from: 'grp-cobertura',                to: 'grp-registro',         type: 'O2O', color: '#1a6e9b' },
+  { from: 'grp-cobertura',                to: 'grp-registro_biomasa', type: 'O2O', color: '#8e44ad' },
+  { from: 'grp-disturbio',                to: 'grp-registro',         type: 'O2O', color: '#c0392b' },
+  { from: 'grp-disturbio',                to: 'grp-registro_biomasa', type: 'O2O', color: '#8e44ad' },
+  { from: 'grp-caracterizacion',          to: 'grp-registro',         type: 'O2O', color: '#d35400' },
+  { from: 'grp-caracterizacion_muestreo', to: 'grp-registro',         type: 'O2O', color: '#7f8c8d' },
+  { from: 'grp-vegetacion_anillo',        to: 'grp-registro',         type: 'O2O', color: '#27ae60' },
+  { from: 'grp-distancias',               to: 'grp-registro',         type: 'O2O', color: '#2c3e50' },
+  { from: 'grp-registro_biomasa',         to: 'grp-sitio',            type: 'FK',  color: '#8e44ad' },
+  { from: 'grp-caracterizacion_parcela',  to: 'grp-registro_biomasa', type: 'O2O', color: '#16a085' },
+];
+
+const NS = 'http://www.w3.org/2000/svg';
+let arrowsVisible = true;
+
+/* ── Crea o reutiliza un marker de punta de flecha ───────────────────────── */
+function ensureMarker(svg, color) {
+  const id = 'arr-' + color.replace('#', '');
+  if (svg.querySelector('#' + id)) return id;
+  let defs = svg.querySelector('defs');
+  if (!defs) { defs = document.createElementNS(NS, 'defs'); svg.prepend(defs); }
+  const marker = document.createElementNS(NS, 'marker');
+  marker.setAttribute('id', id);
+  marker.setAttribute('markerWidth', '7');
+  marker.setAttribute('markerHeight', '5');
+  marker.setAttribute('refX', '7');
+  marker.setAttribute('refY', '2.5');
+  marker.setAttribute('orient', 'auto');
+  const poly = document.createElementNS(NS, 'polygon');
+  poly.setAttribute('points', '0 0,7 2.5,0 5');
+  poly.setAttribute('fill', color);
+  marker.appendChild(poly);
+  defs.appendChild(marker);
+  return id;
+}
+
+/* ── Calcula el punto de salida/entrada más cercano entre dos cajas ───────── */
+function connectionPoints(a, b) {
+  const dx = b.cx - a.cx;
+  const dy = b.cy - a.cy;
+  let x1, y1, x2, y2, cp1x, cp1y, cp2x, cp2y;
+  const bend = 80;
+
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    // Conexión horizontal
+    if (dx >= 0) {
+      x1 = a.right;  y1 = clamp(b.cy, a.top, a.bottom);
+      x2 = b.left;   y2 = clamp(a.cy, b.top, b.bottom);
+    } else {
+      x1 = a.left;   y1 = clamp(b.cy, a.top, a.bottom);
+      x2 = b.right;  y2 = clamp(a.cy, b.top, b.bottom);
+    }
+    cp1x = x1 + Math.sign(dx) * bend; cp1y = y1;
+    cp2x = x2 - Math.sign(dx) * bend; cp2y = y2;
+  } else {
+    // Conexión vertical
+    if (dy >= 0) {
+      x1 = clamp(b.cx, a.left, a.right);  y1 = a.bottom;
+      x2 = clamp(a.cx, b.left, b.right);  y2 = b.top;
+    } else {
+      x1 = clamp(b.cx, a.left, a.right);  y1 = a.top;
+      x2 = clamp(a.cx, b.left, b.right);  y2 = b.bottom;
+    }
+    cp1x = x1; cp1y = y1 + Math.sign(dy) * bend;
+    cp2x = x2; cp2y = y2 - Math.sign(dy) * bend;
+  }
+  return { x1, y1, x2, y2, cp1x, cp1y, cp2x, cp2y };
+}
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+/* ── Convierte getBoundingClientRect a coordenadas relativas al wrapper ──── */
+function relRect(el, wrapperRect) {
+  const r = el.getBoundingClientRect();
+  return {
+    left:   r.left   - wrapperRect.left,
+    right:  r.right  - wrapperRect.left,
+    top:    r.top    - wrapperRect.top,
+    bottom: r.bottom - wrapperRect.top,
+    cx: (r.left + r.right)  / 2 - wrapperRect.left,
+    cy: (r.top  + r.bottom) / 2 - wrapperRect.top,
+  };
+}
+
+/* ── Dibuja todas las flechas ─────────────────────────────────────────────── */
+function drawArrows() {
+  const svg     = document.getElementById('rel-svg');
+  const canvas  = document.getElementById('model-canvas');
+  const wrapper = canvas.parentElement;
+
+  // Ajustar tamaño SVG al canvas real
+  svg.setAttribute('width',  canvas.offsetWidth);
+  svg.setAttribute('height', canvas.offsetHeight);
+
+  // Limpiar todo menos <defs>
+  [...svg.children].forEach(c => { if (c.tagName !== 'defs') c.remove(); });
+  svg.querySelectorAll('defs *').forEach(n => n.remove());
+
+  if (!arrowsVisible) return;
+
+  const wrapRect = wrapper.getBoundingClientRect();
+
+  RELATIONS.forEach(rel => {
+    const fromEl = document.getElementById(rel.from);
+    const toEl   = document.getElementById(rel.to);
+    if (!fromEl || !toEl) return;
+
+    const a = relRect(fromEl, wrapRect);
+    const b = relRect(toEl,   wrapRect);
+    const { x1, y1, x2, y2, cp1x, cp1y, cp2x, cp2y } = connectionPoints(a, b);
+    const markerId = ensureMarker(svg, rel.color);
+
+    // Línea de sombra para legibilidad
+    const shadow = document.createElementNS(NS, 'path');
+    shadow.setAttribute('d', `M${x1},${y1} C${cp1x},${cp1y} ${cp2x},${cp2y} ${x2},${y2}`);
+    shadow.setAttribute('stroke', 'white');
+    shadow.setAttribute('stroke-width', '4');
+    shadow.setAttribute('fill', 'none');
+    shadow.setAttribute('stroke-linecap', 'round');
+    svg.appendChild(shadow);
+
+    // Flecha principal
+    const path = document.createElementNS(NS, 'path');
+    path.setAttribute('d', `M${x1},${y1} C${cp1x},${cp1y} ${cp2x},${cp2y} ${x2},${y2}`);
+    path.setAttribute('stroke', rel.color);
+    path.setAttribute('stroke-width', '1.8');
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke-linecap', 'round');
+    path.setAttribute('opacity', '0.82');
+    if (rel.type === 'O2O') path.setAttribute('stroke-dasharray', '6,3');
+    path.setAttribute('marker-end', `url(#${markerId})`);
+    svg.appendChild(path);
+
+    // Etiqueta en el punto medio de la curva
+    const mx = (x1 + x2) / 2 + (cp1x + cp2x) / 4 - (x1 + x2) / 4;
+    const my = (y1 + y2) / 2 + (cp1y + cp2y) / 4 - (y1 + y2) / 4;
+
+    const bg = document.createElementNS(NS, 'rect');
+    bg.setAttribute('x', mx - 14); bg.setAttribute('y', my - 7);
+    bg.setAttribute('width', 28); bg.setAttribute('height', 13);
+    bg.setAttribute('rx', 3); bg.setAttribute('fill', 'white');
+    bg.setAttribute('opacity', '0.88');
+    svg.appendChild(bg);
+
+    const txt = document.createElementNS(NS, 'text');
+    txt.setAttribute('x', mx); txt.setAttribute('y', my + 4);
+    txt.setAttribute('text-anchor', 'middle');
+    txt.setAttribute('font-size', '8');
+    txt.setAttribute('font-family', 'monospace');
+    txt.setAttribute('font-weight', '700');
+    txt.setAttribute('fill', rel.color);
+    txt.textContent = rel.type;
+    svg.appendChild(txt);
+  });
+}
+
+/* ── Toggle visibilidad de flechas ─────────────────────────────────────────── */
+function toggleArrows() {
+  arrowsVisible = !arrowsVisible;
+  document.getElementById('toggle-arrows').textContent =
+    arrowsVisible ? 'Ocultar relaciones' : 'Mostrar relaciones';
+  drawArrows();
+}
+
+/* ── Re-dibujar al redimensionar ─────────────────────────────────────────── */
+const ro = new ResizeObserver(() => drawArrows());
+ro.observe(document.getElementById('model-canvas'));
+window.addEventListener('scroll', drawArrows, { passive: true });
+window.addEventListener('load', drawArrows);
+setTimeout(drawArrows, 200); // fallback tras render inicial
+
+/* ── Panel de detalle ────────────────────────────────────────────────────── */
+let activeField = null;
+
+function showDetail(el) {
+  if (activeField) activeField.classList.remove('active');
+  activeField = el;
+  el.classList.add('active');
+
+  const color   = el.dataset.color;
+  const section = el.dataset.section;
+
+  document.getElementById('detail-model').textContent   = el.dataset.model;
+  document.getElementById('detail-section').textContent = section ? '§ ' + section : '';
+  document.getElementById('detail-name').textContent    = el.dataset.name;
+  document.getElementById('detail-type').textContent    = el.dataset.type;
+  document.getElementById('detail-desc').textContent    = el.dataset.desc;
+
+  const wrap = document.getElementById('detail-choices-wrap');
+  const box  = document.getElementById('detail-choices');
+  let choices = [];
+  try { choices = JSON.parse(el.dataset.choices || '[]'); } catch(e) {}
+  if (choices.length) {
+    box.innerHTML = `<table class="choices-table"><tbody>${
+      choices.map(c => `<tr><td>${c.value}</td><td>${c.desc}</td></tr>`).join('')
+    }</tbody></table>`;
+    wrap.style.display = 'block';
+  } else {
+    wrap.style.display = 'none';
+  }
+
+  const panel = document.getElementById('detail-panel');
+  panel.style.setProperty('--active-color', color);
+  panel.style.display = 'block';
+}
+
+function closeDetail() {
+  if (activeField) activeField.classList.remove('active');
+  activeField = null;
+  document.getElementById('detail-panel').style.display = 'none';
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetail(); });
+</script>
+{% endblock %}

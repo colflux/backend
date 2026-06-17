@@ -1,0 +1,42 @@
+{% extends "app/base.html" %}
+{% block title %}CRUD de emisiones{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h4 mb-0">Registros de emisiones</h1>
+  <a class="btn btn-primary" href="{% url 'emission-create' %}">Crear</a>
+</div>
+<form class="panel p-3 mb-3" method="get">
+  <div class="row g-2">
+    <div class="col-md-2"><input class="form-control" name="year" placeholder="Ano" value="{{ selected.year }}"></div>
+    <div class="col-md-4">
+      <select class="form-select" name="sector">
+        <option value="">Todos los sectores</option>
+        {% for sector in sectors %}<option value="{{ sector.id }}" {% if selected.sector == sector.id|stringformat:"s" %}selected{% endif %}>{{ sector.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-md-4">
+      <select class="form-select" name="region">
+        <option value="">Todas las regiones</option>
+        {% for region in regions %}<option value="{{ region.id }}" {% if selected.region == region.id|stringformat:"s" %}selected{% endif %}>{{ region.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2 d-grid"><button class="btn btn-outline-secondary">Filtrar</button></div>
+  </div>
+</form>
+<div class="table-wrap table-responsive p-2">
+  <table class="table table-hover align-middle mb-0">
+    <thead><tr><th>Ano</th><th>Region</th><th>Sector</th><th>Fuente</th><th>Gas</th><th class="text-end">t CO2e</th><th></th></tr></thead>
+    <tbody>
+      {% for record in records %}
+      <tr>
+        <td>{{ record.year }}</td><td>{{ record.region }}</td><td>{{ record.sector }}</td><td>{{ record.source }}</td><td>{{ record.gas }}</td>
+        <td class="text-end">{{ record.co2e_tonnes|floatformat:2 }}</td>
+        <td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="{{ record.get_absolute_url }}">Abrir</a></td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="7" class="text-secondary">No hay registros para los filtros seleccionados.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
