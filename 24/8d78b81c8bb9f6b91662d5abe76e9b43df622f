@@ -1,0 +1,147 @@
+Dockerfile
+  s_942cc0a333f761::t_b59a4d5d5a4555 1-14
+.dockerignore
+  s_942cc0a333f761::t_b59a4d5d5a4555 1-6
+app/migrations/__init__.py
+  s_2e0724c209078d::t_ed45bf62f675d5 1
+docker-compose.yml
+  s_2e0724c209078d::t_09dc9bf7324a6f 15
+  s_942cc0a333f761::t_b59a4d5d5a4555 1-14,16-28
+.claude/settings.local.json
+  s_2e0724c209078d::t_d747a77e766508 4
+  s_2e0724c209078d::t_f0fb1d2cf92de7 9-10
+  s_2e0724c209078d::t_d1c1f721c45caf 6
+  s_2e0724c209078d::t_ed45bf62f675d5 7-8
+  s_2e0724c209078d::t_28e8d2b743d62c 1-3,11-13
+  s_2e0724c209078d::t_0a4cfca83176a3 5
+app/admin.py
+  s_2e0724c209078d::t_ed45bf62f675d5 1-2,10-48
+  s_2e0724c209078d::t_6a47554e577751 3-5,9
+  s_2e0724c209078d::t_e8114d8cc6a670 8
+  s_2e0724c209078d::t_b4abd96d83a78c 49-66,69,106,113
+  s_2e0724c209078d::t_595cbe1fdf57d6 6-7,67-68,70-105,107-112,114-129
+  s_2e0724c209078d::t_da5f3ead321f0e 130-155
+requirements.txt
+  s_942cc0a333f761::t_345e32635ad55d 1-7
+app/templates/app/emission_form.html
+  s_2e0724c209078d::t_11de19d6de1bdc 1-21
+app/migrations/0003_proyecto_sitiomonitoreo_registroflujocamara.py
+  s_2e0724c209078d::t_3e3c99f21a0d6b 1-98
+README.md
+  s_942cc0a333f761::t_b59a4d5d5a4555 1-47
+colfux/__init__.py
+  s_2e0724c209078d::t_ed45bf62f675d5 1
+app/templates/app/emission_confirm_delete.html
+  s_2e0724c209078d::t_11de19d6de1bdc 1-11
+app/management/commands/__init__.py
+  s_2e0724c209078d::t_ed45bf62f675d5 1
+colfux/settings.py
+  s_2e0724c209078d::t_ed45bf62f675d5 1-17,19-31,33-49,51-91
+  s_2e0724c209078d::t_7605ada3660304 18
+  s_2e0724c209078d::t_2c54bef06e2768 32
+  s_2e0724c209078d::t_f99460f56af47c 50
+app/views.py
+  s_2e0724c209078d::t_b52e6bd4ed0612 122-126
+  s_2e0724c209078d::t_ed45bf62f675d5 3-13,15-30,32-57,59-64,66-74,76-83,85-92,94-95,499-527
+  s_2e0724c209078d::t_cf06b25bebb6f1 1-2
+  s_2e0724c209078d::t_ed5e9c318be2e9 14,31,58,65,75,84,93
+  s_2e0724c209078d::t_9c973b571a1fd3 153-220
+  s_2e0724c209078d::t_ea730588667a90 96-100,113,120-121,127,129,133-134,139-140,142,146,149,223-224,226,230,237,434,496-498
+  s_2e0724c209078d::t_fd99ed31d99236 229,232-236,238-433
+  s_2e0724c209078d::t_24010d982a6ad1 128,130-132,135-138,141,143-145,147-148,150-152,221-222,225,227-228,231
+  s_2e0724c209078d::t_2bcf52b104dccf 101-112,114-119
+  s_2e0724c209078d::t_2824cfd4937ee3 435-495
+app/templates/app/emission_list.html
+  s_2e0724c209078d::t_11de19d6de1bdc 1-42
+app/templates/app/dashboard.html
+  s_2e0724c209078d::t_11de19d6de1bdc 1-43
+app/management/__init__.py
+  s_2e0724c209078d::t_ed45bf62f675d5 1
+app/migrations/0006_alter_cobertura_registro_alter_disturbio_registro_and_more.py
+  s_2e0724c209078d::t_2656d5afc5d283 1-79
+manage.py
+  s_2e0724c209078d::t_f35959a6636779 7
+  s_942cc0a333f761::t_345e32635ad55d 1-6,8-14
+app/apps.py
+  s_2e0724c209078d::t_ed45bf62f675d5 1-5,7
+  s_2e0724c209078d::t_13b4a2acd6c8d4 6
+app/forms.py
+  s_2e0724c209078d::t_ed45bf62f675d5 1-31
+app/urls.py
+  s_2e0724c209078d::t_860023fcfe04f1 15
+  s_2e0724c209078d::t_ed45bf62f675d5 1-14,16
+app/templates/app/emission_detail.html
+  s_2e0724c209078d::t_11de19d6de1bdc 1-20
+app/models.py
+  s_2e0724c209078d::t_c3181e2c1c8a11 140-281,308-325,344-345,356-382,385-386,389-394,407,421-425,449,472-477,482,489-494,497-498
+  s_2e0724c209078d::t_7492b777dc2887 451-460,468
+  s_2e0724c209078d::t_ed45bf62f675d5 1-139
+  s_2e0724c209078d::t_4a6d3b06611df5 326-327
+  s_2e0724c209078d::t_2f16dd8b91aeb6 296-307
+  s_2e0724c209078d::t_7713ec8e022e25 387-388
+  s_2e0724c209078d::t_ee4546539144c4 500-563
+  s_2e0724c209078d::t_cb5fce0bd8c696 282-295,328-343,346-355,383-384,395-406,408-420,426-448,450,461-467,469-471,478-481,483-488,495-496,499
+colfux/wsgi.py
+  s_2e0724c209078d::t_531b5ee4e55fca 6
+  s_2e0724c209078d::t_ed45bf62f675d5 1-5,7
+data/excel_mapping_template.csv
+  s_942cc0a333f761::t_b59a4d5d5a4555 1-14
+colfux/urls.py
+  s_2e0724c209078d::t_ed45bf62f675d5 1-6,8
+  s_2e0724c209078d::t_a9e8d199e59260 7
+app/management/commands/seed_ghg_data.py
+  s_2e0724c209078d::t_ed45bf62f675d5 1-4,6-70
+  s_2e0724c209078d::t_77495674e09c2f 5
+app/migrations/0004_registroflujocamara_cobertura_humedal_and_more.py
+  s_2e0724c209078d::t_628ff513a4c3c5 1-68
+app/migrations/0002_rename_emissions_e_year_e5e10c_idx_app_emissio_year_f4fa2c_idx_and_more.py
+  s_2e0724c209078d::t_8e2930da16c59e 1-33
+docs/index.html
+  s_942cc0a333f761::t_b59a4d5d5a4555 1-57
+.gitignore
+  s_942cc0a333f761::t_b59a4d5d5a4555 1-8
+app/migrations/0005_caracterizacion_caracterizacionmuestreo_cobertura_and_more.py
+  s_2e0724c209078d::t_e5dd7e6669b66a 1-317
+app/templates/app/base.html
+  s_2e0724c209078d::t_509d0d88df6fb0 31
+app/templates/app/visualizer.html
+  s_2e0724c209078d::t_11de19d6de1bdc 1-35
+app/migrations/0001_initial.py
+  s_2e0724c209078d::t_478e00b963246c 59,71,88-92
+  s_2e0724c209078d::t_ed45bf62f675d5 1-58,60-70,72-87,93-100
+app/__init__.py
+  s_2e0724c209078d::t_ed45bf62f675d5 1
+app/templates/app/data_model.html
+  s_2e0724c209078d::t_9ff5d3cae5ac3b 87-90
+  s_2e0724c209078d::t_b9a4db06694049 1,3-4,6,9,13-14,66,74-79,84,86,91-96,110-111,115-116,118-123,130,143-145,163,169-170,174-175,178,180-181,193,195,197,200-203,205-208,210-211,213,217-218,226,236,251-253,471-472
+  s_2e0724c209078d::t_78fdd2b2a4de83 5,49-53,55,57-61,80-83,85,112,114,148-149,152-153,156-158,160-162,164,168,176-177,183-184,196,199,204,209,212,214-216,220-224,227-235
+  s_2e0724c209078d::t_a18ffe1db54abf 56
+  s_2e0724c209078d::t_93e015b1c56413 2,7-8,10-12,15-48,54,62-65,67-73,97-109,113,117,124,128-129,131-133,136,146-147,150-151,154-155,159,165-167,171-173,179,182,185-192,194,198,219,225,237,242,245,254-305,307-308,310-470
+  s_2e0724c209078d::t_72944b8d452da4 125-127,134-135,137-142
+  s_2e0724c209078d::t_bae7dedd2c4740 238-241,243-244,246-250
+  s_2e0724c209078d::t_aba8810d265c49 306,309
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "248d78b81c8bb9f6b91662d5abe76e9b43df622f",
+  "prompts": {},
+  "sessions": {
+    "s_2e0724c209078d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eab504c4-153a-42ca-ad54-3bf04d4162a5",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    },
+    "s_942cc0a333f761": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ece51-8515-7d31-bc67-3ae4e333d2f0",
+        "model": "gpt-5.5"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    }
+  }
+}
