@@ -1,0 +1,628 @@
+
+Enum escala_monitoreo {
+  Bioma // Grandes zonas ecológicas con clima y vegetación dominante (páramo, selva tropical).
+  Regional // Conjunto de paisajes con clima y biogeografía similares.
+  Ecosistema // Área con estructura y funciones comunes (bosque, turbera, lago).
+  Sitio // Conjunto de parcelas o instrumentos en un mismo ecosistema local.
+  Parcela // Unidad fija de medición (parcelas de vegetación, collares, sensores).
+}
+
+// https://livejaverianaedu-my.sharepoint.com/:x:/r/personal/marian_cabrerap_javeriana_edu_co/_layouts/15/Doc.aspx?sourcedoc=%7B90BECD76-6AE4-4AD5-BE9C-D2681BB1BB21%7D&file=LECC_Metadatos_proyecto_v2.xlsx&action=default&mobileredirect=true 
+Table proyecto [headercolor: #e84393] {
+  id int [pk, increment]
+  codigo varchar
+  nombre varchar
+  fecha_inicio date
+  fecha_fin date
+  coordinador varchar
+  correo_coordinador varchar
+  sitio text
+  abreviatura_sitio varchar
+  objetivo_general text
+  preguntas_principales text
+  escala_espacial escala_monitoreo
+  numero_sitios_monitoreo int
+  estructura_muestreo text
+  tipo_diseno text
+  objetivo_especifico text
+  sitio_id int [ref: > sitio.id]
+
+}
+
+Enum pendiente {
+  plano // Superficie con pendiente mínima.
+  ondulado_variable // Relieve irregular con pendientes variables.
+  valle_fondo // Zona baja del relieve con acumulación.
+  pendiente_suave // Pendiente muy baja (<2%).
+  pendiente_media // Pendiente moderada (2–5%).
+  pendiente_significativa // Pendiente marcada (5–10%).
+  pendiente_fuerte // Pendiente pronunciada (>10%).
+  cresta_cima // Parte alta o divisoria del relieve.
+}
+
+Enum topografia {
+  cresta_cima // Parte más alta del relieve; zona de divergencia de escorrentía.
+  ladera_superior // Tramo alto de la ladera; drenaje rápido y baja acumulación.
+  ladera_media // Tramo intermedio de la ladera; tránsito de agua y sedimentos.
+  ladera_inferior // Tramo bajo de la ladera; mayor acumulación de agua y materiales.
+  valle_fondo // Zona baja del relieve; acumulación de agua y sedimentos.
+  plano // Superficie con pendiente mínima y escasa redistribución lateral.
+}
+
+Enum propiedad_tierra {
+  publica // Terreno de propiedad del Estado o entidad pública.
+  privada // Terreno de propiedad privada o comunitaria no estatal.
+}
+
+Table transecto {
+  id int [pk]
+  nombre varchar
+  descripcion varchar
+  sitio int [ref: > sitio.id]
+  parcela int [ref: > parcela.id]
+}
+
+Table sitio [headercolor: #f1c40f] {
+  id int [pk]
+  proyecto_id int
+
+  codigo_metadatos varchar
+  nombre varchar
+
+  latitud decimal
+  longitud decimal
+  sistema_referencia int [ref: > sistema_referencia.id] 
+
+  altitud decimal
+  pendiente pendiente
+  topografia topografia
+  uso_actual uso_actual
+  propiedad_tierra propiedad_tierra
+  invertevido bool // https://livejaverianaedu-my.sharepoint.com/:x:/r/personal/marian_cabrerap_javeriana_edu_co/_layouts/15/Doc.aspx?sourcedoc=%7B08F8B97C-7DC6-48D4-A9FE-3C232F1AE733%7D&file=Suelos_2021.xlsx&action=default&mobileredirect=true 
+
+
+  municipio varchar [ref: > municipio.id]
+  disturbio varchar  [ref: > disturbio.id]
+  vegetacion varchar  [ref: > vegetacion.id]
+  cobertura varchar  [ref: > cobertura.id]
+}
+
+Enum estatus_parcela {
+  Activa // En proceso de medición o mantenimiento.
+  Inactiva // No se han realizado mediciones recientes pero el sitio existe.
+  Abandonada // El sitio no es recuperable o se perdió el marcado.
+  Finalizada // Sin proceso de medición o mantenimiento.
+}
+
+Enum unidad_de_muestreo {
+  Parcela_permanente_cuadrada // Parcela Permanente Cuadrada.
+  Parcela_permanente_rectangular // Parcela Permanente Rectangular.
+  Parcela_circular // Parcela Circular.
+  Transecto_lineal // Transecto Lineal.
+  Puntos_de_muestreo_aleatorios // Puntos de Muestreo Aleatorios.
+  Conglomerado // Conjunto de subparcelas.
+}
+
+Table parcela [headercolor: #2ecc71] {
+  id int [pk]
+  sitio_id int
+
+  unidad_muestreo unidad_de_muestreo
+  area decimal
+
+  estatus estatus_parcela
+
+  fecha_instalacion int
+}
+
+Enum tipo_monitoreo {
+  Biomasa_Aerea
+  Biomasa_Subterranea
+  Flora
+  Rasgos_Funcionales
+}
+
+Enum protocolo_biomasa_aerea {
+  Alometria_destructiva // Medición física y destructiva de la biomasa.
+  Alometria_no_destructiva // Medición de la biomasa a partir de modelos matemáticos.
+  LiDAR_terrestre // LiDAR terrestre.
+  LiDAR_aerotransportado // LiDAR aerotransportado.
+}
+
+Table monitoreo_parcela {
+  id int [pk]
+  parcela_id int
+
+  tipo_monitoreo tipo_monitoreo
+
+  activo boolean
+  protocolo protocolo_biomasa_aerea
+}
+
+Ref: monitoreo_parcela.parcela_id > parcela.id
+
+
+Enum sistema_referencia {
+  EPSG_4326 // Sistema geodésico global estándar; coordenadas geográficas en latitud y longitud (WGS84).
+  EPSG_4686 // Sistema geodésico oficial de Colombia, compatible con WGS84 (MAGNA-SIRGAS).
+  EPSG_4674 // Sistema geodésico regional usado en América del Sur (SIRGAS2000).
+  Otro // Sistema de referencia distinto; se debe indicar el código EPSG.
+}
+
+Table sistema_referencia {
+  id int [pk]
+  nombre sistema_referencia
+}
+
+Enum clima_koeppen {
+  Selva_tropical_lluviosa // Clima cálido y húmedo durante todo el año, sin estación seca definida.
+  Monzon_tropical // Clima cálido con estación húmeda intensa y estación seca corta.
+  Sabana_tropical // Clima cálido con estación seca bien definida y lluvias estacionales.
+  Desierto_IC // Clima extremadamente árido con precipitaciones muy bajas (<250 mm anuales).
+  Desierto_IF // Clima árido con inviernos fríos y veranos cálidos.
+  Oceanico_de_la_costa_occidental_VC // Clima templado con precipitaciones constantes y veranos moderadamente cálidos.
+  Oceanico_de_la_costa_occidental_VF // Clima templado-frío con veranos frescos e inviernos suaves.
+  Templado_de_montania_VC // Clima templado de altitud con invierno seco y verano lluvioso.
+  Templado_de_montania_VF // Clima de montaña frío con inviernos secos y veranos frescos.
+  Continental_humedo // Clima con inviernos fríos y veranos calurosos; lluvias todo el año.
+  Continental_de_verano_calido // Clima continental con inviernos fríos y veranos templados a cálidos.
+  Continental_seco_VC // Clima continental con estación seca marcada y veranos calurosos.
+  Continental_de_verano_calido_2 // Variante continental con veranos templados a cálidos e inviernos fríos.
+  Continental_seco_VF // Clima continental con estación seca y veranos frescos.
+  Continental_humedo_1 // Clima con inviernos fríos prolongados y veranos moderadamente cálidos.
+  Continental_de_verano_calido_3 // Clima continental con invierno seco y verano húmedo.
+  Casquete_de_hielo // Clima polar extremo con temperatura media mensual inferior a 0 °C.
+  Tundra // Clima polar donde el mes más cálido no supera los 10 °C.
+}
+
+
+Table cobertura [headercolor: #2ecc71] {
+  id int [pk]
+  cobertura_clc varchar
+  cobertura_nombre_comun varchar
+  clima_koeppen clima_koeppen
+}
+
+Enum tipo_vegetacion {
+  Pasto_Graminea
+  Graminea_C3
+  Graminea_C4
+  Cultivo_herbaceo
+  Cultivo_lenoso
+  Arbol
+  Arbol_caducifolio
+  Arbol_perennifolio
+  Arbusto
+  Hierba_Forbia
+  Hierba_anual_Forbia_anual
+  Hierba_perenne_Forbia_perenne
+  Plantas_con_aerenquima
+  Liana_Enredadera
+  Suculenta
+  No_vasculares
+  Otro
+  Sin_vegetacion
+  Agua
+}
+
+Table aliado {
+  id int [pk, increment]
+  nombre varchar
+  correo varchar
+}
+
+
+
+Table proyecto_aliado {
+  proyecto_id int
+  aliado_id int
+}
+
+Enum region_natural {
+  Andes // Región natural de los Andes.
+  Orinoquia // Región natural de la Orinoquía.
+  Amazonas // Región natural de la Amazonía.
+  Caribe // Región natural del Caribe.
+  Pacifico // Región natural del Pacífico.
+}
+
+Table region [headercolor: #34495e] {
+  id int [pk, increment]
+  nombre region_natural
+
+}
+Enum departamento {
+  Amazonas // Amazonas.
+  Antioquia // Antioquia.
+  Arauca // Arauca.
+  Atlantico // Atlántico.
+  Bolivar // Bolívar.
+  Boyaca // Boyacá.
+  Caldas // Caldas.
+  Caqueta // Caquetá.
+  Casanare // Casanare.
+  Cauca // Cauca.
+  Cesar // Cesar.
+  Choco // Chocó.
+  Cordoba // Córdoba.
+  Cundinamarca // Cundinamarca.
+  Guainia // Guainía.
+  Guaviare // Guaviare.
+  Huila // Huila.
+  La_Guajira // La Guajira.
+  Magdalena // Magdalena.
+  Meta // Meta.
+  Narinio // Nariño.
+  Norte_de_Santander // Norte de Santander.
+  Putumayo // Putumayo.
+  Quindio // Quindío.
+  Risaralda // Risaralda.
+  San_Andres // San Andrés, Providencia y Santa Catalina.
+  Santander // Santander.
+  Sucre // Sucre.
+  Tolima // Tolima.
+  Valle_del_Cauca // Valle del Cauca.
+  Vaupes // Vaupés.
+  Vichada // Vichada.
+}
+
+
+Table departamento [headercolor: #34495e] {
+  id int [pk, increment]
+  nombre departamento
+  region_id int [ref: > region.id]
+}
+
+
+Table municipio [headercolor: #34495e] {
+  id int [pk, increment]
+  nombre varchar
+  departamento int [ref: > departamento.id]
+}
+
+
+
+Table vegetacion [headercolor: #2ecc71] {
+  id int [pk, increment]
+  tipo_cobertura varchar
+  especies_dominantes text
+  altura_dosel decimal
+  porcentaje_cobertura decimal
+  edad_cobertura text
+  estado_sucesional varchar
+}
+
+Enum tipo_disturbio {
+  Agricultura // Manejo agrícola de cualquier tipo, incluyendo cultivo, labranza, cosecha, riego, pesticidas, siembra o encalado.
+  Sequia // Deficiencia prolongada de agua; sequía hidrológica o climática.
+  Fuego // Incendios forestales o quemas controladas.
+  Silvicultura // Manejo forestal, aprovechamiento maderero, plantaciones o aplicación de herbicidas.
+  Pastoreo // Herbivoría o ramoneo por mamíferos manejados o silvestres.
+  Evento_hidrologico // Drenaje, inundación persistente o inundación crónica; excluye tormentas y riego.
+  Cambio_en_cobertura_del_suelo // Cambios en uso y cobertura del suelo, invasiones biológicas o expansión urbana/leñosa.
+  Plagas_y_enfermedades // Daño causado por plagas, insectos, patógenos, tizones u otras enfermedades.
+  Tormenta_o_viento // Tormentas severas, vientos extremos, huracanes, tornados, granizadas o inundaciones asociadas.
+  Extremos_de_temperatura // Olas de calor o eventos de heladas.
+  Sin_disturbio // No se ha registrado disturbio ni manejo en el sitio.
+}
+Enum uso_actual {
+  Bosque_primario // Bosque nativo que no ha sufrido intervención humana significativa reciente y mantiene su estructura ecológica original.
+  Bosque_secundario // Bosque que se ha regenerado naturalmente después de un disturbio.
+  Plantacion_forestal // Área forestada artificialmente con una o pocas especies, generalmente con fines productivos.
+  Agricultura_intensiva // Terreno destinado al cultivo agrícola anual o permanente, incluyendo fertilización o mecanización.
+  Agricultura_tradicional // Terreno destinado al cultivo agrícola anual o permanente.
+  Pastura // Área dominada por gramíneas usada para pastoreo.
+  Humedal_natural // Ecosistema con suelos saturados o inundados periódicamente.
+  Humedal_intervenido // Humedal con alteraciones hidrológicas como drenaje, canalización o compactación.
+  Area_protegida // Territorio legalmente designado para la conservación de biodiversidad, servicios ecosistémicos o valores culturales.
+  Sistema_agroforestal // Sistema de uso del suelo que integra árboles con cultivos agrícolas y/o ganado.
+  Abandonado // Área previamente usada para agricultura o pastura que ya no tiene manejo activo.
+  Restauracion_activa // Área en proceso formal de restauración ecológica con intervención humana planificada.
+}
+
+Enum estado_actual {
+  Intacto // Ecosistema sin señales evidentes de degradación estructural o funcional.
+  Ligeramente_degradado // Alteraciones leves sin pérdida significativa de funciones ecológicas.
+  Moderadamente_degradado // Reducción clara en biodiversidad, compactación del suelo o cambios hidrológicos parciales.
+  Severamente_degradado // Pérdida significativa de cobertura vegetal, erosión visible y alteración fuerte del ciclo hidrológico.
+  En_recuperacion_natural // Ecosistema en proceso de regeneración tras disturbio sin intervención intensiva.
+  En_restauracion_activa // Ecosistema con intervención planificada que ha alcanzado estabilidad funcional.
+  Estable // Sistema que mantiene estructura y función constantes bajo el régimen actual.
+  En_transicion // Ecosistema en cambio activo entre estados (ej. pastura → bosque secundario).
+}
+
+Table disturbio [headercolor: #2ecc71] {
+  // Torres y en pROYECTO
+  id int [pk, increment]
+  descripcion text
+  fecha_inicio date
+  fecha_fin date
+  incertidumbre_anios int
+
+  tipo tipo_disturbio
+  anios_disturbio int
+  anios_desde_fin int
+
+
+  estado_actual estado_actual
+}
+
+Enum ecosistema {
+  Paramo_seco // Ecosistema altoandino frío con vegetación adaptada a baja humedad y alta radiación.
+  Turbera_de_alta_elevacion // Humedal de montaña donde se acumula materia orgánica saturada de agua.
+  Bosque_humedo_tropical // Bosque cálido y lluvioso con alta biodiversidad y vegetación densa.
+  Bosque_de_niebla // Bosque montano húmedo con presencia frecuente de neblina y alta humedad.
+  Bosque_seco_tropical // Bosque cálido con temporada seca marcada y vegetación adaptada a la escasez de agua.
+  Sabana_seca // Ecosistema abierto de pastizales y árboles dispersos con baja disponibilidad de agua.
+  Sabana_inundable // Sabana que se inunda temporalmente por lluvias o desbordamientos.
+  Turbera_de_baja_elevacion // Humedal en zonas bajas con suelos saturados y acumulación de materia orgánica.
+  Pantano_cienaga // Humedal de aguas poco profundas con vegetación acuática o semiacuática.
+  Lago_superficial // Cuerpo de agua continental poco profundo con interacción directa entre agua, sedimentos y vegetación.
+  Manglar // Ecosistema costero tropical con árboles tolerantes a la salinidad e influencia de mareas.
+}
+
+Enum microtopografia {
+  Hummock // Cojines.
+  Hollow // Depresiones húmedas.
+  Pool // Charcos, piscinas o mediciones realizadas directamente sobre agua.
+  Lawns // Lugares planos.
+}
+
+Table flujo_camaras [headercolor: #9b59b6] {
+  id int [pk]
+
+  camara_id int
+
+  microtopografia microtopografia
+
+  diametro_anillo decimal
+  tratamiento varchar
+
+  pozo_nivel_freatico varchar
+
+  cobertura_vegetal_primaria tipo_vegetacion
+  porcentaje_cob_veg_pri decimal
+
+  cobertura_vegetal_secundaria tipo_vegetacion
+  porcentaje_cob_veg_sec decimal
+
+  cobertura_vegetal_terciaria tipo_vegetacion
+  porcentaje_cob_veg_ter decimal
+
+  distancia_drenaje decimal
+  distancia_fuego decimal
+  distancia_pastoreo decimal
+  distancia_cultivo decimal
+  sitio_id int [ref: > sitio.id]
+}
+
+Enum fuente_poder {
+  generador_metanol // Generador alimentado con metanol.
+  generador_gasolina // Generador alimentado con gasolina.
+  solar_mas_generador // Sistema híbrido solar + generador.
+  otro // Otra fuente de energía (especificar).
+}
+Table torre_fuente_energia {
+  id int [pk]
+  torre_id int
+
+  tipo_fuente fuente_poder
+
+  numero_unidades_recepcion int
+  numero_unidades_almacenamiento int
+
+  sistema_puesta_tierra boolean
+}
+
+Ref: torre_fuente_energia.torre_id > torre_ec.id
+
+Table torre_ec [headercolor: #2980b9] {
+  id int [pk]
+  sitio_id int [ref: > sitio.id]
+
+  fecha_instalacion date
+  utc varchar
+
+  altura_canopy decimal
+  altura_torre decimal
+  altura_anemometro decimal
+
+  frecuencia_adquisicion decimal
+  north_offset decimal
+  equipo int [ref: > equipo.id]
+
+  longitud_tubo_sensor_co2 decimal // cm
+  diametro_tubo_sensor_co2 decimal // mm
+  configuracion int [ref: > configuracion_sensor_gas.id]
+
+}
+
+Enum gas {
+  CO2
+  CH4
+  N2O
+}
+
+Table configuracion_sensor_gas {
+  id int [pk]
+  torre_id int
+
+  gas gas
+
+  longitud_tubo decimal
+  diametro_tubo decimal
+
+  separacion_norte_sur decimal
+  separacion_este_oeste decimal
+  separacion_vertical decimal
+}
+
+Enum tipo_equipo {
+  Anemometro
+  Analizador_CO2
+  Analizador_CH4
+  Adquisicion
+  Retencion
+  Procesamiento
+  Biomet
+  Estacion_Complementaria
+}
+
+Table equipo {
+  id int [pk]
+  torre_id int
+
+  tipo_equipo tipo_equipo
+  modelo varchar
+  serial varchar
+}
+
+Enum cobertura_IGBP {
+  Vegetacion_escasa_o_suelo_desnudo // Tierras con menos del 10% de cobertura vegetal.
+  Cultivos // Tierras cubiertas por cultivos temporales o permanentes.
+  Matorrales_cerrados // Arbustos <2 m con cobertura superior al 60%.
+  Mosaico_de_cultivos_y_vegetacion_natural // Mezcla de cultivos, bosques, matorrales y pastizales donde ningún componente supera el 60%.
+  Bosques_latifoliados_caducifolios // Bosques de hoja ancha con pérdida estacional de hojas.
+  Bosques_de_coniferas_caducifolias // Bosques de coníferas con pérdida estacional de hojas.
+  Bosques_latifoliados_siempreverdes // Bosques de hoja ancha verdes todo el año.
+  Bosques_de_coniferas_siempreverdes // Bosques de coníferas verdes todo el año.
+  Pastizales // Cobertura herbácea con menos del 10% de árboles y arbustos.
+  Bosques_mixtos // Mezcla de tipos forestales donde ninguno supera el 60%.
+  Matorrales_abiertos // Arbustos <2 m con cobertura entre 10% y 60%.
+  Sabanas // Cobertura arbórea entre 10% y 30%.
+  Nieve_y_hielo // Superficies cubiertas por nieve o hielo la mayor parte del año.
+  Areas_urbanas_y_construidas // Áreas dominadas por infraestructura construida.
+  Cuerpos_de_agua // Océanos, mares, lagos, embalses y ríos.
+  Humedales_permanentes // Áreas permanentemente inundadas con vegetación acuática o semiacuática.
+  Sabanas_arboladas // Cobertura arbórea entre 30% y 60%.
+}
+
+Enum protocolo_cos {
+  combustion_seca // Cuantifica directamente el carbono total mediante combustión a alta temperatura.
+  perdida_por_ignicion // Estima la materia orgánica por pérdida de peso tras quema controlada y la convierte a carbono mediante un factor.
+  oxidacion_humeda // Estima el carbono orgánico mediante oxidación química y cuantificación por titulación.
+}
+
+Enum tipo_de_suelo {
+  Mineral // Suelo dominado por partículas minerales (arena, limo y arcilla) con bajo contenido de materia orgánica.
+  Organico // Suelo con alto contenido de materia orgánica acumulada, generalmente formado en condiciones saturadas de agua.
+}
+
+
+
+Table caracterizacion_muestreo_suelo [headercolor: #f39c12] {
+  id int [pk]
+
+  sitio_id int [ref: > sitio.id]
+
+
+  muestreo_id int [not null]
+
+  tipo_de_suelo tipo_de_suelo
+
+  profundidad_perfil decimal // cm
+  intervalos_perfil decimal // cm
+}
+
+Enum tipo_monitoreo_suelo {
+  Macrofosiles
+  Datacion
+  Densidad_Aparente
+  COS
+}
+
+Table monitoreo_suelo {
+  id int [pk]
+
+  caracterizacion_muestreo_suelo_id int  [ref: > caracterizacion_muestreo_suelo.id]
+
+  tipo_monitoreo tipo_monitoreo_suelo
+
+  activo boolean
+
+  protocolo varchar
+}
+
+Table publicacion [headercolor: #16a085] {
+  id int [pk]
+
+  bibliography_type varchar
+
+  isbn varchar
+  doi varchar
+  identifier varchar
+
+  titulo text
+  journal varchar
+
+  volumen varchar
+  numero varchar
+  paginas varchar
+
+  anio int
+  mes varchar
+
+  email varchar
+  url varchar
+
+  abstract text
+  keywords text
+
+  validacion_campo boolean
+  datos_disponibles_repositorio boolean
+}
+
+Table autor {
+  id int [pk]
+  nombre varchar
+}
+
+Table publicacion_autor {
+  publicacion_id int
+  autor_id int
+}
+
+
+Table publicacion_sitio {
+  publicacion_id int [ref: > publicacion.id]
+  sitio_id int [ref: > sitio.id]
+}
+
+
+Enum variable_resultado {
+  Biomasa_Aerea_C
+  Biomasa_Subterranea_C
+  Biomasa_Total_C
+  COS
+  MOM
+  AMP_TM
+  DFM
+  DGM
+  Hojarasca
+  CO2_Flux
+  CH4_Flux
+  N2O_Flux
+} 
+
+Table resultado_publicacion {
+  id int [pk]
+
+  publicacion_id int  [ref: > publicacion.id]
+
+  variable variable_resultado
+
+  valor decimal
+
+  unidad varchar
+
+  error decimal
+
+  metodologia text
+}
+
+
+Ref: proyecto_aliado.proyecto_id > proyecto.id
+Ref: proyecto_aliado.aliado_id > aliado.id
+
+
+

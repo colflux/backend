@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>COLFLUX — Modelo de Base de Datos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Inter', sans-serif; color: #1a2236; background: #fff; line-height: 1.6; }
+
+    :root {
+      --green:   #18735d; --green-l: #e6f4f0; --green-d: #0d4f40;
+      --blue:    #1a6e9b; --blue-l:  #e6f3fb;
+      --purple:  #6b4f9e; --purple-l:#f0ecfa;
+      --amber:   #d97706; --amber-l: #fef3c7;
+      --red:     #dc2626; --red-l:   #fee2e2;
+      --gray:    #64748b; --gray-l:  #f1f5f9;
+      --border:  #e2e8f0;
+    }
+
+    .container { max-width: 1140px; margin: 0 auto; padding: 0 24px; }
+
+    /* ── Nav ── */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(255,255,255,.96); backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border); padding: 12px 0;
+    }
+    .nav-inner { display: flex; align-items: center; justify-content: space-between; max-width: 1140px; margin: 0 auto; padding: 0 24px; }
+    .nav-logo { font-weight: 800; font-size: 1rem; color: var(--green-d); text-decoration: none; display: flex; align-items: center; gap: 8px; }
+    .nav-links { display: flex; gap: 24px; list-style: none; }
+    .nav-links a { color: var(--gray); font-size: .85rem; font-weight: 500; text-decoration: none; transition: color .2s; }
+    .nav-links a:hover { color: var(--green); }
+    .nav-links a.active { color: var(--green); font-weight: 700; }
+    .nav-pill { background: var(--green-d); color: white; font-size: .75rem; font-weight: 700; padding: 5px 12px; border-radius: 20px; text-decoration: none; }
+    @media (max-width: 600px) { .nav-links { display: none; } }
+
+    /* ── Hero ── */
+    .hero { background: #0d4f40; color: white; padding: 56px 0 48px; }
+    .hero-badge { display: inline-flex; align-items: center; gap: 7px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.3); border-radius: 20px; padding: 4px 14px; font-size: .75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 16px; color: white; }
+    .hero h1 { font-size: clamp(1.8rem, 3.5vw, 2.8rem); font-weight: 800; line-height: 1.1; letter-spacing: -.02em; margin-bottom: 12px; }
+    .hero h1 em { font-style: normal; color: #6ee7b7; }
+    .hero-lead { font-size: .95rem; color: rgba(255,255,255,.85); max-width: 560px; line-height: 1.65; margin-bottom: 28px; }
+    .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn-primary { background: white; color: var(--green-d); font-weight: 700; font-size: .85rem; padding: 10px 20px; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; transition: opacity .2s; }
+    .btn-primary:hover { opacity: .9; }
+    .btn-secondary { background: rgba(255,255,255,.15); color: white; border: 1.5px solid rgba(255,255,255,.4); font-weight: 600; font-size: .85rem; padding: 10px 20px; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; transition: background .2s; }
+    .btn-secondary:hover { background: rgba(255,255,255,.25); }
+    .hero-stats { display: flex; gap: 32px; flex-wrap: wrap; margin-top: 32px; padding-top: 28px; border-top: 1px solid rgba(255,255,255,.2); }
+    .hero-stat strong { display: block; font-size: 1.8rem; font-weight: 800; color: #6ee7b7; line-height: 1; }
+    .hero-stat span { font-size: .78rem; color: rgba(255,255,255,.7); }
+
+    /* ── Section headings ── */
+    section { padding: 56px 0; }
+    section:nth-child(even) { background: #fafbfc; }
+    .section-eyebrow { display: flex; align-items: center; gap: 8px; font-size: .75rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--green); margin-bottom: 10px; }
+    .section-eyebrow::before { content: ''; display: block; width: 18px; height: 2px; background: currentColor; }
+    h2.stitle { font-size: clamp(1.4rem, 2.5vw, 1.9rem); font-weight: 800; letter-spacing: -.02em; margin-bottom: 8px; }
+    .sdesc { color: var(--gray); font-size: .92rem; max-width: 580px; margin-bottom: 36px; }
+
+    /* ── Embed ── */
+    .embed-wrapper {
+      border: 1.5px solid var(--border); border-radius: 16px; overflow: hidden;
+      background: var(--gray-l); position: relative;
+      box-shadow: 0 4px 24px rgba(0,0,0,.08);
+    }
+    .embed-toolbar {
+      background: white; border-bottom: 1px solid var(--border);
+      padding: 10px 16px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .embed-dots { display: flex; gap: 6px; }
+    .embed-dot { width: 12px; height: 12px; border-radius: 50%; }
+    .embed-dot:nth-child(1) { background: #ff5f56; }
+    .embed-dot:nth-child(2) { background: #ffbd2e; }
+    .embed-dot:nth-child(3) { background: #27c93f; }
+    .embed-url { font-family: 'JetBrains Mono', monospace; font-size: .75rem; color: var(--gray); background: var(--gray-l); padding: 4px 12px; border-radius: 6px; }
+    .embed-open { font-size: .78rem; font-weight: 700; color: var(--green); text-decoration: none; }
+    .embed-open:hover { text-decoration: underline; }
+    .embed-frame { width: 100%; height: 580px; border: none; display: block; }
+    .embed-fallback {
+      display: none; padding: 60px 32px; text-align: center;
+      flex-direction: column; align-items: center; gap: 16px;
+    }
+    .embed-fallback.visible { display: flex; }
+    .embed-fallback-icon { font-size: 3rem; margin-bottom: 4px; }
+    .embed-fallback h3 { font-size: 1.2rem; font-weight: 700; margin-bottom: 4px; }
+    .embed-fallback p { color: var(--gray); font-size: .88rem; max-width: 380px; }
+    .embed-fallback .btn-primary { margin-top: 8px; background: var(--green-d); color: white; }
+
+    /* ── Schema groups ── */
+    .groups-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+    .group-card {
+      border: 1.5px solid var(--border); border-radius: 14px; overflow: hidden;
+      background: white; box-shadow: 0 2px 8px rgba(0,0,0,.05);
+    }
+    .group-header { padding: 14px 18px; color: white; display: flex; align-items: center; justify-content: space-between; }
+    .group-header h3 { font-size: .95rem; font-weight: 700; }
+    .group-count { font-size: .72rem; font-weight: 700; background: rgba(255,255,255,.25); padding: 2px 8px; border-radius: 12px; }
+    .group-tables { padding: 10px 0; }
+    .table-row { padding: 8px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; gap: 10px; }
+    .table-row:last-child { border-bottom: none; }
+    .table-name { font-family: 'JetBrains Mono', monospace; font-size: .8rem; font-weight: 500; color: #1a2236; white-space: nowrap; min-width: 180px; }
+    .table-fields { font-size: .76rem; color: var(--gray); line-height: 1.5; }
+    .field-tag { display: inline-block; background: var(--gray-l); color: #374151; font-size: .68rem; font-weight: 600; padding: 1px 6px; border-radius: 4px; margin: 1px 2px 1px 0; font-family: 'JetBrains Mono', monospace; }
+    .field-tag.pk { background: #fef3c7; color: #92400e; }
+    .field-tag.fk { background: #e6f3fb; color: #1a6e9b; }
+    .field-tag.m2m { background: var(--purple-l); color: var(--purple); }
+
+    /* ── Relationships ── */
+    .rel-list { display: flex; flex-direction: column; gap: 10px; }
+    .rel-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: white; border: 1px solid var(--border); border-radius: 10px; font-size: .83rem; }
+    .rel-from { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--green-d); }
+    .rel-arrow { color: var(--gray); font-size: 1rem; }
+    .rel-to { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--blue); }
+    .rel-type { margin-left: auto; font-size: .72rem; font-weight: 700; padding: 2px 8px; border-radius: 8px; }
+    .rel-type.many-one { background: var(--blue-l); color: var(--blue); }
+    .rel-type.one-one { background: var(--green-l); color: var(--green); }
+    .rel-type.many-many { background: var(--purple-l); color: var(--purple); }
+
+    /* ── Footer ── */
+    footer { background: #0d1117; color: rgba(255,255,255,.5); padding: 32px 0; font-size: .82rem; }
+    .footer-inner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+    footer a { color: rgba(255,255,255,.6); text-decoration: none; }
+    footer a:hover { color: white; }
+    .footer-links { display: flex; gap: 20px; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a class="nav-logo" href="index.html">🌿 COLFLUX · OE2</a>
+    <ul class="nav-links">
+      <li><a href="index.html">Plan de trabajo</a></li>
+      <li><a href="team.html">Equipo</a></li>
+      <li><a href="db.html" class="active" style="color:var(--green);font-weight:700;">Base de datos</a></li>
+    </ul>
+    <a class="nav-pill" href="https://dbdiagram.io/d/colfux-db-67b2aae2263d6cf9a05d08d0" target="_blank">Abrir diagrama →</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="container">
+    <div class="hero-badge">📐 Esquema de datos</div>
+    <h1>Modelo de <em>Base de Datos</em></h1>
+    <p class="hero-lead">
+      Esquema relacional del sistema COLFLUX. Cubre sitios de monitoreo, proyectos,
+      flujo de cámaras, torres EC, caracterización de suelos y publicaciones científicas.
+    </p>
+    <div class="hero-actions">
+      <a class="btn-primary" href="https://dbdiagram.io/d/colfux-db-67b2aae2263d6cf9a05d08d0" target="_blank">
+        🔗 Ver en dbdiagram.io
+      </a>
+      <a class="btn-secondary" href="#schema">Ver tablas</a>
+    </div>
+    <div class="hero-stats">
+      <div class="hero-stat"><strong>25</strong><span>Tablas</span></div>
+      <div class="hero-stat"><strong>8</strong><span>Módulos</span></div>
+      <div class="hero-stat"><strong>30+</strong><span>Enums</span></div>
+      <div class="hero-stat"><strong>PostgreSQL</strong><span>Motor</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Embed ── -->
+<section>
+  <div class="container">
+    <p class="section-eyebrow">Diagrama interactivo</p>
+    <h2 class="stitle">Diagrama entidad-relación</h2>
+    <p class="sdesc">
+      Diagrama interactivo en dbdiagram.io. Si el navegador bloquea el embed,
+      usa el botón <strong>Abrir en dbdiagram.io</strong> para verlo en pantalla completa.
+    </p>
+
+    <div class="embed-wrapper" id="embedWrapper">
+      <div class="embed-toolbar">
+        <div class="embed-dots">
+          <div class="embed-dot"></div>
+          <div class="embed-dot"></div>
+          <div class="embed-dot"></div>
+        </div>
+        <span class="embed-url">dbdiagram.io/d/colfux-db-67b2aae2263d6cf9a05d08d0</span>
+        <a class="embed-open" href="https://dbdiagram.io/d/colfux-db-67b2aae2263d6cf9a05d08d0" target="_blank">Abrir en pestaña ↗</a>
+      </div>
+      <iframe
+        id="dbFrame"
+        class="embed-frame"
+        src="https://dbdiagram.io/d/colfux-db-67b2aae2263d6cf9a05d08d0"
+        title="Diagrama COLFLUX DB"
+        loading="lazy"
+      ></iframe>
+      <div class="embed-fallback" id="fallback">
+        <div class="embed-fallback-icon">🗄️</div>
+        <h3>El diagrama no puede mostrarse aquí</h3>
+        <p>dbdiagram.io restringe la incrustación en iframes. Ábrelo directamente en su sitio para ver el modelo completo e interactivo.</p>
+        <a class="btn-primary" href="https://dbdiagram.io/d/colfux-db-67b2aae2263d6cf9a05d08d0" target="_blank">
+          🔗 Abrir en dbdiagram.io →
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Schema ── -->
+<section id="schema">
+  <div class="container">
+    <p class="section-eyebrow">Estructura</p>
+    <h2 class="stitle">Tablas por módulo</h2>
+    <p class="sdesc">25 tablas organizadas en 8 módulos funcionales.</p>
+
+    <div class="groups-grid">
+
+      <!-- Geografía -->
+      <div class="group-card">
+        <div class="group-header" style="background:#34495e;">
+          <h3>📍 Geografía</h3>
+          <span class="group-count">4 tablas</span>
+        </div>
+        <div class="group-tables">
+          <div class="table-row">
+            <span class="table-name">region</span>
+            <div class="table-fields">
+              <span class="field-tag pk">id</span>
+              <span class="field-tag">nombre</span>
+            </div>
+          </div>
+          <div class="table-row">
+            <span class="table-name">departamento</span>
+            <div class="table-fields">
+              <span class="field-tag pk">id</span>
+              <span class="field-tag">nombre</span>
+              <span class="field-tag fk">region_id</span>
+            </div>
+          </div>
+          <div class="table-row">
+            <span class="table-name">municipio</span>
+            <div class="table-fields">
+              <span class="field-tag pk">id</span>
+              <span class="field-tag">nombre</span>
+              <span class="field-tag fk">departamento_id</span>
+            </div>
+          </div>
+          <div class="table-row">
+            <span class="table-name">sistema_referencia</span>
+            <div class="table-fields">
+              <span class="field-tag pk">id</span>
+              <span class="field-tag">nombre (EPSG)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cobertura -->
+      <div class="group-card">
+        <div class="group-header" style="background:#27ae60;">
+          <h3>🌿 Cobertura / Disturbio</h3>
+          <span class="group-count">3 tablas</span>
+        </div>
+        <div class="group-tables">
+          <div class="table-row">
+            <span class="table-name">cobertura</span>
+            <div class="table-fields">
+              <span class="field-tag pk">id</span>
+              <span class="field-tag">cobertura_clc</span>
+              <span class="field-tag">nombre_comun</span>
+              <span class="field-tag">clima_koeppen</span>
+              <span class="field-tag">igbp</span>
+            </div>
+          </div>
+          <div class="table-row">
+            <span class="table-name">vegetacion</span>
+            <div class="table-fields">
+              <span class="field-tag pk">id</span>
+              <span class="field-tag">tipo_cobertura</span>
+              <span class="field-tag">especies_dominantes</span>
+              <span class="field-tag">altura_dosel</span>
+            </div>
+          </div>
+          <div class="table-row">
+            <span class="table-name">disturbio</span>
+            <div class="table-fields">
+              <span class="field-tag pk">id</span>
+              <span class="field-tag">tipo</span>
+              <span class="field-tag">estado_actual</span>
+              <span class="field-tag">fecha_inicio</span>
+              <span class="field-tag">anios_disturbio</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sitio -->
+      <div class="group-card">
+        <div class="group-header" style="background:#f1c40f; color:#1a2236;">
+          <h3>📌 Sitio de monitoreo</h3>
+          <span class="group-count" style="background:rgba(0,0,0,.15); color:#1a2236;">4 tablas</span>
+        </div>
+        <div class="group-tables">
+          <div class="table-row">
+            <span class="table-name">sitio</span>
+            <div class="table-fields">
+              <span class="field-tag pk">id</span>
+              <span class="field-tag">nombre</span>
+              <span class="field-tag">latitud / longitud</span>
+              <span class="field-tag fk">municipio</span>
+              <span class="field-tag fk">cobertura</span>
+              <span class="field-tag fk">disturbio</span>
+              <span class="field-tag fk">vegetacion</span>
+            </div>
+          </div>
+          <div class="table-row">
+            <span class="table-name">parcela</span>
+            <div class="table-fields">
+              <span class="field-tag pk">id</span>
+              <span class="field-tag fk">sitio_id</span>
+              <span class="field-tag">unidad_muestreo</span>
+              <span class="field-tag">area</span>
+              <span class="field-tag">estatus</span>
+            </div>
+          </div>
+          <div class="table-row">
+            <span class="table-name">transecto</span>
+            <div class="table-fields">
+              <span class="field-tag pk">id</span>
+              <span class="field-tag fk">sitio_id</span>
+              <span class="field-tag fk">parcela_id</span>
+            </div>
+          </div>
+          <div class="table-row">
+            <span class="table-name">monitoreo_parcela</span>
+            <div class="table-fields">
+              <span class="field-tag pk">id</span>
+              <span class="field-tag fk">parcela_id</span>
+              <span class="field-tag">tipo_monitoreo</span>
+              <span class="field-tag">protocolo</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Proyecto -->
+      <div class="group-card">
+        <div class="group-header" style="background:#e84393;">
+          <h3>🗂 Proyecto</h3>
+          <span class="group-count">3 tablas</span>
+        </div>
+        <div class="group-tables">
+          <div class="table-row">
+            <span class="table-name">proyecto</span>
+            <div class="table-fields">
+              <span class="field-tag pk">id</span>
+              <span class="field-tag">codigo</span>
+              <span class="field-tag">nombre</span>
+              <span class="field-tag">coordinador</span>
+              <span class="field-tag">escala_espacial</span>
+              <span class="field-tag fk">sitio_id</span>
+            </div>
+          </div>
+          <div class="table-row">
+            <span class="table-name">aliado</span>
+            <div class="table-fields">
+              <span class="field-tag pk">id</span>
+              <span class="field-tag">nombre</span>
+              <span class="field-tag">correo</span>
+            </div>
+          </div>
+          <div class="table-row">
+            <span class="table-name">proyecto_aliado</span>
+            <div class="table-fields">
+              <span class="field-tag m2m">M2M</span>
+              <span class="field-tag fk">proyecto_id</span>
+              <span class="field-tag fk">aliado_id</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Flujo Cámaras -->
+      <div class="group-card">
+        <div class="group-header" style="background:#9b59b6;">
+          <h3>🎥 Flujo Cámaras</h3>
+          <span class="group-count">1 tabla</span>
+        </div>
+        <div class="group-tables">
+          <div class="table-row">
+            <span class="table-name">flujo_camaras</span>
+            <div class="table-fields">
+              <span class="field-tag pk">id</span>
+              <span class="field-tag fk">sitio_id</span>
+              <span class="field-tag">microtopografia</span>
+              <span class="field-tag">diametro_anillo</span>
+              <span class="field-tag">cob. vegetal ×3</span>
+              <span class="field-tag">distancias ×4</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Torre EC -->
+      <div class="group-card">
+        <div class="group-header" style="background:#2980b9;">
+          <h3>📡 Torre EC</h3>
+          <span class="group-count">4 tablas</span>
+        </div>
+        <div class="group-tables">
+          <div class="table-row">
+            <span class="table-name">torre_ec</span>
+            <div class="table-fields">
+              <span class="field-tag pk">id</span>
+              <span class="field-tag fk">sitio_id</span>
+              <span class="field-tag">altura_torre</span>
+              <span class="field-tag">altura_canopy</span>
+              <span class="field-tag">frecuencia_adq.</span>
+            </div>
+          </div>
+          <div class="table-row">
+            <span class="table-name">torre_fuente_energia</span>
+            <div class="table-fields">
+              <span class="field-tag pk">id</span>
+              <span class="field-tag fk">torre_id</span>
+              <span class="field-tag">tipo_fuente</span>
+            </div>
+          </div>
+          <div class="table-row">
+            <span class="table-name">configuracion_sensor_gas</span>
+            <div class="table-fields">
+              <span class="field-tag pk">id</span>
+              <span class="field-tag fk">torre_id</span>
+              <span class="field-tag">gas (CO₂/CH₄/N₂O)</span>
+              <span class="field-tag">longitud_tubo</span>
+            </div>
+          </div>
+          <div class="table-row">
+            <span class="table-name">equipo</span>
+            <div class="table-fields">
+              <span class="field-tag pk">id</span>
+              <span class="field-tag fk">torre_id</span>
+              <span class="field-tag">tipo_equipo</span>
+              <span class="field-tag">modelo</span>
+              <span class="field-tag">serial</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Suelo -->
+      <div class="group-card">
+        <div class="group-header" style="background:#f39c12;">
+          <h3>🪨 Suelo</h3>
+          <span class="group-count">2 tablas</span>
+        </div>
+        <div class="group-tables">
+          <div class="table-row">
+            <span class="table-name">caracterizacion_muestreo_suelo</span>
+            <div class="table-fields">
+              <span class="field-tag pk">id</span>
+              <span class="field-tag fk">sitio_id</span>
+              <span class="field-tag">tipo_de_suelo</span>
+              <span class="field-tag">profundidad_perfil</span>
+              <span class="field-tag">intervalos_perfil</span>
+            </div>
+          </div>
+          <div class="table-row">
+            <span class="table-name">monitoreo_suelo</span>
+            <div class="table-fields">
+              <span class="field-tag pk">id</span>
+              <span class="field-tag fk">caracterizacion_id</span>
+              <span class="field-tag">tipo (COS/DA…)</span>
+              <span class="field-tag">protocolo</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Publicaciones -->
+      <div class="group-card">
+        <div class="group-header" style="background:#16a085;">
+          <h3>📄 Publicaciones</h3>
+          <span class="group-count">5 tablas</span>
+        </div>
+        <div class="group-tables">
+          <div class="table-row">
+            <span class="table-name">publicacion</span>
+            <div class="table-fields">
+              <span class="field-tag pk">id</span>
+              <span class="field-tag">titulo</span>
+              <span class="field-tag">doi / isbn</span>
+              <span class="field-tag">journal</span>
+              <span class="field-tag">anio</span>
+            </div>
+          </div>
+          <div class="table-row">
+            <span class="table-name">autor</span>
+            <div class="table-fields">
+              <span class="field-tag pk">id</span>
+              <span class="field-tag">nombre</span>
+            </div>
+          </div>
+          <div class="table-row">
+            <span class="table-name">publicacion_autor</span>
+            <div class="table-fields">
+              <span class="field-tag m2m">M2M</span>
+              <span class="field-tag fk">publicacion_id</span>
+              <span class="field-tag fk">autor_id</span>
+            </div>
+          </div>
+          <div class="table-row">
+            <span class="table-name">publicacion_sitio</span>
+            <div class="table-fields">
+              <span class="field-tag m2m">M2M</span>
+              <span class="field-tag fk">publicacion_id</span>
+              <span class="field-tag fk">sitio_id</span>
+            </div>
+          </div>
+          <div class="table-row">
+            <span class="table-name">resultado_publicacion</span>
+            <div class="table-fields">
+              <span class="field-tag pk">id</span>
+              <span class="field-tag fk">publicacion_id</span>
+              <span class="field-tag">variable</span>
+              <span class="field-tag">valor / unidad</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── Relaciones clave ── -->
+<section>
+  <div class="container">
+    <p class="section-eyebrow">Relaciones</p>
+    <h2 class="stitle">Relaciones clave</h2>
+    <p class="sdesc"><code>sitio</code> es el nodo central: la mayoría de entidades lo referencian.</p>
+
+    <div class="rel-list">
+      <div class="rel-item">
+        <span class="rel-from">municipio</span>
+        <span class="rel-arrow">→</span>
+        <span class="rel-to">departamento → region</span>
+        <span class="rel-type many-one">N:1 en cascada</span>
+      </div>
+      <div class="rel-item">
+        <span class="rel-from">sitio</span>
+        <span class="rel-arrow">→</span>
+        <span class="rel-to">municipio, cobertura, vegetacion, disturbio, sistema_referencia</span>
+        <span class="rel-type many-one">N:1</span>
+      </div>
+      <div class="rel-item">
+        <span class="rel-from">parcela</span>
+        <span class="rel-arrow">→</span>
+        <span class="rel-to">sitio</span>
+        <span class="rel-type many-one">N:1</span>
+      </div>
+      <div class="rel-item">
+        <span class="rel-from">proyecto</span>
+        <span class="rel-arrow">→</span>
+        <span class="rel-to">sitio (sitio principal)</span>
+        <span class="rel-type many-one">N:1 nullable</span>
+      </div>
+      <div class="rel-item">
+        <span class="rel-from">proyecto ↔ aliado</span>
+        <span class="rel-arrow">↔</span>
+        <span class="rel-to">proyecto_aliado</span>
+        <span class="rel-type many-many">M:N</span>
+      </div>
+      <div class="rel-item">
+        <span class="rel-from">flujo_camaras</span>
+        <span class="rel-arrow">→</span>
+        <span class="rel-to">sitio</span>
+        <span class="rel-type many-one">N:1</span>
+      </div>
+      <div class="rel-item">
+        <span class="rel-from">torre_ec</span>
+        <span class="rel-arrow">→</span>
+        <span class="rel-to">sitio</span>
+        <span class="rel-type many-one">N:1</span>
+      </div>
+      <div class="rel-item">
+        <span class="rel-from">equipo / config_sensor_gas / fuente_energia</span>
+        <span class="rel-arrow">→</span>
+        <span class="rel-to">torre_ec</span>
+        <span class="rel-type many-one">N:1</span>
+      </div>
+      <div class="rel-item">
+        <span class="rel-from">caracterizacion_muestreo_suelo</span>
+        <span class="rel-arrow">→</span>
+        <span class="rel-to">sitio</span>
+        <span class="rel-type many-one">N:1</span>
+      </div>
+      <div class="rel-item">
+        <span class="rel-from">publicacion ↔ sitio</span>
+        <span class="rel-arrow">↔</span>
+        <span class="rel-to">publicacion_sitio</span>
+        <span class="rel-type many-many">M:N</span>
+      </div>
+      <div class="rel-item">
+        <span class="rel-from">publicacion ↔ autor</span>
+        <span class="rel-arrow">↔</span>
+        <span class="rel-to">publicacion_autor</span>
+        <span class="rel-type many-many">M:N</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <span>🌿 COLFLUX OE2 — Modelo de BD</span>
+      <div class="footer-links">
+        <a href="https://github.com/vivianabautistaxyz/backend-colfux" target="_blank">GitHub</a>
+        <a href="https://dbdiagram.io/d/colfux-db-67b2aae2263d6cf9a05d08d0" target="_blank">dbdiagram.io</a>
+        <a href="index.html">Plan de trabajo</a>
+        <a href="team.html">Equipo</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Detecta si el iframe fue bloqueado y muestra el fallback
+  const frame = document.getElementById('dbFrame');
+  const fallback = document.getElementById('fallback');
+
+  // Timeout: si en 4s el iframe no cargó contenido accesible, mostramos fallback
+  const timer = setTimeout(() => {
+    try {
+      // Intento de acceso cross-origin (lanzará error si fue bloqueado)
+      const loaded = frame.contentDocument || frame.contentWindow.document;
+      if (!loaded || loaded.body.innerHTML.trim() === '') throw new Error('empty');
+    } catch {
+      frame.style.display = 'none';
+      fallback.classList.add('visible');
+    }
+  }, 4000);
+
+  frame.addEventListener('load', () => {
+    clearTimeout(timer);
+    try {
+      const doc = frame.contentDocument || frame.contentWindow.document;
+      if (!doc || doc.body.innerHTML.trim() === '') throw new Error('blocked');
+    } catch {
+      frame.style.display = 'none';
+      fallback.classList.add('visible');
+    }
+  });
+
+  frame.addEventListener('error', () => {
+    clearTimeout(timer);
+    frame.style.display = 'none';
+    fallback.classList.add('visible');
+  });
+</script>
+</body>
+</html>

@@ -1,155 +1,159 @@
 from django.contrib import admin
 
 from .models import (
-    DatasetMetadata, EmissionRecord, EmissionSource, Gas, Region, Sector,
-    Proyecto, SitioMonitoreo, RegistroFlujoCamara,
-    Cobertura, Disturbio, Caracterizacion, CaracterizacionMuestreo,
-    VegetacionAnillo, Distancias,
-    RegistroBiomasa, CaracterizacionParcela,
+    Aliado, Autor, CaracterizacionMuestreoSuelo, Cobertura,
+    ConfiguracionSensorGas, Departamento, Disturbio, Equipo,
+    FlujoCamaras, MonitoreoParcela, MonitoreoSuelo, Municipio,
+    Parcela, Proyecto, ProyectoAliado, Publicacion, PublicacionAutor,
+    PublicacionSitio, Region, ResultadoPublicacion, Sitio,
+    SistemaReferencia, TorreEc, TorreFuenteEnergia, Transecto, Vegetacion,
 )
-
-
-@admin.register(DatasetMetadata)
-class DatasetMetadataAdmin(admin.ModelAdmin):
-    list_display = ("name", "source", "version", "publication_year")
-    search_fields = ("name", "source", "description")
 
 
 @admin.register(Region)
 class RegionAdmin(admin.ModelAdmin):
-    list_display = ("name", "code", "region_type", "parent")
-    list_filter = ("region_type",)
-    search_fields = ("name", "code")
+    list_display = ("nombre",)
 
 
-@admin.register(Sector)
-class SectorAdmin(admin.ModelAdmin):
-    list_display = ("name", "ipcc_code")
-    search_fields = ("name", "ipcc_code")
+@admin.register(Departamento)
+class DepartamentoAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "region")
+    list_filter = ("region",)
 
 
-@admin.register(Gas)
-class GasAdmin(admin.ModelAdmin):
-    list_display = ("chemical_formula", "name", "gwp_100")
-    search_fields = ("name", "chemical_formula")
+@admin.register(Municipio)
+class MunicipioAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "departamento")
+    list_filter = ("departamento",)
+    search_fields = ("nombre",)
 
 
-@admin.register(EmissionSource)
-class EmissionSourceAdmin(admin.ModelAdmin):
-    list_display = ("name", "sector")
-    list_filter = ("sector",)
-    search_fields = ("name", "description")
-
-
-@admin.register(EmissionRecord)
-class EmissionRecordAdmin(admin.ModelAdmin):
-    list_display = ("year", "region", "sector", "source", "gas", "co2e_tonnes", "data_quality")
-    list_filter = ("year", "region", "sector", "gas", "data_quality")
-    search_fields = ("region__name", "sector__name", "source__name", "notes")
-
-
-@admin.register(Proyecto)
-class ProyectoAdmin(admin.ModelAdmin):
-    list_display = ("codigo", "nombre", "created_at")
-    search_fields = ("codigo", "nombre")
-
-
-@admin.register(SitioMonitoreo)
-class SitioMonitoreoAdmin(admin.ModelAdmin):
-    list_display = ("codigo_sitio", "proyecto", "region_natural", "ecosistema", "departamento", "latitud", "longitud")
-    list_filter = ("region_natural", "ecosistema", "departamento", "pendiente")
-    search_fields = ("codigo_sitio", "proyecto__codigo", "sitio_urbano_cercano")
-    raw_id_fields = ("proyecto",)
-
-
-@admin.register(RegistroFlujoCamara)
-class RegistroFlujoCamaraAdmin(admin.ModelAdmin):
-    list_display = ("codigo_metadatos", "sitio", "created_at")
-    search_fields = ("codigo_metadatos", "sitio__codigo_sitio")
-    raw_id_fields = ("sitio",)
+@admin.register(SistemaReferencia)
+class SistemaReferenciaAdmin(admin.ModelAdmin):
+    list_display = ("nombre",)
 
 
 @admin.register(Cobertura)
 class CoberturaAdmin(admin.ModelAdmin):
-    list_display = ("registro", "cobertura_ipcc", "cobertura_clc", "cobertura_humedal", "clima_koeppen")
-    list_filter = ("cobertura_humedal", "clima_koeppen")
-    search_fields = ("registro__codigo_metadatos", "cobertura_nom_comun")
-    raw_id_fields = ("registro",)
+    list_display = ("cobertura_nombre_comun", "cobertura_clc", "clima_koeppen")
+    list_filter = ("clima_koeppen",)
+    search_fields = ("cobertura_nombre_comun", "cobertura_clc")
+
+
+@admin.register(Vegetacion)
+class VegetacionAdmin(admin.ModelAdmin):
+    list_display = ("tipo_cobertura", "estado_sucesional", "altura_dosel", "porcentaje_cobertura")
+    list_filter = ("tipo_cobertura",)
 
 
 @admin.register(Disturbio)
 class DisturbioAdmin(admin.ModelAdmin):
-    list_display = ("registro", "tipo_disturbio", "uso_actual", "estado_actual", "propiedad_tierra")
-    list_filter = ("tipo_disturbio", "uso_actual", "estado_actual", "propiedad_tierra")
-    search_fields = ("registro__codigo_metadatos",)
-    raw_id_fields = ("registro",)
+    list_display = ("tipo", "estado_actual", "fecha_inicio", "fecha_fin")
+    list_filter = ("tipo", "estado_actual")
 
 
-@admin.register(Caracterizacion)
-class CaracterizacionAdmin(admin.ModelAdmin):
-    list_display = ("registro", "tipo_de_suelo", "microtopografia", "diametro_anillo")
-    list_filter = ("tipo_de_suelo", "microtopografia")
-    search_fields = ("registro__codigo_metadatos", "tratamiento")
-    raw_id_fields = ("registro",)
+@admin.register(Sitio)
+class SitioAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "municipio", "latitud", "longitud", "uso_actual", "intervenido")
+    list_filter = ("uso_actual", "propiedad_tierra", "pendiente")
+    search_fields = ("nombre", "codigo_metadatos")
+    raw_id_fields = ("municipio", "disturbio", "vegetacion", "cobertura", "sistema_referencia")
 
 
-@admin.register(CaracterizacionMuestreo)
-class CaracterizacionMuestreoAdmin(admin.ModelAdmin):
-    list_display = ("registro", "profundidad_perfil", "intervalos_perfil",
-                    "monitoreo_macrofosiles", "monitoreo_datacion",
-                    "monitoreo_densidad_aparente", "monitoreo_cos")
-    list_filter = ("monitoreo_macrofosiles", "monitoreo_datacion",
-                   "monitoreo_densidad_aparente", "monitoreo_cos",
-                   "protocolo_densidad_aparente", "protocolo_cos")
-    search_fields = ("registro__codigo_metadatos", "protocolo_macrofosiles", "protocolo_datacion")
-    raw_id_fields = ("registro",)
-    fieldsets = (
-        ("Identificación", {"fields": ("registro",)}),
-        ("Perfil", {"fields": ("profundidad_perfil", "intervalos_perfil")}),
-        ("Macrofósiles", {"fields": ("monitoreo_macrofosiles", "protocolo_macrofosiles")}),
-        ("Datación", {"fields": ("monitoreo_datacion", "protocolo_datacion")}),
-        ("Densidad Aparente", {"fields": ("monitoreo_densidad_aparente", "protocolo_densidad_aparente")}),
-        ("Carbono Orgánico del Suelo (COS)", {"fields": ("monitoreo_cos", "protocolo_cos")}),
-    )
-
-
-@admin.register(VegetacionAnillo)
-class VegetacionAnilloAdmin(admin.ModelAdmin):
-    list_display = ("registro", "cobertura_vegetal_primaria", "porcentaje_cob_veg_pri",
-                    "cobertura_vegetal_secundaria", "porcentaje_cob_veg_sec")
-    search_fields = ("registro__codigo_metadatos", "cobertura_vegetal_primaria")
-    raw_id_fields = ("registro",)
-
-
-@admin.register(Distancias)
-class DistanciasAdmin(admin.ModelAdmin):
-    list_display = ("registro", "distancia_drenaje", "distancia_fuego",
-                    "distancia_pastoreo", "distancia_cultivo")
-    search_fields = ("registro__codigo_metadatos",)
-    raw_id_fields = ("registro",)
-
-
-@admin.register(RegistroBiomasa)
-class RegistroBiomasaAdmin(admin.ModelAdmin):
-    list_display = ("codigo_metadatos", "sitio", "parcela", "created_at")
-    search_fields = ("codigo_metadatos", "sitio__codigo_sitio", "parcela")
+@admin.register(Parcela)
+class ParcelaAdmin(admin.ModelAdmin):
+    list_display = ("pk", "sitio", "unidad_muestreo", "area", "estatus", "fecha_instalacion")
+    list_filter = ("estatus", "unidad_muestreo")
     raw_id_fields = ("sitio",)
 
 
-@admin.register(CaracterizacionParcela)
-class CaracterizacionParcelaAdmin(admin.ModelAdmin):
-    list_display = ("registro", "unidad_de_muestreo", "area", "estatus_parcela",
-                    "fecha_instalacion", "monitoreo_biomasa_aerea", "monitoreo_flora")
-    list_filter = ("estatus_parcela", "unidad_de_muestreo",
-                   "monitoreo_biomasa_aerea", "monitoreo_biomasa_subterranea",
-                   "monitoreo_flora", "monitoreo_rasgos_funcionales")
-    search_fields = ("registro__codigo_metadatos",)
-    raw_id_fields = ("registro",)
-    fieldsets = (
-        ("Identificación", {"fields": ("registro",)}),
-        ("Parcela", {"fields": ("unidad_de_muestreo", "area", "estatus_parcela", "fecha_instalacion")}),
-        ("Biomasa Aérea", {"fields": ("monitoreo_biomasa_aerea", "protocolo_biomasa_aerea")}),
-        ("Biomasa Subterránea", {"fields": ("monitoreo_biomasa_subterranea", "protocolo_biomasa_subterranea")}),
-        ("Flora", {"fields": ("monitoreo_flora", "protocolo_flora")}),
-        ("Rasgos Funcionales", {"fields": ("monitoreo_rasgos_funcionales", "protocolo_rasgos_funcionales")}),
-    )
+@admin.register(Transecto)
+class TransectoAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "sitio", "parcela")
+    search_fields = ("nombre",)
+    raw_id_fields = ("sitio", "parcela")
+
+
+@admin.register(MonitoreoParcela)
+class MonitoreoParcelaAdmin(admin.ModelAdmin):
+    list_display = ("parcela", "tipo_monitoreo", "activo", "protocolo")
+    list_filter = ("tipo_monitoreo", "activo")
+    raw_id_fields = ("parcela",)
+
+
+@admin.register(Aliado)
+class AliadoAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "correo")
+    search_fields = ("nombre",)
+
+
+@admin.register(Proyecto)
+class ProyectoAdmin(admin.ModelAdmin):
+    list_display = ("codigo", "nombre", "coordinador", "escala_espacial", "fecha_inicio", "fecha_fin")
+    list_filter = ("escala_espacial",)
+    search_fields = ("codigo", "nombre", "coordinador")
+    raw_id_fields = ("sitio_principal",)
+
+
+@admin.register(FlujoCamaras)
+class FlujoCamarasAdmin(admin.ModelAdmin):
+    list_display = ("pk", "sitio", "microtopografia", "diametro_anillo", "created_at")
+    list_filter = ("microtopografia",)
+    raw_id_fields = ("sitio",)
+
+
+@admin.register(TorreEc)
+class TorreEcAdmin(admin.ModelAdmin):
+    list_display = ("pk", "sitio", "fecha_instalacion", "altura_torre", "altura_anemometro")
+    raw_id_fields = ("sitio",)
+
+
+@admin.register(TorreFuenteEnergia)
+class TorreFuenteEnergiaAdmin(admin.ModelAdmin):
+    list_display = ("torre", "tipo_fuente", "sistema_puesta_tierra")
+    list_filter = ("tipo_fuente",)
+
+
+@admin.register(Equipo)
+class EquipoAdmin(admin.ModelAdmin):
+    list_display = ("tipo_equipo", "modelo", "serial", "torre")
+    list_filter = ("tipo_equipo",)
+    search_fields = ("modelo", "serial")
+
+
+@admin.register(ConfiguracionSensorGas)
+class ConfiguracionSensorGasAdmin(admin.ModelAdmin):
+    list_display = ("torre", "gas", "longitud_tubo", "diametro_tubo")
+    list_filter = ("gas",)
+
+
+@admin.register(CaracterizacionMuestreoSuelo)
+class CaracterizacionMuestreoSueloAdmin(admin.ModelAdmin):
+    list_display = ("muestreo_id", "sitio", "tipo_de_suelo", "profundidad_perfil")
+    list_filter = ("tipo_de_suelo",)
+    raw_id_fields = ("sitio",)
+
+
+@admin.register(MonitoreoSuelo)
+class MonitoreoSueloAdmin(admin.ModelAdmin):
+    list_display = ("caracterizacion", "tipo_monitoreo", "activo")
+    list_filter = ("tipo_monitoreo", "activo")
+
+
+@admin.register(Publicacion)
+class PublicacionAdmin(admin.ModelAdmin):
+    list_display = ("titulo", "anio", "journal", "validacion_campo", "datos_disponibles_repositorio")
+    list_filter = ("anio", "validacion_campo", "datos_disponibles_repositorio")
+    search_fields = ("titulo", "doi", "isbn", "keywords")
+
+
+@admin.register(Autor)
+class AutorAdmin(admin.ModelAdmin):
+    list_display = ("nombre",)
+    search_fields = ("nombre",)
+
+
+@admin.register(ResultadoPublicacion)
+class ResultadoPublicacionAdmin(admin.ModelAdmin):
+    list_display = ("publicacion", "variable", "valor", "unidad")
+    list_filter = ("variable",)

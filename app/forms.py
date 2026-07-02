@@ -1,29 +1,28 @@
 from django import forms
 
-from .models import EmissionRecord
+from .models import Sitio
 
 
-class EmissionRecordForm(forms.ModelForm):
+class SitioForm(forms.ModelForm):
     class Meta:
-        model = EmissionRecord
+        model = Sitio
         fields = [
-            "dataset",
-            "region",
-            "sector",
-            "source",
-            "gas",
-            "year",
-            "value_tonnes",
-            "co2e_tonnes",
-            "unit",
-            "method",
-            "data_quality",
-            "notes",
+            "nombre",
+            "codigo_metadatos",
+            "latitud",
+            "longitud",
+            "sistema_referencia",
+            "altitud",
+            "pendiente",
+            "topografia",
+            "uso_actual",
+            "propiedad_tierra",
+            "intervenido",
+            "municipio",
+            "disturbio",
+            "vegetacion",
+            "cobertura",
         ]
-        widgets = {
-            "notes": forms.Textarea(attrs={"rows": 3}),
-            "method": forms.TextInput(attrs={"placeholder": "Ej. factor de emision IPCC"}),
-        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
