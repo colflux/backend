@@ -1,0 +1,34 @@
+app/migrations/0001_initial.py
+  s_5317050cfb94c2::t_a971b4d80a7afa 1-2,8,15,17-25,28-34,36-40,43,45-53,56,58-62,65,67-75,78-184,186-577,582-971,974-1030,1032-1036,1039,1041-1049,1052-1202,1204-1208,1211,1213-1275,1278-1340,1342-2123
+docs/data.html
+  s_5317050cfb94c2::t_db1c320f441636 134-195
+  s_5317050cfb94c2::t_c73baffee76328 566-646
+  s_5317050cfb94c2::t_054a06144a8d32 281-284
+  s_5317050cfb94c2::t_26c736b0778c0a 299-362
+requirements.txt
+  s_5317050cfb94c2::t_50e39a40ab93a1 5
+colfux/settings.py
+  s_5317050cfb94c2::t_7d2746f0c046f7 94-96
+  s_5317050cfb94c2::t_6851e4ae6dabfb 23
+  s_5317050cfb94c2::t_f65736e5251ab4 19
+app/urls.py
+  s_5317050cfb94c2::t_dba93c483713fa 8
+app/views.py
+  s_5317050cfb94c2::t_9f461e53e5f042 1-2,4,50-99
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "ea6aaffb9d5a96aba28e0d2008519a4d2e763eb0",
+  "prompts": {},
+  "sessions": {
+    "s_5317050cfb94c2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26bb51e5-b683-4a9d-b120-3d81fb32f4fb",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    }
+  }
+}
