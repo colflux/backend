@@ -7,7 +7,29 @@
       "Bash(docker-compose ps *)",
       "Bash(cp -r /Users/labautista/colfux/backend-colfux/greenhouse_project /Users/labautista/colfux/backend-colfux/colfux)",
       "Bash(cp -r /Users/labautista/colfux/backend-colfux/emissions /Users/labautista/colfux/backend-colfux/app)",
-      "Bash(docker-compose restart *)"
+      "Bash(docker-compose restart *)",
+      "Bash(pdftoppm --version)",
+      "Bash(.venv/bin/python manage.py check)",
+      "WebFetch(domain:dbdiagram.io)",
+      "Bash(cat ~/.ssh/config 2>/dev/null || echo \"No SSH config found\")",
+      "Read(//Users/labautista/.ssh/**)",
+      "Bash(.venv/bin/python manage.py makemigrations)",
+      "Bash(.venv/bin/python manage.py migrate)",
+      "Bash(.venv/bin/python manage.py showmigrations app)",
+      "Bash(.venv/bin/python manage.py dbshell -- -c \"DELETE FROM django_migrations WHERE app = 'app';\")",
+      "Bash(sqlite3 /Users/labautista/colfux/backend-colfux/db.sqlite3 \"DELETE FROM django_migrations WHERE app = 'app';\")",
+      "Bash(sqlite3 /Users/labautista/colfux/backend-colfux/db.sqlite3 \"SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'app_%';\")",
+      "Bash(sqlite3 /Users/labautista/colfux/backend-colfux/db.sqlite3 ' *)",
+      "Bash(.venv/bin/python manage.py createsuperuser --username admin --email laydi.bautista@mercadolibre.com.co)",
+      "Bash(.venv/bin/python manage.py shell -c ' *)",
+      "Bash(.venv/bin/python manage.py runserver)",
+      "Bash(.venv/bin/pip install *)",
+      "Bash(pkill -f \"manage.py runserver\")",
+      "Bash(.venv/bin/python -c \"import corsheaders; print\\(corsheaders.__version__\\)\")",
+      "Bash(.venv/bin/pip show *)",
+      "Bash(pkill -9 -f \"manage.py runserver\")",
+      "Bash(.venv/bin/python manage.py runserver --noreload)",
+      "Bash(pkill -f \"http.server 8080\")"
     ]
   }
 }

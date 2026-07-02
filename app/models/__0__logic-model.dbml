@@ -624,5 +624,26 @@ Table resultado_publicacion {
 Ref: proyecto_aliado.proyecto_id > proyecto.id
 Ref: proyecto_aliado.aliado_id > aliado.id
 
+Table reportador [headercolor: #2c3e50] {
+  id int [pk, increment]
+  nombre varchar
+  correo_institucional varchar
+  correo varchar
+  institucion_asociada varchar
+}
+
+Table fuente_datos [headercolor: #e67e22] {
+  id int [pk, increment]
+  proyecto_id int [ref: > proyecto.id]
+  reportador_id int [ref: > reportador.id]
+  nombre varchar
+  descripcion text
+  tipo varchar // excel, csv, shapefile, geojson, api, base_de_datos, otro
+  url varchar
+  estado varchar // pendiente, en_proceso, completo, con_errores
+  fecha_recepcion date
+  notas text
+}
+
 
 

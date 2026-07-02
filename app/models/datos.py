@@ -3,6 +3,21 @@ from django.db import models
 from .base import TimestampedModel
 
 
+class Reportador(TimestampedModel):
+    nombre = models.CharField("nombre", max_length=255)
+    correo_institucional = models.EmailField("correo institucional", blank=True)
+    correo = models.EmailField("correo personal", blank=True)
+    institucion_asociada = models.CharField("institución asociada", max_length=255, blank=True)
+
+    class Meta:
+        verbose_name = "reportador"
+        verbose_name_plural = "reportadores"
+        ordering = ["nombre"]
+
+    def __str__(self):
+        return self.nombre
+
+
 class FuenteDatos(TimestampedModel):
     TIPO_CHOICES = [
         ("excel", "Excel (.xlsx / .xls)"),
@@ -24,9 +39,9 @@ class FuenteDatos(TimestampedModel):
         "app.Proyecto", on_delete=models.SET_NULL, null=True, blank=True,
         related_name="fuentes_datos", verbose_name="proyecto",
     )
-    sitio = models.ForeignKey(
-        "app.Sitio", on_delete=models.SET_NULL, null=True, blank=True,
-        related_name="fuentes_datos", verbose_name="sitio",
+    reportador = models.ForeignKey(
+        Reportador, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="fuentes_datos", verbose_name="reportador",
     )
 
     nombre = models.CharField("nombre", max_length=255)
@@ -34,8 +49,7 @@ class FuenteDatos(TimestampedModel):
     tipo = models.CharField("tipo", max_length=20, choices=TIPO_CHOICES, default="excel")
     url = models.URLField("enlace al archivo", max_length=2048, blank=True)
     estado = models.CharField("estado", max_length=20, choices=ESTADO_CHOICES, default="pendiente")
-    responsable = models.CharField("responsable", max_length=255, blank=True)
-    fecha_datos = models.DateField("fecha de los datos", null=True, blank=True)
+    fecha_recepcion = models.DateField("fecha de recepción", null=True, blank=True)
     notas = models.TextField("notas", blank=True)
 
     class Meta:

@@ -16,7 +16,7 @@ from .suelo import CaracterizacionMuestreoSuelo, MonitoreoSuelo
 
 from .publicacion import Autor, Publicacion, PublicacionAutor, PublicacionSitio, ResultadoPublicacion
 
-from .datos import FuenteDatos
+from .datos import FuenteDatos, Reportador
 
 __all__ = [
     "TimestampedModel",
@@ -49,6 +49,7 @@ __all__ = [
     "CaracterizacionMuestreoSuelo",
     "MonitoreoSuelo",
     # Gestión de datos
+    "Reportador",
     "FuenteDatos",
     # Publicaciones
     "Autor",
