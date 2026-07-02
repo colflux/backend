@@ -266,7 +266,10 @@
 
       <!-- Sidebar de proyectos -->
       <aside class="sidebar">
-        <div class="sidebar-title">Proyectos</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div class="sidebar-title" style="margin-bottom:0;">Proyectos</div>
+          <button class="btn-nueva" style="font-size:.72rem;padding:5px 10px;" onclick="openProyectoDrawer()">＋ Nuevo</button>
+        </div>
         <div class="proyecto-list" id="proyectoList">
           <div class="state-box" style="padding:20px 0;">
             <div class="spinner" style="width:24px;height:24px;border-width:2px;"></div>
@@ -296,7 +299,68 @@
   </div>
 </div>
 
-<!-- ── Drawer ── -->
+<!-- ── Drawer Proyecto ── -->
+<div class="drawer-overlay" id="proyectoDrawerOverlay" onclick="closeProyectoDrawer()"></div>
+<div class="drawer" id="proyectoDrawer">
+  <div class="drawer-header">
+    <h3>🗂 Nuevo proyecto</h3>
+    <button class="drawer-close" onclick="closeProyectoDrawer()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="field-row">
+      <div class="field-group">
+        <label>Código <span>*</span></label>
+        <input type="text" id="pCodigo" placeholder="Ej: COLFLUX-01">
+      </div>
+      <div class="field-group">
+        <label>Escala espacial</label>
+        <select id="pEscala">
+          <option value="">— Seleccionar —</option>
+          <option value="Bioma">Bioma</option>
+          <option value="Regional">Regional</option>
+          <option value="Ecosistema">Ecosistema</option>
+          <option value="Sitio">Sitio</option>
+          <option value="Parcela">Parcela</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-group">
+      <label>Nombre <span>*</span></label>
+      <input type="text" id="pNombre" placeholder="Nombre completo del proyecto">
+    </div>
+    <div class="field-row">
+      <div class="field-group">
+        <label>Fecha inicio</label>
+        <input type="date" id="pFechaInicio">
+      </div>
+      <div class="field-group">
+        <label>Fecha fin</label>
+        <input type="date" id="pFechaFin">
+      </div>
+    </div>
+    <div class="field-group">
+      <label>Coordinador</label>
+      <input type="text" id="pCoordinador" placeholder="Nombre del coordinador">
+    </div>
+    <div class="field-group">
+      <label>Correo del coordinador</label>
+      <input type="email" id="pCorreo" placeholder="coordinador@universidad.edu.co">
+    </div>
+    <div class="field-group">
+      <label>Objetivo general</label>
+      <textarea id="pObjetivo" placeholder="Describe el objetivo principal del proyecto…"></textarea>
+    </div>
+    <div id="pFormError" class="form-error" style="display:none;"></div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn-cancel" onclick="closeProyectoDrawer()">Cancelar</button>
+    <button class="btn-submit" id="pBtnSubmit" onclick="submitProyecto()">
+      <span id="pSubmitLabel">Guardar proyecto</span>
+    </button>
+  </div>
+</div>
+
+<!-- ── Drawer Fuente ── -->
 <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
 <div class="drawer" id="drawer">
   <div class="drawer-header">
@@ -641,8 +705,82 @@
     }
   }
 
+  // ── Drawer Proyecto ────────────────────────────────────────────────────────
+  function openProyectoDrawer() {
+    document.getElementById('pFormError').style.display = 'none';
+    document.getElementById('proyectoDrawerOverlay').classList.add('open');
+    document.getElementById('proyectoDrawer').classList.add('open');
+    document.getElementById('pCodigo').focus();
+  }
+
+  function closeProyectoDrawer() {
+    document.getElementById('proyectoDrawerOverlay').classList.remove('open');
+    document.getElementById('proyectoDrawer').classList.remove('open');
+    ['pCodigo','pNombre','pCoordinador','pCorreo','pObjetivo','pFechaInicio','pFechaFin'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('pEscala').value = '';
+  }
+
+  async function submitProyecto() {
+    const codigo = document.getElementById('pCodigo').value.trim();
+    const nombre = document.getElementById('pNombre').value.trim();
+    const errEl  = document.getElementById('pFormError');
+
+    if (!codigo) {
+      errEl.textContent = 'El código es obligatorio.';
+      errEl.style.display = 'block';
+      document.getElementById('pCodigo').focus();
+      return;
+    }
+    if (!nombre) {
+      errEl.textContent = 'El nombre es obligatorio.';
+      errEl.style.display = 'block';
+      document.getElementById('pNombre').focus();
+      return;
+    }
+    errEl.style.display = 'none';
+
+    const btn = document.getElementById('pBtnSubmit');
+    const lbl = document.getElementById('pSubmitLabel');
+    btn.disabled = true;
+    lbl.textContent = 'Guardando…';
+
+    try {
+      const res = await fetch(`${API_BASE}/api/proyectos/crear/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          codigo,
+          nombre,
+          coordinador:      document.getElementById('pCoordinador').value.trim(),
+          correo_coordinador: document.getElementById('pCorreo').value.trim(),
+          escala_espacial:  document.getElementById('pEscala').value,
+          objetivo_general: document.getElementById('pObjetivo').value.trim(),
+          fecha_inicio:     document.getElementById('pFechaInicio').value || null,
+          fecha_fin:        document.getElementById('pFechaFin').value || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+
+      // Agrega al estado local y re-renderiza
+      allData.proyectos.push({ id: data.id, codigo: data.codigo, nombre: data.nombre });
+      closeProyectoDrawer();
+      render();
+    } catch (e) {
+      errEl.textContent = e.message || 'Error al guardar. Intenta de nuevo.';
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      lbl.textContent = 'Guardar proyecto';
+    }
+  }
+
   // Cierra el drawer con Escape
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeDrawer(); closeProyectoDrawer(); }
+  });
 
   // ── Init ───────────────────────────────────────────────────────────────────
   fetchData();
