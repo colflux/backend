@@ -131,6 +131,68 @@
     .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--green); border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 16px; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* ── Drawer ── */
+    .drawer-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 200;
+      opacity: 0; pointer-events: none; transition: opacity .25s;
+    }
+    .drawer-overlay.open { opacity: 1; pointer-events: all; }
+    .drawer {
+      position: fixed; top: 0; right: 0; bottom: 0; width: 440px; max-width: 100vw;
+      background: white; z-index: 201; box-shadow: -8px 0 32px rgba(0,0,0,.15);
+      transform: translateX(100%); transition: transform .28s cubic-bezier(.4,0,.2,1);
+      display: flex; flex-direction: column;
+    }
+    .drawer.open { transform: translateX(0); }
+    .drawer-header {
+      padding: 20px 24px 16px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .drawer-header h3 { font-size: 1.05rem; font-weight: 800; }
+    .drawer-close {
+      background: none; border: none; cursor: pointer; color: var(--gray);
+      font-size: 1.3rem; line-height: 1; padding: 4px; border-radius: 6px;
+      transition: background .15s;
+    }
+    .drawer-close:hover { background: var(--gray-l); color: #1a2236; }
+    .drawer-body { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 18px; }
+    .field-group { display: flex; flex-direction: column; gap: 6px; }
+    .field-group label { font-size: .8rem; font-weight: 700; color: #374151; }
+    .field-group label span { color: var(--red); margin-left: 2px; }
+    .field-group input, .field-group select, .field-group textarea {
+      border: 1.5px solid var(--border); border-radius: 8px; padding: 9px 12px;
+      font-size: .88rem; font-family: inherit; color: #1a2236; background: white;
+      outline: none; transition: border-color .2s; width: 100%;
+    }
+    .field-group input:focus, .field-group select:focus, .field-group textarea:focus { border-color: var(--green); }
+    .field-group textarea { resize: vertical; min-height: 80px; }
+    .field-hint { font-size: .75rem; color: var(--gray); }
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .drawer-footer {
+      padding: 16px 24px; border-top: 1px solid var(--border);
+      display: flex; gap: 10px; align-items: center;
+    }
+    .btn-submit {
+      flex: 1; background: var(--green-d); color: white; border: none; border-radius: 8px;
+      padding: 10px 20px; font-size: .88rem; font-weight: 700; font-family: inherit;
+      cursor: pointer; transition: opacity .2s; display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-submit:hover { opacity: .9; }
+    .btn-submit:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-cancel {
+      background: white; color: var(--gray); border: 1.5px solid var(--border);
+      border-radius: 8px; padding: 10px 16px; font-size: .88rem; font-weight: 600;
+      font-family: inherit; cursor: pointer; transition: border-color .2s;
+    }
+    .btn-cancel:hover { border-color: var(--gray); color: #1a2236; }
+    .form-error { font-size: .8rem; color: var(--red); font-weight: 600; }
+    .btn-nueva {
+      background: var(--green-d); color: white; border: none; border-radius: 8px;
+      padding: 8px 16px; font-size: .82rem; font-weight: 700; font-family: inherit;
+      cursor: pointer; display: flex; align-items: center; gap: 6px; transition: opacity .2s;
+    }
+    .btn-nueva:hover { opacity: .9; }
+
     /* ── Footer ── */
     footer { background: #0d1117; color: rgba(255,255,255,.5); padding: 28px 0; font-size: .82rem; }
     .footer-inner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
@@ -216,7 +278,10 @@
       <div>
         <div class="cards-header">
           <h2 id="cardsTitle">Fuentes de datos</h2>
-          <span id="cardsCount"></span>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span id="cardsCount"></span>
+            <button class="btn-nueva" onclick="openDrawer()">＋ Nueva fuente</button>
+          </div>
         </div>
         <div class="cards" id="cardsContainer">
           <div class="state-box">
@@ -228,6 +293,70 @@
       </div>
 
     </div>
+  </div>
+</div>
+
+<!-- ── Drawer ── -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-header">
+    <h3>📂 Nueva fuente de datos</h3>
+    <button class="drawer-close" onclick="closeDrawer()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="field-group">
+      <label>Proyecto</label>
+      <select id="fProyecto">
+        <option value="">— Sin proyecto —</option>
+      </select>
+    </div>
+    <div class="field-group">
+      <label>Nombre <span>*</span></label>
+      <input type="text" id="fNombre" placeholder="Ej: SWAP Turbera La Cocha 2023">
+    </div>
+    <div class="field-group">
+      <label>Enlace al archivo</label>
+      <input type="url" id="fUrl" placeholder="https://docs.google.com/spreadsheets/…">
+      <span class="field-hint">Link a Excel, Google Sheets, Drive, SharePoint, etc.</span>
+    </div>
+    <div class="field-group">
+      <label>Descripción</label>
+      <textarea id="fDescripcion" placeholder="¿Qué contiene este archivo? ¿De qué campaña de campo es?"></textarea>
+    </div>
+    <div class="field-row">
+      <div class="field-group">
+        <label>Tipo</label>
+        <select id="fTipo">
+          <option value="excel">Excel</option>
+          <option value="csv">CSV</option>
+          <option value="shapefile">Shapefile</option>
+          <option value="geojson">GeoJSON</option>
+          <option value="api">API externa</option>
+          <option value="base_de_datos">Base de datos</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label>Estado</label>
+        <select id="fEstado">
+          <option value="pendiente">Pendiente</option>
+          <option value="en_proceso">En proceso</option>
+          <option value="completo">Completo</option>
+          <option value="con_errores">Con errores</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-group">
+      <label>Responsable</label>
+      <input type="text" id="fResponsable" placeholder="Nombre de quien gestiona este archivo">
+    </div>
+    <div id="formError" class="form-error" style="display:none;"></div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn-cancel" onclick="closeDrawer()">Cancelar</button>
+    <button class="btn-submit" id="btnSubmit" onclick="submitFuente()">
+      <span id="submitLabel">Guardar fuente</span>
+    </button>
   </div>
 </div>
 
@@ -433,6 +562,87 @@
   document.getElementById('searchInput').addEventListener('input', render);
   document.getElementById('tipoFilter').addEventListener('change', render);
   document.getElementById('estadoFilter').addEventListener('change', render);
+
+  // ── Drawer ─────────────────────────────────────────────────────────────────
+  function openDrawer() {
+    // Popula el select de proyectos con los datos actuales
+    const sel = document.getElementById('fProyecto');
+    sel.innerHTML = '<option value="">— Sin proyecto —</option>';
+    for (const p of allData.proyectos) {
+      sel.innerHTML += `<option value="${p.id}">${p.codigo} — ${p.nombre}</option>`;
+    }
+    // Si hay un proyecto activo en el sidebar lo preselecciona
+    if (activeProyecto) sel.value = activeProyecto;
+
+    document.getElementById('formError').style.display = 'none';
+    document.getElementById('drawerOverlay').classList.add('open');
+    document.getElementById('drawer').classList.add('open');
+    document.getElementById('fNombre').focus();
+  }
+
+  function closeDrawer() {
+    document.getElementById('drawerOverlay').classList.remove('open');
+    document.getElementById('drawer').classList.remove('open');
+    // Limpia el formulario
+    ['fProyecto','fNombre','fUrl','fDescripcion','fResponsable'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = el.tagName === 'SELECT' ? '' : '';
+    });
+    document.getElementById('fTipo').value = 'excel';
+    document.getElementById('fEstado').value = 'pendiente';
+  }
+
+  async function submitFuente() {
+    const nombre = document.getElementById('fNombre').value.trim();
+    const errEl  = document.getElementById('formError');
+
+    if (!nombre) {
+      errEl.textContent = 'El nombre es obligatorio.';
+      errEl.style.display = 'block';
+      document.getElementById('fNombre').focus();
+      return;
+    }
+    errEl.style.display = 'none';
+
+    const btn = document.getElementById('btnSubmit');
+    const lbl = document.getElementById('submitLabel');
+    btn.disabled = true;
+    lbl.textContent = 'Guardando…';
+
+    const body = {
+      nombre,
+      descripcion: document.getElementById('fDescripcion').value.trim(),
+      url:         document.getElementById('fUrl').value.trim(),
+      tipo:        document.getElementById('fTipo').value,
+      estado:      document.getElementById('fEstado').value,
+      responsable: document.getElementById('fResponsable').value.trim(),
+      proyecto_id: document.getElementById('fProyecto').value || null,
+    };
+
+    try {
+      const res = await fetch(`${API_BASE}/api/fuentes-datos/crear/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+
+      // Agrega al estado local y re-renderiza
+      allData.fuentes.unshift(data);
+      closeDrawer();
+      render();
+    } catch (e) {
+      errEl.textContent = e.message || 'Error al guardar. Intenta de nuevo.';
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      lbl.textContent = 'Guardar fuente';
+    }
+  }
+
+  // Cierra el drawer con Escape
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
 
   // ── Init ───────────────────────────────────────────────────────────────────
   fetchData();
