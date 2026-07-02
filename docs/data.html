@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>COLFLUX — Gestión de Datos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Inter', sans-serif; color: #1a2236; background: #f8fafc; line-height: 1.6; }
+
+    :root {
+      --green:   #18735d; --green-l: #e6f4f0; --green-d: #0d4f40;
+      --blue:    #1a6e9b; --blue-l:  #e6f3fb;
+      --purple:  #6b4f9e; --purple-l:#f0ecfa;
+      --amber:   #d97706; --amber-l: #fef3c7;
+      --red:     #dc2626; --red-l:   #fee2e2;
+      --gray:    #64748b; --gray-l:  #f1f5f9;
+      --border:  #e2e8f0;
+    }
+
+    .container { max-width: 1140px; margin: 0 auto; padding: 0 24px; }
+
+    /* ── Nav ── */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(255,255,255,.96); backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border); padding: 12px 0;
+    }
+    .nav-inner { display: flex; align-items: center; justify-content: space-between; max-width: 1140px; margin: 0 auto; padding: 0 24px; }
+    .nav-logo { font-weight: 800; font-size: 1rem; color: var(--green-d); text-decoration: none; display: flex; align-items: center; gap: 8px; }
+    .nav-links { display: flex; gap: 24px; list-style: none; }
+    .nav-links a { color: var(--gray); font-size: .85rem; font-weight: 500; text-decoration: none; transition: color .2s; }
+    .nav-links a:hover, .nav-links a.active { color: var(--green); font-weight: 700; }
+    .nav-pill { background: var(--green-d); color: white; font-size: .75rem; font-weight: 700; padding: 5px 12px; border-radius: 20px; text-decoration: none; }
+    @media (max-width: 600px) { .nav-links { display: none; } }
+
+    /* ── Hero ── */
+    .hero { background: #0d4f40; color: white; padding: 48px 0 40px; }
+    .hero-badge { display: inline-flex; align-items: center; gap: 7px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.3); border-radius: 20px; padding: 4px 14px; font-size: .75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 14px; }
+    .hero h1 { font-size: clamp(1.8rem, 3.5vw, 2.6rem); font-weight: 800; line-height: 1.1; letter-spacing: -.02em; margin-bottom: 10px; }
+    .hero h1 em { font-style: normal; color: #6ee7b7; }
+    .hero-lead { font-size: .92rem; color: rgba(255,255,255,.85); max-width: 540px; margin-bottom: 0; }
+
+    /* ── Toolbar ── */
+    .toolbar { background: white; border-bottom: 1px solid var(--border); padding: 14px 0; position: sticky; top: 57px; z-index: 90; }
+    .toolbar-inner { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .toolbar-inner select, .toolbar-inner input {
+      border: 1.5px solid var(--border); border-radius: 8px; padding: 7px 12px;
+      font-size: .84rem; font-family: inherit; color: #1a2236; background: white;
+      outline: none; transition: border-color .2s;
+    }
+    .toolbar-inner select:focus, .toolbar-inner input:focus { border-color: var(--green); }
+    .toolbar-inner input { flex: 1; min-width: 200px; }
+    .server-status { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: .78rem; font-weight: 600; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gray); }
+    .status-dot.online { background: #22c55e; }
+    .status-dot.offline { background: var(--red); }
+
+    /* ── Stats bar ── */
+    .stats-bar { display: flex; gap: 12px; flex-wrap: wrap; padding: 20px 0 4px; }
+    .stat-chip { background: white; border: 1.5px solid var(--border); border-radius: 10px; padding: 10px 18px; display: flex; align-items: center; gap: 10px; }
+    .stat-chip strong { font-size: 1.4rem; font-weight: 800; color: var(--green-d); line-height: 1; }
+    .stat-chip span { font-size: .78rem; color: var(--gray); }
+
+    /* ── Main layout ── */
+    .main { padding: 28px 0 56px; }
+    .layout { display: grid; grid-template-columns: 260px 1fr; gap: 24px; align-items: start; }
+    @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
+
+    /* ── Project sidebar ── */
+    .sidebar { position: sticky; top: 110px; }
+    .sidebar-title { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--gray); margin-bottom: 10px; }
+    .proyecto-list { display: flex; flex-direction: column; gap: 6px; }
+    .proyecto-btn {
+      text-align: left; width: 100%; background: white; border: 1.5px solid var(--border);
+      border-radius: 10px; padding: 10px 14px; cursor: pointer; transition: all .15s;
+      font-family: inherit; font-size: .84rem;
+    }
+    .proyecto-btn:hover { border-color: var(--green); }
+    .proyecto-btn.active { border-color: var(--green); background: var(--green-l); }
+    .proyecto-btn .p-code { font-family: 'JetBrains Mono', monospace; font-size: .72rem; color: var(--gray); display: block; margin-bottom: 2px; }
+    .proyecto-btn .p-name { font-weight: 600; color: #1a2236; line-height: 1.3; }
+    .proyecto-btn .p-count { font-size: .72rem; color: var(--gray); margin-top: 4px; }
+    .proyecto-btn.all .p-name { color: var(--green-d); }
+
+    /* ── Cards grid ── */
+    .cards-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .cards-header h2 { font-size: 1rem; font-weight: 700; }
+    .cards-header span { font-size: .82rem; color: var(--gray); }
+    .cards { display: flex; flex-direction: column; gap: 14px; }
+
+    .card {
+      background: white; border: 1.5px solid var(--border); border-radius: 14px;
+      overflow: hidden; box-shadow: 0 1px 6px rgba(0,0,0,.05);
+      transition: box-shadow .2s;
+    }
+    .card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.1); }
+    .card-top { padding: 16px 20px; display: flex; align-items: flex-start; gap: 14px; }
+    .card-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
+    .card-body { flex: 1; min-width: 0; }
+    .card-name { font-weight: 700; font-size: .95rem; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .card-desc { font-size: .82rem; color: var(--gray); line-height: 1.5; }
+    .card-meta { padding: 10px 20px 14px; border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .badge { display: inline-flex; align-items: center; gap: 4px; font-size: .72rem; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
+    .badge-tipo-excel    { background: #dcfce7; color: #166534; }
+    .badge-tipo-csv      { background: #dbeafe; color: #1e40af; }
+    .badge-tipo-shapefile{ background: #fef9c3; color: #854d0e; }
+    .badge-tipo-geojson  { background: #f3e8ff; color: #6b21a8; }
+    .badge-tipo-api      { background: #e0f2fe; color: #0369a1; }
+    .badge-tipo-base_de_datos { background: #fce7f3; color: #9d174d; }
+    .badge-tipo-otro     { background: var(--gray-l); color: #374151; }
+    .badge-estado-pendiente   { background: var(--gray-l); color: #374151; }
+    .badge-estado-en_proceso  { background: var(--amber-l); color: #92400e; }
+    .badge-estado-completo    { background: #dcfce7; color: #166534; }
+    .badge-estado-con_errores { background: var(--red-l); color: var(--red); }
+    .card-link { margin-left: auto; font-size: .8rem; font-weight: 700; color: var(--blue); text-decoration: none; display: flex; align-items: center; gap: 4px; }
+    .card-link:hover { text-decoration: underline; }
+    .card-proyecto { font-size: .75rem; color: var(--gray); font-family: 'JetBrains Mono', monospace; }
+    .card-responsable { font-size: .75rem; color: var(--gray); }
+
+    /* ── Empty / loading / error states ── */
+    .state-box { text-align: center; padding: 64px 24px; }
+    .state-box .icon { font-size: 3rem; margin-bottom: 12px; }
+    .state-box h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 6px; }
+    .state-box p { color: var(--gray); font-size: .88rem; max-width: 360px; margin: 0 auto 20px; }
+    .state-box a { color: var(--green); font-weight: 600; text-decoration: none; }
+    .state-box a:hover { text-decoration: underline; }
+    .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--green); border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 16px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Footer ── */
+    footer { background: #0d1117; color: rgba(255,255,255,.5); padding: 28px 0; font-size: .82rem; }
+    .footer-inner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+    footer a { color: rgba(255,255,255,.6); text-decoration: none; }
+    footer a:hover { color: white; }
+    .footer-links { display: flex; gap: 20px; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a class="nav-logo" href="index.html">🌿 COLFLUX · OE2</a>
+    <ul class="nav-links">
+      <li><a href="index.html">Plan de trabajo</a></li>
+      <li><a href="team.html">Equipo</a></li>
+      <li><a href="db.html">Base de datos</a></li>
+      <li><a href="data.html" class="active">Gestión de datos</a></li>
+    </ul>
+    <a class="nav-pill" href="https://github.com/colflux/backend" target="_blank">GitHub →</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="container">
+    <div class="hero-badge">📂 Fuentes de datos</div>
+    <h1>Gestión de <em>Datos</em></h1>
+    <p class="hero-lead">
+      Registro de todas las fuentes de datos del proyecto: archivos Excel, CSVs, shapefiles y APIs.
+      Consulta el estado de cada fuente y accede directamente al archivo.
+    </p>
+  </div>
+</div>
+
+<div class="toolbar">
+  <div class="container">
+    <div class="toolbar-inner">
+      <input type="text" id="searchInput" placeholder="🔍  Buscar por nombre, descripción o responsable…">
+      <select id="tipoFilter">
+        <option value="">Todos los tipos</option>
+        <option value="excel">Excel</option>
+        <option value="csv">CSV</option>
+        <option value="shapefile">Shapefile</option>
+        <option value="geojson">GeoJSON</option>
+        <option value="api">API externa</option>
+        <option value="base_de_datos">Base de datos</option>
+        <option value="otro">Otro</option>
+      </select>
+      <select id="estadoFilter">
+        <option value="">Todos los estados</option>
+        <option value="pendiente">Pendiente</option>
+        <option value="en_proceso">En proceso</option>
+        <option value="completo">Completo</option>
+        <option value="con_errores">Con errores</option>
+      </select>
+      <div class="server-status">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusLabel">Conectando…</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="stats-bar" id="statsBar"></div>
+</div>
+
+<div class="main">
+  <div class="container">
+    <div class="layout">
+
+      <!-- Sidebar de proyectos -->
+      <aside class="sidebar">
+        <div class="sidebar-title">Proyectos</div>
+        <div class="proyecto-list" id="proyectoList">
+          <div class="state-box" style="padding:20px 0;">
+            <div class="spinner" style="width:24px;height:24px;border-width:2px;"></div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Cards -->
+      <div>
+        <div class="cards-header">
+          <h2 id="cardsTitle">Fuentes de datos</h2>
+          <span id="cardsCount"></span>
+        </div>
+        <div class="cards" id="cardsContainer">
+          <div class="state-box">
+            <div class="spinner"></div>
+            <h3>Cargando datos…</h3>
+            <p>Conectando con el servidor Django.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <span>🌿 COLFLUX OE2 — Gestión de datos</span>
+      <div class="footer-links">
+        <a href="https://github.com/colflux/backend" target="_blank">GitHub</a>
+        <a href="db.html">Base de datos</a>
+        <a href="index.html">Plan de trabajo</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  const API_BASE = 'http://localhost:8000';
+  const API_URL  = `${API_BASE}/api/fuentes-datos/`;
+
+  const TIPO_ICONS = {
+    excel: '📊', csv: '📋', shapefile: '🗺️',
+    geojson: '📍', api: '🔌', base_de_datos: '🗄️', otro: '📁',
+  };
+
+  let allData = { fuentes: [], proyectos: [] };
+  let activeProyecto = null;
+
+  // ── Fetch ──────────────────────────────────────────────────────────────────
+  async function fetchData() {
+    try {
+      const res = await fetch(API_URL, { signal: AbortSignal.timeout(5000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      allData = await res.json();
+      setStatus(true);
+      render();
+    } catch (e) {
+      setStatus(false);
+      renderOffline();
+    }
+  }
+
+  function setStatus(online) {
+    document.getElementById('statusDot').className = `status-dot ${online ? 'online' : 'offline'}`;
+    document.getElementById('statusLabel').textContent = online ? 'Servidor activo' : 'Servidor no disponible';
+  }
+
+  // ── Filters ────────────────────────────────────────────────────────────────
+  function filteredFuentes() {
+    let items = allData.fuentes;
+    if (activeProyecto !== null) items = items.filter(f => f.proyecto?.id === activeProyecto);
+    const q = document.getElementById('searchInput').value.toLowerCase();
+    if (q) items = items.filter(f =>
+      f.nombre.toLowerCase().includes(q) ||
+      f.descripcion.toLowerCase().includes(q) ||
+      (f.responsable || '').toLowerCase().includes(q)
+    );
+    const tipo = document.getElementById('tipoFilter').value;
+    if (tipo) items = items.filter(f => f.tipo === tipo);
+    const estado = document.getElementById('estadoFilter').value;
+    if (estado) items = items.filter(f => f.estado === estado);
+    return items;
+  }
+
+  // ── Stats ──────────────────────────────────────────────────────────────────
+  function renderStats(items) {
+    const total     = items.length;
+    const completos = items.filter(f => f.estado === 'completo').length;
+    const pendientes = items.filter(f => f.estado === 'pendiente').length;
+    const errores   = items.filter(f => f.estado === 'con_errores').length;
+    document.getElementById('statsBar').innerHTML = `
+      <div class="stat-chip"><strong>${total}</strong><span>Fuentes totales</span></div>
+      <div class="stat-chip"><strong style="color:#166534">${completos}</strong><span>Completas</span></div>
+      <div class="stat-chip"><strong style="color:var(--amber)">${pendientes}</strong><span>Pendientes</span></div>
+      <div class="stat-chip"><strong style="color:var(--red)">${errores}</strong><span>Con errores</span></div>
+    `;
+  }
+
+  // ── Sidebar ────────────────────────────────────────────────────────────────
+  function renderSidebar() {
+    const list = document.getElementById('proyectoList');
+    const countAll = allData.fuentes.length;
+
+    const items = [`
+      <button class="proyecto-btn all ${activeProyecto === null ? 'active' : ''}" onclick="setProyecto(null)">
+        <span class="p-code">— todos —</span>
+        <span class="p-name">Todos los proyectos</span>
+        <span class="p-count">${countAll} fuente${countAll !== 1 ? 's' : ''}</span>
+      </button>
+    `];
+
+    for (const p of allData.proyectos) {
+      const count = allData.fuentes.filter(f => f.proyecto?.id === p.id).length;
+      items.push(`
+        <button class="proyecto-btn ${activeProyecto === p.id ? 'active' : ''}" onclick="setProyecto(${p.id})">
+          <span class="p-code">${p.codigo}</span>
+          <span class="p-name">${p.nombre}</span>
+          <span class="p-count">${count} fuente${count !== 1 ? 's' : ''}</span>
+        </button>
+      `);
+    }
+
+    if (allData.proyectos.length === 0) {
+      items.push(`<p style="font-size:.82rem;color:var(--gray);padding:8px 4px;">Sin proyectos registrados.</p>`);
+    }
+
+    list.innerHTML = items.join('');
+  }
+
+  // ── Cards ──────────────────────────────────────────────────────────────────
+  function renderCards(items) {
+    const container = document.getElementById('cardsContainer');
+    document.getElementById('cardsCount').textContent = `${items.length} resultado${items.length !== 1 ? 's' : ''}`;
+
+    if (items.length === 0) {
+      container.innerHTML = `
+        <div class="state-box">
+          <div class="icon">🔍</div>
+          <h3>Sin resultados</h3>
+          <p>No hay fuentes de datos que coincidan con los filtros aplicados.</p>
+        </div>`;
+      return;
+    }
+
+    container.innerHTML = items.map(f => {
+      const icon = TIPO_ICONS[f.tipo] || '📁';
+      const iconBg = {
+        excel:'#dcfce7', csv:'#dbeafe', shapefile:'#fef9c3',
+        geojson:'#f3e8ff', api:'#e0f2fe', base_de_datos:'#fce7f3', otro:'#f1f5f9',
+      }[f.tipo] || '#f1f5f9';
+
+      const linkHtml = f.url
+        ? `<a class="card-link" href="${f.url}" target="_blank">Abrir archivo ↗</a>`
+        : `<span class="card-link" style="color:var(--gray);cursor:default;">Sin enlace</span>`;
+
+      const proyectoHtml = f.proyecto
+        ? `<span class="card-proyecto">${f.proyecto.codigo}</span>`
+        : '';
+
+      const responsableHtml = f.responsable
+        ? `<span class="card-responsable">👤 ${f.responsable}</span>`
+        : '';
+
+      const fechaHtml = f.fecha_datos
+        ? `<span class="card-responsable">📅 ${f.fecha_datos}</span>`
+        : '';
+
+      return `
+        <div class="card">
+          <div class="card-top">
+            <div class="card-icon" style="background:${iconBg}">${icon}</div>
+            <div class="card-body">
+              <div class="card-name">${f.nombre}</div>
+              <div class="card-desc">${f.descripcion || '<em style="color:var(--gray)">Sin descripción</em>'}</div>
+              ${f.notas ? `<div class="card-desc" style="margin-top:4px;color:#374151">📝 ${f.notas}</div>` : ''}
+            </div>
+          </div>
+          <div class="card-meta">
+            <span class="badge badge-tipo-${f.tipo}">${f.tipo_label}</span>
+            <span class="badge badge-estado-${f.estado}">${f.estado_label}</span>
+            ${proyectoHtml}
+            ${responsableHtml}
+            ${fechaHtml}
+            ${linkHtml}
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // ── Offline ────────────────────────────────────────────────────────────────
+  function renderOffline() {
+    document.getElementById('statsBar').innerHTML = '';
+    document.getElementById('proyectoList').innerHTML = `<p style="font-size:.82rem;color:var(--gray)">No disponible</p>`;
+    document.getElementById('cardsContainer').innerHTML = `
+      <div class="state-box">
+        <div class="icon">🔌</div>
+        <h3>Servidor no disponible</h3>
+        <p>El servidor Django no está corriendo. Inícialo con:</p>
+        <code style="display:block;background:var(--gray-l);padding:10px 16px;border-radius:8px;font-size:.82rem;margin:12px auto;max-width:320px">python manage.py runserver</code>
+        <a href="javascript:location.reload()">Reintentar →</a>
+      </div>`;
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+  function render() {
+    const items = filteredFuentes();
+    renderStats(items);
+    renderSidebar();
+    renderCards(items);
+
+    const label = activeProyecto
+      ? allData.proyectos.find(p => p.id === activeProyecto)?.nombre || 'Proyecto'
+      : 'Todas las fuentes';
+    document.getElementById('cardsTitle').textContent = label;
+  }
+
+  function setProyecto(id) {
+    activeProyecto = id;
+    render();
+  }
+
+  // ── Events ─────────────────────────────────────────────────────────────────
+  document.getElementById('searchInput').addEventListener('input', render);
+  document.getElementById('tipoFilter').addEventListener('change', render);
+  document.getElementById('estadoFilter').addEventListener('change', render);
+
+  // ── Init ───────────────────────────────────────────────────────────────────
+  fetchData();
+</script>
+</body>
+</html>

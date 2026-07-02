@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from .models import (
     Aliado, Autor, CaracterizacionMuestreoSuelo, Cobertura,
+    FuenteDatos,
     ConfiguracionSensorGas, Departamento, Disturbio, Equipo,
     FlujoCamaras, MonitoreoParcela, MonitoreoSuelo, Municipio,
     Parcela, Proyecto, ProyectoAliado, Publicacion, PublicacionAutor,
@@ -151,6 +152,14 @@ class PublicacionAdmin(admin.ModelAdmin):
 class AutorAdmin(admin.ModelAdmin):
     list_display = ("nombre",)
     search_fields = ("nombre",)
+
+
+@admin.register(FuenteDatos)
+class FuenteDatosAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "tipo", "estado", "proyecto", "sitio", "responsable", "fecha_datos")
+    list_filter = ("tipo", "estado", "proyecto")
+    search_fields = ("nombre", "descripcion", "responsable")
+    raw_id_fields = ("proyecto", "sitio")
 
 
 @admin.register(ResultadoPublicacion)

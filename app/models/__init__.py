@@ -16,6 +16,8 @@ from .suelo import CaracterizacionMuestreoSuelo, MonitoreoSuelo
 
 from .publicacion import Autor, Publicacion, PublicacionAutor, PublicacionSitio, ResultadoPublicacion
 
+from .datos import FuenteDatos
+
 __all__ = [
     "TimestampedModel",
     # Geografía
@@ -46,6 +48,8 @@ __all__ = [
     # Suelo
     "CaracterizacionMuestreoSuelo",
     "MonitoreoSuelo",
+    # Gestión de datos
+    "FuenteDatos",
     # Publicaciones
     "Autor",
     "Publicacion",
