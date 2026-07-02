@@ -1,0 +1,55 @@
+app/models/__0__logic-model.dbml
+  s_5317050cfb94c2::t_81f95178c2de36 627-647
+.claude/settings.local.json
+  s_5317050cfb94c2::t_f774d454a5bc33 13-15
+  s_5317050cfb94c2::t_57313171ef2bcf 30
+  s_5317050cfb94c2::t_a79cd929201993 24
+  s_5317050cfb94c2::t_9855ed2909a595 28
+  s_5317050cfb94c2::t_dffaba1467484e 17-18
+  s_5317050cfb94c2::t_61889a8b5d4e3e 26-27
+  s_5317050cfb94c2::t_30b21719daf583 16
+  s_5317050cfb94c2::t_a6abd78f73a897 29
+  s_5317050cfb94c2::t_4fcd6a5d10c8f3 31-32
+  s_c45d8eda277732::t_8da8686c005ece 10
+  s_5317050cfb94c2::t_82cc3ea494a6d6 25
+  s_5317050cfb94c2::t_3bca019c2c8399 20
+  s_5317050cfb94c2::t_dcf780103d4bac 22
+  s_5317050cfb94c2::t_36c87bf8027559 19
+  s_5317050cfb94c2::t_751dd0f6c0baaa 23
+  s_5317050cfb94c2::t_658d592e274ee3 11
+  s_5317050cfb94c2::t_48ed301cc23aed 21
+app/migrations/0002_reportador_remove_fuentedatos_fecha_datos_and_more.py
+  s_5317050cfb94c2::t_8186ae06eb7147 1-85
+app/admin.py
+  s_5317050cfb94c2::t_25ed7ce2a95108 157-162,165,167-168
+  s_5317050cfb94c2::t_0de891704a9454 5
+app/models/datos.py
+  s_5317050cfb94c2::t_a48be9e1fdaaa4 6-20,42-44,52
+app/models/__init__.py
+  s_5317050cfb94c2::t_a525aa5ddeecfe 19
+  s_5317050cfb94c2::t_e42e2ed0ddcd27 52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "ee691772f9885309c0578ad29a129dda74c20e58",
+  "prompts": {},
+  "sessions": {
+    "s_5317050cfb94c2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26bb51e5-b683-4a9d-b120-3d81fb32f4fb",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    },
+    "s_c45d8eda277732": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2ebfd4bb-96b0-4553-a886-81605ff4610b",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    }
+  }
+}
