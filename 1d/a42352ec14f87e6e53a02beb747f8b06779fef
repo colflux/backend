@@ -1,0 +1,25 @@
+docs/data.html
+  s_5317050cfb94c2::t_f8c052d7df3c1f 708-779,781-783
+  s_5317050cfb94c2::t_4ba9fb9bda30d1 302-363
+  s_5317050cfb94c2::t_15fe575cb58743 269-272
+app/views.py
+  s_5317050cfb94c2::t_be1cc0248a4ffb 100-142
+app/urls.py
+  s_5317050cfb94c2::t_aaec0a75c8c27d 9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "1da42352ec14f87e6e53a02beb747f8b06779fef",
+  "prompts": {},
+  "sessions": {
+    "s_5317050cfb94c2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26bb51e5-b683-4a9d-b120-3d81fb32f4fb",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    }
+  }
+}
