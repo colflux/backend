@@ -52,12 +52,19 @@ DATABASE_URL=<Internal Database URL de PostgreSQL en Render>
 DJANGO_ALLOWED_HOSTS=backend-143s.onrender.com
 DJANGO_DEBUG=0
 DJANGO_SECRET_KEY=<clave larga y aleatoria>
+DJANGO_SUPERUSER_USERNAME=<usuario admin>
+DJANGO_SUPERUSER_EMAIL=<correo admin>
+DJANGO_SUPERUSER_PASSWORD=<clave admin temporal>
 ```
 
 Usa la **Internal Database URL** que entrega Render para la base PostgreSQL.
 No uses la URL local de Docker Compose (`postgres://ghg:ghg@db:5432/ghg`),
 porque el host `db` solo existe dentro de `docker-compose.yml` y Render no lo
 puede resolver.
+
+Si no tienes Shell en Render, las variables `DJANGO_SUPERUSER_*` crean el usuario
+admin automaticamente durante el deploy. Despues de entrar al admin por primera
+vez, elimina `DJANGO_SUPERUSER_PASSWORD` de Render o cambiala por una nueva.
 
 ## Publicar landing en GitHub Pages
 
