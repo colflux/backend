@@ -1,0 +1,33 @@
+manage.py
+  s_be48c130011231::t_200c8c69c3ef15 7
+docs/index.html
+  s_be48c130011231::t_7449ea22561677 163,590
+docs/db.html
+  s_be48c130011231::t_7449ea22561677 618
+Dockerfile
+  s_be48c130011231::t_36813dc567cf75 14
+docker-compose.yml
+  s_be48c130011231::t_200c8c69c3ef15 15
+docs/team.html
+  s_be48c130011231::t_7449ea22561677 141,343
+colflux/settings.py
+  s_be48c130011231::t_200c8c69c3ef15 1-96
+colflux/wsgi.py
+  s_be48c130011231::t_200c8c69c3ef15 1-7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b6c5dfaff9c17503e7998173f47f02e02b2a0e9c",
+  "prompts": {},
+  "sessions": {
+    "s_be48c130011231": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f3803-c192-78f1-a450-a314c67c0361",
+        "model": "gpt-5.5"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    }
+  }
+}
