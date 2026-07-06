@@ -1,0 +1,24 @@
+README.md
+  s_be48c130011231::t_e9830414c62f9c 55-57,65-67
+  s_be48c130011231::t_8803d18766f6b4 68
+app/management/commands/create_admin_from_env.py
+  s_be48c130011231::t_ab69d34149b3de 1-25
+Dockerfile
+  s_be48c130011231::t_fe550a955508fd 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "76776e656c602ba11d75bdabdd0309a7433ba117",
+  "prompts": {},
+  "sessions": {
+    "s_be48c130011231": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f3803-c192-78f1-a450-a314c67c0361",
+        "model": "gpt-5.5"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    }
+  }
+}
