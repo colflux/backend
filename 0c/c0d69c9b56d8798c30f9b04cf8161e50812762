@@ -1,0 +1,26 @@
+README.md
+  s_be48c130011231::t_9d9c487a5bbe59 58,70-73
+  s_be48c130011231::t_5a3fb79354235b 74
+Dockerfile
+  s_be48c130011231::t_5e61afab38e3ad 14
+app/views.py
+  s_be48c130011231::t_475027ac3c24e6 7,22,37-38,41,74-78,85,98
+docs/data.html
+  s_be48c130011231::t_c390ff61142337 441,468,600-602
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0cc0d69c9b56d8798c30f9b04cf8161e50812762",
+  "prompts": {},
+  "sessions": {
+    "s_be48c130011231": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f3803-c192-78f1-a450-a314c67c0361",
+        "model": "gpt-5.5"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    }
+  }
+}
