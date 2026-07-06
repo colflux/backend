@@ -1,0 +1,21 @@
+Dockerfile
+  s_be48c130011231::t_63076ad58ac2bc 14
+README.md
+  s_be48c130011231::t_75d3eb5a0833a4 45-61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "fe6a748d3dc9c3eb81632e7228962874efa1dc7d",
+  "prompts": {},
+  "sessions": {
+    "s_be48c130011231": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f3803-c192-78f1-a450-a314c67c0361",
+        "model": "gpt-5.5"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    }
+  }
+}
