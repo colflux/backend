@@ -55,6 +55,7 @@ DJANGO_SECRET_KEY=<clave larga y aleatoria>
 DJANGO_SUPERUSER_USERNAME=<usuario admin>
 DJANGO_SUPERUSER_EMAIL=<correo admin>
 DJANGO_SUPERUSER_PASSWORD=<clave admin temporal>
+LOAD_SEED_DATA=1
 ```
 
 Usa la **Internal Database URL** que entrega Render para la base PostgreSQL.
@@ -65,6 +66,11 @@ puede resolver.
 Si no tienes Shell en Render, las variables `DJANGO_SUPERUSER_*` crean el usuario
 admin automaticamente durante el deploy. Despues de entrar al admin por primera
 vez, elimina `DJANGO_SUPERUSER_PASSWORD` de Render o cambiala por una nueva.
+
+La variable `LOAD_SEED_DATA=1` ejecuta `python manage.py seed_ghg_data` durante
+el deploy para cargar datos iniciales de demostracion. El comando evita duplicar
+los registros existentes. Si ya no quieres cargar datos demo en cada deploy,
+elimina esa variable o cambiala a `0`.
 
 ## Publicar landing en GitHub Pages
 

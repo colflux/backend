@@ -438,7 +438,7 @@
 </footer>
 
 <script>
-  const API_BASE = 'http://localhost:8000';
+  const API_BASE = 'https://backend-143s.onrender.com';
   const API_URL  = `${API_BASE}/api/fuentes-datos/`;
 
   const TIPO_ICONS = {
@@ -465,7 +465,7 @@
 
   function setStatus(online) {
     document.getElementById('statusDot').className = `status-dot ${online ? 'online' : 'offline'}`;
-    document.getElementById('statusLabel').textContent = online ? 'Servidor activo' : 'Servidor no disponible';
+    document.getElementById('statusLabel').textContent = online ? 'API activa' : 'API no disponible';
   }
 
   // ── Filters ────────────────────────────────────────────────────────────────
@@ -597,9 +597,9 @@
     document.getElementById('cardsContainer').innerHTML = `
       <div class="state-box">
         <div class="icon">🔌</div>
-        <h3>Servidor no disponible</h3>
-        <p>El servidor Django no está corriendo. Inícialo con:</p>
-        <code style="display:block;background:var(--gray-l);padding:10px 16px;border-radius:8px;font-size:.82rem;margin:12px auto;max-width:320px">python manage.py runserver</code>
+        <h3>API no disponible</h3>
+        <p>No fue posible conectar con la API desplegada en Render.</p>
+        <code style="display:block;background:var(--gray-l);padding:10px 16px;border-radius:8px;font-size:.82rem;margin:12px auto;max-width:320px">https://backend-143s.onrender.com</code>
         <a href="javascript:location.reload()">Reintentar →</a>
       </div>`;
   }
