@@ -42,6 +42,23 @@ python manage.py seed_ghg_data
 python manage.py runserver
 ```
 
+## Desplegar en Render
+
+Para produccion crea una base PostgreSQL en Render y conecta el Web Service con
+estas variables de entorno:
+
+```env
+DATABASE_URL=<Internal Database URL de PostgreSQL en Render>
+DJANGO_ALLOWED_HOSTS=backend-143s.onrender.com
+DJANGO_DEBUG=0
+DJANGO_SECRET_KEY=<clave larga y aleatoria>
+```
+
+Usa la **Internal Database URL** que entrega Render para la base PostgreSQL.
+No uses la URL local de Docker Compose (`postgres://ghg:ghg@db:5432/ghg`),
+porque el host `db` solo existe dentro de `docker-compose.yml` y Render no lo
+puede resolver.
+
 ## Publicar landing en GitHub Pages
 
 En GitHub, ve a Settings > Pages y selecciona la carpeta `docs/` de la rama principal.
