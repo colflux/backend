@@ -1,0 +1,94 @@
+app/api/datos/__init__.py
+  s_5ff1ca1eafc639::t_c7202b439d8952 1
+app/api/etl/__init__.py
+  s_5ff1ca1eafc639::t_c7202b439d8952 1
+app/api/reportador/serializers.py
+  s_5ff1ca1eafc639::t_c7202b439d8952 1-49
+app/api/erd/__init__.py
+  s_5ff1ca1eafc639::t_c7202b439d8952 1
+app/api/datos/serializers.py
+  s_5ff1ca1eafc639::t_c7202b439d8952 1-55
+app/api/proyecto/views.py
+  s_5ff1ca1eafc639::t_a80331d17bbb6e 1-8
+app/api/proyecto/__init__.py
+  s_5ff1ca1eafc639::t_c7202b439d8952 1
+data-portal/assets/js/data-page/README.md
+  s_5ff1ca1eafc639::t_68869d8cb56d41 5,9-10
+  s_5ff1ca1eafc639::t_e3a3d47f5b5bc9 1-4,6-8,11-12
+app/api/etl/views.py
+  s_5ff1ca1eafc639::t_df61f8bae60410 10,12,117
+.claude/settings.local.json
+  s_168353289dfe8b::t_1d99a153d8ae07 34-35
+colflux/settings.py
+  s_5ff1ca1eafc639::t_aab0d722ab3a60 20
+app/api/urls.py
+  s_5ff1ca1eafc639::t_69fec3720e755f 1-30
+app/management/commands/generate_catalogo.py
+  s_5ff1ca1eafc639::t_56ec60afb3a675 8
+app/api/reportador/__init__.py
+  s_5ff1ca1eafc639::t_c7202b439d8952 1
+app/api/dashboard/__init__.py
+  s_5ff1ca1eafc639::t_c7202b439d8952 1
+data-portal/assets/js/data-page/proyecto-drawer.js
+  s_5ff1ca1eafc639::t_81d8c197b439f3 86-95,151
+  s_5ff1ca1eafc639::t_ffa00eb2e5a593 1-85,96-150,152-174
+data-portal/assets/js/data-page/etl-actions.js
+  s_5ff1ca1eafc639::t_ffa00eb2e5a593 1-18
+data-portal/pages/data.html
+  s_5ff1ca1eafc639::t_0ab32bf6fd798a 350-351,357-359
+  s_5ff1ca1eafc639::t_3185dd9ad2657f 349
+  s_5ff1ca1eafc639::t_e3a3d47f5b5bc9 333
+  s_5ff1ca1eafc639::t_95cdf48b6b2df6 360-363
+  s_5ff1ca1eafc639::t_ffa00eb2e5a593 334-336,352-356,478,552-554,557
+  s_5ff1ca1eafc639::t_68869d8cb56d41 312
+requirements.txt
+  s_5ff1ca1eafc639::t_aab0d722ab3a60 6
+app/api/base.py
+  s_5ff1ca1eafc639::t_a80331d17bbb6e 1-8
+data-portal/assets/js/data-page/fuente-drawer.js
+  s_5ff1ca1eafc639::t_81d8c197b439f3 111-171
+app/api/catalogo/__init__.py
+  s_5ff1ca1eafc639::t_c7202b439d8952 1
+data-portal/assets/js/data-page/responsable-drawer.js
+  s_5ff1ca1eafc639::t_ffa00eb2e5a593 1-3,6-30,33,35-37,39-48,50-53,64-65,67-78,118-120,123-129
+  s_5ff1ca1eafc639::t_95cdf48b6b2df6 4-5,31-32,34,38,49,66,79-106,108-117,121-122
+  s_5ff1ca1eafc639::t_81d8c197b439f3 54-63,107
+app/api/dashboard/views.py
+  s_5ff1ca1eafc639::t_a80331d17bbb6e 1-13
+app/api/__init__.py
+  s_5ff1ca1eafc639::t_c7202b439d8952 1
+app/api/datos/views.py
+  s_5ff1ca1eafc639::t_a80331d17bbb6e 1-30
+app/api/reportador/views.py
+  s_5ff1ca1eafc639::t_a80331d17bbb6e 1-20
+app/apps.py
+  s_5ff1ca1eafc639::t_56ec60afb3a675 14
+app/api/proyecto/serializers.py
+  s_5ff1ca1eafc639::t_c7202b439d8952 1-25
+app/urls.py
+  s_5ff1ca1eafc639::t_69fec3720e755f 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "9d1a3b1c1b54009de9fea611fee514b63e78ad48",
+  "prompts": {},
+  "sessions": {
+    "s_168353289dfe8b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2aa2c70b-b721-49ac-8463-847f61d4e2b3",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    },
+    "s_5ff1ca1eafc639": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f4893-efb7-7ca1-8310-387629d0fb2f",
+        "model": "gpt-5.5"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    }
+  }
+}
