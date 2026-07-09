@@ -118,6 +118,7 @@
     .badge-estado-con_errores { background: var(--red-l); color: var(--red); }
     .card-link { margin-left: auto; font-size: .8rem; font-weight: 700; color: var(--blue); text-decoration: none; display: flex; align-items: center; gap: 4px; }
     .card-link:hover { text-decoration: underline; }
+    .card-link-etl { color: var(--green-d); font-weight: 700; }
     .card-proyecto { font-size: .75rem; color: var(--gray); font-family: 'JetBrains Mono', monospace; }
     .card-responsable { font-size: .75rem; color: var(--gray); }
 
@@ -203,18 +204,7 @@
 </head>
 <body>
 
-<nav>
-  <div class="nav-inner">
-    <a class="nav-logo" href="../index.html">🌿 COLFLUX · OE2</a>
-    <ul class="nav-links">
-      <li><a href="../index.html">Plan de trabajo</a></li>
-      <li><a href="team.html">Equipo</a></li>
-      <li><a href="db.html">Base de datos</a></li>
-      <li><a href="data.html" class="active">Gestión de datos</a></li>
-    </ul>
-    <a class="nav-pill" href="https://github.com/colflux/backend" target="_blank">GitHub →</a>
-  </div>
-</nav>
+<div id="app-nav"></div>
 
 <div class="hero">
   <div class="container">
@@ -424,19 +414,9 @@
   </div>
 </div>
 
-<footer>
-  <div class="container">
-    <div class="footer-inner">
-      <span>🌿 COLFLUX OE2 — Gestión de datos</span>
-      <div class="footer-links">
-        <a href="https://github.com/colflux/backend" target="_blank">GitHub</a>
-        <a href="db.html">Base de datos</a>
-        <a href="../index.html">Plan de trabajo</a>
-      </div>
-    </div>
-  </div>
-</footer>
+<div id="app-footer"></div>
 
+<script src="../assets/js/layout.js"></script>
 <script src="../config/services.js"></script>
 <script>
   const API_BASE = window.COLFLUX_CONFIG.apiBaseUrl;
@@ -557,6 +537,10 @@
         ? `<a class="card-link" href="${f.url}" target="_blank">Abrir archivo ↗</a>`
         : `<span class="card-link" style="color:var(--gray);cursor:default;">Sin enlace</span>`;
 
+      const etlHtml = (f.tipo === 'excel' || f.tipo === 'csv')
+        ? `<a class="card-link card-link-etl" href="etl-upload.html?fuente=${f.id}">Iniciar carga →</a>`
+        : '';
+
       const proyectoHtml = f.proyecto
         ? `<span class="card-proyecto">${f.proyecto.codigo}</span>`
         : '';
@@ -586,6 +570,7 @@
             ${responsableHtml}
             ${fechaHtml}
             ${linkHtml}
+            ${etlHtml}
           </div>
         </div>`;
     }).join('');

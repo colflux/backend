@@ -4,8 +4,28 @@ from .base import TimestampedModel
 from .sitio import Sitio
 
 
+class PublicacionType(models.Model):
+    nombre = models.CharField("nombre", max_length=80, unique=True)
+    descripcion = models.TextField("descripción", blank=True)
+
+    class Meta:
+        verbose_name = "tipo de publicación"
+        verbose_name_plural = "tipos de publicación"
+        ordering = ["nombre"]
+
+    def __str__(self):
+        return self.nombre
+
+
 class Publicacion(TimestampedModel):
-    bibliography_type = models.CharField("tipo de referencia", max_length=80, blank=True)
+    bibliography_type = models.ForeignKey(
+        PublicacionType,
+        verbose_name="tipo de referencia",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="publicaciones",
+    )
     isbn = models.CharField("ISBN", max_length=20, blank=True)
     doi = models.CharField("DOI", max_length=255, blank=True)
     identifier = models.CharField("identificador", max_length=120, blank=True)

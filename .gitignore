@@ -6,3 +6,6 @@ __pycache__/
 db.sqlite3
 staticfiles/
 postgres_data/
+data-portal/assets/data/catalogo.json
+data/
+media/

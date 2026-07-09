@@ -1,0 +1,841 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>COLFLUX — Carga de datos ETL</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Inter', sans-serif; color: #1a2236; background: #f8fafc; line-height: 1.6; }
+
+    :root {
+      --green:   #18735d; --green-l: #e6f4f0; --green-d: #0d4f40;
+      --blue:    #1a6e9b; --blue-l:  #e6f3fb;
+      --purple:  #6b4f9e; --purple-l:#f0ecfa;
+      --amber:   #d97706; --amber-l: #fef3c7;
+      --red:     #dc2626; --red-l:   #fee2e2;
+      --gray:    #64748b; --gray-l:  #f1f5f9;
+      --border:  #e2e8f0;
+    }
+
+    .container { max-width: 1140px; margin: 0 auto; padding: 0 24px; }
+
+    /* ── Nav ── */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(255,255,255,.96); backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border); padding: 12px 0;
+    }
+    .nav-inner { display: flex; align-items: center; justify-content: space-between; max-width: 1140px; margin: 0 auto; padding: 0 24px; }
+    .nav-logo { font-weight: 800; font-size: 1rem; color: var(--green-d); text-decoration: none; display: flex; align-items: center; gap: 8px; }
+    .nav-links { display: flex; gap: 24px; list-style: none; }
+    .nav-links a { color: var(--gray); font-size: .85rem; font-weight: 500; text-decoration: none; transition: color .2s; }
+    .nav-links a:hover, .nav-links a.active { color: var(--green); font-weight: 700; }
+    .nav-pill { background: var(--green-d); color: white; font-size: .75rem; font-weight: 700; padding: 5px 12px; border-radius: 20px; text-decoration: none; }
+    @media (max-width: 600px) { .nav-links { display: none; } }
+
+    /* ── Hero ── */
+    .hero { background: #0d4f40; color: white; padding: 48px 0 40px; }
+    .hero-badge { display: inline-flex; align-items: center; gap: 7px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.3); border-radius: 20px; padding: 4px 14px; font-size: .75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 14px; }
+    .hero h1 { font-size: clamp(1.6rem, 3vw, 2.2rem); font-weight: 800; line-height: 1.15; letter-spacing: -.02em; margin-bottom: 14px; }
+    .hero h1 em { font-style: normal; color: #6ee7b7; }
+    .hero-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .hero-fuente-nombre { font-size: 1.05rem; font-weight: 700; color: white; }
+    .badge { display: inline-flex; align-items: center; gap: 4px; font-size: .72rem; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
+    .badge-tipo-excel    { background: #dcfce7; color: #166534; }
+    .badge-tipo-csv      { background: #dbeafe; color: #1e40af; }
+    .badge-tipo-shapefile{ background: #fef9c3; color: #854d0e; }
+    .badge-tipo-geojson  { background: #f3e8ff; color: #6b21a8; }
+    .badge-tipo-api      { background: #e0f2fe; color: #0369a1; }
+    .badge-tipo-base_de_datos { background: #fce7f3; color: #9d174d; }
+    .badge-tipo-otro     { background: var(--gray-l); color: #374151; }
+    .badge-estado-pendiente   { background: rgba(255,255,255,.15); color: rgba(255,255,255,.9); }
+    .badge-estado-en_proceso  { background: var(--amber-l); color: #92400e; }
+    .badge-estado-completo    { background: #dcfce7; color: #166534; }
+    .badge-estado-con_errores { background: var(--red-l); color: var(--red); }
+    .hero-loading { color: rgba(255,255,255,.6); font-size: .9rem; }
+
+    /* ── Stepper ── */
+    .stepper-wrap { background: white; border-bottom: 1px solid var(--border); padding: 20px 0; }
+    .stepper { display: flex; align-items: center; gap: 0; }
+    .step { display: flex; align-items: center; gap: 10px; flex: 1; }
+    .step-circle {
+      width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .8rem; font-weight: 700;
+      background: var(--gray-l); color: var(--gray);
+      border: 2px solid var(--border);
+      transition: all .2s;
+    }
+    .step.active .step-circle {
+      background: var(--green-d); color: white; border-color: var(--green-d);
+    }
+    .step-label { font-size: .82rem; font-weight: 600; color: var(--gray); white-space: nowrap; }
+    .step.active .step-label { color: var(--green-d); font-weight: 700; }
+    .step-connector { flex: 1; height: 2px; background: var(--border); margin: 0 8px; min-width: 16px; }
+    @media (max-width: 600px) { .step-label { display: none; } }
+
+    /* ── Main ── */
+    .main { padding: 36px 0 64px; }
+    .step-section { max-width: 640px; }
+    .step-section h2 { font-size: 1.1rem; font-weight: 800; margin-bottom: 6px; }
+    .step-section .step-desc { font-size: .88rem; color: var(--gray); margin-bottom: 24px; }
+
+    /* ── Drop zone ── */
+    .dropzone {
+      border: 2px dashed var(--border); border-radius: 14px;
+      background: white; padding: 48px 24px; text-align: center;
+      cursor: pointer; transition: border-color .2s, background .2s;
+      position: relative;
+    }
+    .dropzone:hover, .dropzone.drag-over {
+      border-color: var(--green); background: var(--green-l);
+    }
+    .dropzone-icon { font-size: 2.8rem; margin-bottom: 12px; line-height: 1; }
+    .dropzone-text { font-size: .92rem; font-weight: 600; color: #374151; margin-bottom: 6px; }
+    .dropzone-hint { font-size: .8rem; color: var(--gray); }
+    .dropzone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .file-selected {
+      display: none; margin-top: 16px;
+      background: var(--green-l); border: 1.5px solid var(--green);
+      border-radius: 10px; padding: 12px 16px;
+      display: none; align-items: center; gap: 10px;
+      font-size: .88rem; font-weight: 600; color: var(--green-d);
+    }
+    .file-selected.visible { display: flex; }
+    .file-selected-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* ── Actions ── */
+    .step-actions { margin-top: 24px; display: flex; align-items: center; gap: 12px; }
+    .btn-primary {
+      background: var(--green-d); color: white; border: none; border-radius: 8px;
+      padding: 10px 22px; font-size: .9rem; font-weight: 700; font-family: inherit;
+      cursor: pointer; transition: opacity .2s; display: flex; align-items: center; gap: 8px;
+    }
+    .btn-primary:hover { opacity: .88; }
+    .btn-secondary {
+      background: white; color: var(--gray); border: 1.5px solid var(--border);
+      border-radius: 8px; padding: 10px 18px; font-size: .88rem; font-weight: 600;
+      font-family: inherit; cursor: pointer; transition: border-color .2s; text-decoration: none;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn-secondary:hover { border-color: var(--gray); color: #1a2236; }
+
+    /* ── Error state ── */
+    .error-box {
+      background: var(--red-l); border: 1.5px solid var(--red); border-radius: 10px;
+      padding: 14px 18px; font-size: .88rem; color: var(--red); font-weight: 600;
+    }
+
+    /* ── Spinner ── */
+    .spinner {
+      width: 20px; height: 20px; border: 3px solid rgba(255,255,255,.4);
+      border-top-color: white; border-radius: 50%;
+      animation: spin .7s linear infinite; flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(60px);
+      background: #0d4f40; color: white; padding: 12px 24px; border-radius: 10px;
+      font-size: .9rem; font-weight: 700; box-shadow: 0 4px 16px rgba(0,0,0,.18);
+      transition: transform .3s ease; z-index: 999; pointer-events: none; white-space: nowrap;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ── Stepper: estado completado ── */
+    .step.done .step-circle {
+      background: var(--green-l); color: var(--green-d); border-color: var(--green);
+    }
+    .step.done .step-label { color: var(--green-d); }
+
+    /* ── Mapeo de columnas ── */
+    .mapeo-sheet-bar {
+      display: flex; align-items: center; gap: 16px;
+      background: white; border: 1.5px solid var(--border); border-radius: 10px;
+      padding: 12px 18px; margin-bottom: 20px; flex-wrap: wrap;
+    }
+    .mapeo-sheet-bar label { font-size: .85rem; font-weight: 600; color: var(--gray); white-space: nowrap; }
+    .mapeo-sheet-bar select {
+      border: 1.5px solid var(--border); border-radius: 8px; padding: 7px 12px;
+      font-size: .88rem; font-family: inherit; background: white; cursor: pointer;
+    }
+    .mapeo-filas-badge {
+      font-size: .82rem; color: var(--gray); margin-left: auto;
+    }
+
+    .mapeo-panel {
+      background: white; border: 1.5px solid var(--border); border-radius: 14px;
+      overflow: hidden; margin-bottom: 24px;
+    }
+    .mapeo-panel-header {
+      padding: 14px 20px; border-bottom: 1px solid var(--border);
+      font-size: .88rem; font-weight: 700; color: #374151; background: var(--gray-l);
+    }
+    .mapeo-list { max-height: 520px; overflow-y: auto; }
+    .mapeo-row {
+      display: grid;
+      grid-template-columns: 1fr 20px 1fr;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .mapeo-row:last-child { border-bottom: none; }
+    .mapeo-col-info {}
+    .mapeo-col-name { font-size: .88rem; font-weight: 700; color: #1a2236; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .mapeo-dtype { font-size: .72rem; font-weight: 700; padding: 2px 8px; border-radius: 20px; background: var(--blue-l); color: var(--blue); }
+    .mapeo-nulls { font-size: .72rem; color: var(--gray); }
+    .mapeo-sample { font-size: .78rem; color: var(--gray); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+    .mapeo-arrow { color: var(--gray); font-size: 1rem; text-align: center; user-select: none; }
+    .mapeo-col-destino { display: flex; gap: 8px; align-items: center; }
+    .mapeo-col-destino select {
+      border: 1.5px solid var(--border); border-radius: 8px; padding: 7px 12px;
+      font-size: .82rem; font-family: inherit; background: white; cursor: pointer;
+      flex: 1; min-width: 0;
+    }
+    .mapeo-col-destino select:disabled { opacity: .5; cursor: default; }
+
+    /* ── Step 3 placeholder ── */
+    .step3-placeholder {
+      background: white; border: 1.5px solid var(--border); border-radius: 14px;
+      padding: 48px 32px; text-align: center; color: var(--gray);
+    }
+    .step3-placeholder .ph-icon { font-size: 2.8rem; margin-bottom: 12px; }
+    .step3-placeholder h3 { font-size: 1.1rem; font-weight: 700; color: #374151; margin-bottom: 6px; }
+    .step3-placeholder p { font-size: .88rem; }
+
+    /* ── Footer ── */
+    footer { background: #0d1117; color: rgba(255,255,255,.5); padding: 28px 0; font-size: .82rem; }
+    .footer-inner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+    footer a { color: rgba(255,255,255,.6); text-decoration: none; }
+    footer a:hover { color: white; }
+    .footer-links { display: flex; gap: 20px; }
+
+    /* ── Calidad del dato ── */
+    .calidad-resumen {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 12px; margin-bottom: 24px;
+    }
+    .calidad-stat {
+      background: white; border: 1.5px solid var(--border); border-radius: 12px;
+      padding: 16px; text-align: center;
+    }
+    .calidad-stat strong { display: block; font-size: 1.6rem; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+    .calidad-stat span { font-size: .75rem; color: var(--gray); }
+    .calidad-col {
+      background: white; border: 1.5px solid var(--border); border-radius: 12px;
+      margin-bottom: 12px; overflow: hidden;
+    }
+    .calidad-col-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px; cursor: pointer; user-select: none;
+    }
+    .calidad-col-header:hover { background: var(--gray-l); }
+    .calidad-col-title { font-weight: 700; font-size: .9rem; }
+    .calidad-col-destino { font-size: .75rem; color: var(--gray); font-family: 'JetBrains Mono', monospace; }
+    .calidad-col-badge-ok  { background: #dcfce7; color: #166534; }
+    .calidad-col-badge-err { background: var(--red-l); color: var(--red); }
+    .calidad-col-body { border-top: 1px solid var(--border); padding: 0; display: none; }
+    .calidad-col-body.open { display: block; }
+    .calidad-error-row {
+      display: grid; grid-template-columns: 60px 1fr 1fr; gap: 8px;
+      padding: 8px 16px; border-bottom: 1px solid var(--border); font-size: .82rem;
+      align-items: center;
+    }
+    .calidad-error-row:last-child { border-bottom: none; }
+    .calidad-fila { font-family: 'JetBrains Mono', monospace; color: var(--gray); font-size: .75rem; }
+    .calidad-valor { color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .calidad-tipo { font-size: .72rem; font-weight: 700; padding: 2px 8px; border-radius: 20px; text-align: center; }
+    .tipo-nulo_obligatorio   { background: var(--red-l); color: var(--red); }
+    .tipo-tipo_invalido      { background: var(--amber-l); color: #92400e; }
+    .tipo-longitud_excedida  { background: var(--purple-l); color: var(--purple); }
+    .tipo-fuera_de_vocabulario { background: #dbeafe; color: #1e40af; }
+    .calidad-actions { display: flex; gap: 10px; margin-top: 24px; }
+    .btn-importar { background: var(--green-d); color: white; border: none; border-radius: 8px; padding: 10px 20px; font-size: .88rem; font-weight: 700; font-family: inherit; cursor: pointer; }
+    .btn-importar:hover { opacity: .9; }
+    .btn-secondary { background: white; color: var(--gray); border: 1.5px solid var(--border); border-radius: 8px; padding: 10px 16px; font-size: .88rem; font-weight: 600; font-family: inherit; cursor: pointer; }
+    .btn-secondary:hover { border-color: var(--gray); color: #1a2236; }
+  </style>
+</head>
+<body>
+
+<div id="app-nav"></div>
+
+<div class="hero">
+  <div class="container">
+    <div class="hero-badge">⬆️ ETL · Carga de datos</div>
+    <h1>Carga de datos — <em>ETL</em></h1>
+    <div class="hero-meta" id="heroMeta">
+      <span class="hero-loading">Cargando información de la fuente…</span>
+    </div>
+  </div>
+</div>
+
+<!-- Stepper -->
+<div class="stepper-wrap">
+  <div class="container">
+    <div class="stepper">
+      <div class="step active" id="step1">
+        <div class="step-circle">1</div>
+        <span class="step-label">Subir archivo</span>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step" id="step2">
+        <div class="step-circle">2</div>
+        <span class="step-label">Mapear columnas</span>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step" id="step3">
+        <div class="step-circle">3</div>
+        <span class="step-label">Calidad del dato</span>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step" id="step4">
+        <div class="step-circle">4</div>
+        <span class="step-label">Importar</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- Main content -->
+<div class="main">
+  <div class="container">
+
+    <!-- Step 1: Subir archivo -->
+    <div class="step-section" id="sectionStep1">
+      <h2>Paso 1 — Subir archivo</h2>
+      <p class="step-desc">Selecciona o arrastra el archivo Excel (.xlsx / .xls) o CSV que deseas cargar a la base de datos.</p>
+
+      <div class="dropzone" id="dropzone">
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+        <div class="dropzone-icon">📂</div>
+        <div class="dropzone-text">Arrastra aquí tu archivo o haz clic para seleccionar</div>
+        <div class="dropzone-hint">Formatos aceptados: .xlsx, .xls, .csv</div>
+      </div>
+
+      <div class="file-selected" id="fileSelected">
+        <span>📄</span>
+        <span class="file-selected-name" id="fileSelectedName"></span>
+      </div>
+
+      <div id="step1Error"></div>
+
+      <div class="step-actions">
+        <button class="btn-primary" id="btnAnalizar">Analizar archivo →</button>
+        <a class="btn-secondary" href="data.html">← Volver</a>
+      </div>
+    </div>
+
+    <!-- Step 2: Mapeo de columnas (oculto hasta avanzar) -->
+    <div id="sectionStep2" style="display:none; max-width: 820px;">
+      <h2>Paso 2 — Mapeo de columnas</h2>
+      <p class="step-desc">Asocia cada columna del archivo con el campo correspondiente en la base de datos, o márcala como ignorar.</p>
+
+      <!-- Selector de hoja -->
+      <div class="mapeo-sheet-bar" id="sheetBar">
+        <label for="sheetSelect">Hoja:</label>
+        <select id="sheetSelect"></select>
+        <span class="mapeo-filas-badge" id="filasDetectadas"></span>
+      </div>
+
+      <!-- Callout catálogo técnico -->
+      <div style="background:var(--blue-l);border:1.5px solid #93c5fd;border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;">
+        <span style="font-size:1.3rem;">📖</span>
+        <div>
+          <div style="font-size:.85rem;font-weight:700;color:var(--blue);">¿No sabes a qué campo mapear?</div>
+          <div style="font-size:.8rem;color:#1e40af;">Consulta el <a href="catalogo-tecnico.html" target="_blank" style="color:var(--blue);font-weight:700;">Catálogo técnico →</a> para ver todas las entidades y sus campos disponibles.</div>
+        </div>
+      </div>
+
+      <!-- Panel de mapeo -->
+      <div class="mapeo-panel">
+        <div class="mapeo-panel-header" id="mapeoHeader">Mapeo de columnas</div>
+        <div class="mapeo-list" id="mapeoList"></div>
+      </div>
+
+      <div id="step2Error"></div>
+
+      <div class="step-actions">
+        <button class="btn-primary" id="btnGuardarMapeo">Guardar mapeo →</button>
+        <button class="btn-secondary" id="btnVolverPaso1">← Volver al paso 1</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Reporte de calidad -->
+    <section id="sectionStep3" style="display:none;">
+      <div class="etl-card">
+        <h2 style="font-size:1.1rem;font-weight:800;margin-bottom:6px;">Reporte de calidad del dato</h2>
+        <p style="font-size:.85rem;color:var(--gray);margin-bottom:20px;">
+          Validación automática de las columnas mapeadas contra los tipos y restricciones del modelo.
+        </p>
+
+        <div id="calidadLoading" style="text-align:center;padding:40px 0;">
+          <div class="spinner" style="margin:0 auto 12px;border-color:rgba(0,0,0,.15);border-top-color:var(--green-d);"></div>
+          <p style="color:var(--gray);font-size:.88rem;">Analizando datos…</p>
+        </div>
+
+        <div id="calidadContent" style="display:none;">
+          <div class="calidad-resumen" id="calidadResumen"></div>
+          <div id="calidadColumnas"></div>
+          <div id="paso3Error" class="error-box" style="display:none;margin-top:12px;"></div>
+          <div class="calidad-actions">
+            <button class="btn-importar" id="btnImportar">Importar datos →</button>
+            <button class="btn-secondary" id="btnVolverPaso2">← Volver al mapeo</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<div id="app-footer"></div>
+
+<script src="../assets/js/layout.js"></script>
+<script src="../config/services.js"></script>
+<script>
+  const API_BASE = window.COLFLUX_CONFIG.apiBaseUrl;
+
+  // ── Estado global ─────────────────────────────────────────────────────────
+  let state = {
+    fuenteId: null,
+    cargaId: null,
+    columnas: [],
+    sheets: [],
+    totalFilas: 0,
+    modelosDestino: {}
+  };
+
+  // ── Utilidades ────────────────────────────────────────────────────────────
+  function showToast(msg, duration = 3000) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), duration);
+  }
+
+  function showError(containerId, msg) {
+    const el = document.getElementById(containerId);
+    if (!msg) { el.innerHTML = ''; return; }
+    el.innerHTML = `<div class="error-box" style="margin-top:16px;">${msg}</div>`;
+  }
+
+  // ── Stepper ───────────────────────────────────────────────────────────────
+  function setStepperState(active) {
+    // active = 1 | 2 | 3 | 4
+    [1, 2, 3, 4].forEach(n => {
+      const el = document.getElementById(`step${n}`);
+      el.classList.remove('active', 'done');
+      if (n < active) {
+        el.classList.add('done');
+        el.querySelector('.step-circle').textContent = '✓';
+      } else if (n === active) {
+        el.classList.add('active');
+        el.querySelector('.step-circle').textContent = String(n);
+      } else {
+        el.querySelector('.step-circle').textContent = String(n);
+      }
+    });
+  }
+
+  function showSection(num) {
+    [1, 2, 3].forEach(n => {
+      document.getElementById(`sectionStep${n}`).style.display = n === num ? '' : 'none';
+    });
+    setStepperState(num);
+    if (num === 3) iniciarValidacion();
+  }
+
+  // ── Hero: cargar nombre de la fuente ─────────────────────────────────────
+  async function initPage() {
+    const params = new URLSearchParams(window.location.search);
+    state.fuenteId = params.get('fuente');
+    const heroMeta = document.getElementById('heroMeta');
+
+    if (!state.fuenteId) {
+      heroMeta.innerHTML = `<span style="color:rgba(255,255,255,.7);font-size:.9rem;">No se especificó ninguna fuente de datos.</span>`;
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/fuentes-datos/`, {
+        signal: AbortSignal.timeout(window.COLFLUX_CONFIG.requestTimeoutMs),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const fuente = (data.fuentes || []).find(f => String(f.id) === String(state.fuenteId));
+
+      if (!fuente) {
+        heroMeta.innerHTML = `<span style="color:rgba(255,255,255,.7);font-size:.9rem;">Fuente con id <strong>${state.fuenteId}</strong> no encontrada.</span>`;
+        return;
+      }
+
+      heroMeta.innerHTML = `
+        <span class="hero-fuente-nombre">${fuente.nombre}</span>
+        <span class="badge badge-tipo-${fuente.tipo}">${fuente.tipo_label}</span>
+        <span class="badge badge-estado-${fuente.estado}">${fuente.estado_label}</span>
+      `;
+    } catch (e) {
+      heroMeta.innerHTML = `<span style="color:rgba(255,255,255,.7);font-size:.9rem;">No se pudo conectar con la API.</span>`;
+    }
+  }
+
+  // ── Drag & drop (paso 1) ──────────────────────────────────────────────────
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+
+  dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+  dropzone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropzone.classList.remove('drag-over');
+    const file = e.dataTransfer?.files?.[0];
+    if (file) setFile(file);
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files?.[0]) setFile(fileInput.files[0]);
+  });
+
+  function setFile(file) {
+    document.getElementById('fileSelectedName').textContent = file.name;
+    document.getElementById('fileSelected').classList.add('visible');
+    showError('step1Error', '');
+  }
+
+  // ── Paso 1 → upload ───────────────────────────────────────────────────────
+  document.getElementById('btnAnalizar').addEventListener('click', async () => {
+    const file = fileInput.files?.[0];
+    if (!file) { showError('step1Error', 'Selecciona un archivo antes de continuar.'); return; }
+    if (!state.fuenteId) { showError('step1Error', 'No hay fuente de datos en la URL (?fuente=id).'); return; }
+
+    const btn = document.getElementById('btnAnalizar');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Analizando…';
+    showError('step1Error', '');
+
+    try {
+      const formData = new FormData();
+      formData.append('archivo', file);
+
+      const res = await fetch(`${API_BASE}/api/fuentes-datos/${state.fuenteId}/upload/`, {
+        method: 'POST',
+        body: formData,
+        signal: AbortSignal.timeout(window.COLFLUX_CONFIG.requestTimeoutMs),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || err.error || `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      state.cargaId   = data.carga_id;
+      state.columnas  = data.columnas  || [];
+      state.sheets    = data.sheets    || [];
+      state.totalFilas = data.total_filas ?? 0;
+
+      // Cargar campos destino antes de mostrar paso 2
+      await cargarCamposDestino();
+      renderPaso2();
+      showSection(2);
+
+    } catch (e) {
+      showError('step1Error', `Error al analizar el archivo: ${e.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = 'Analizar archivo →';
+    }
+  });
+
+  // ── Cargar campos destino ─────────────────────────────────────────────────
+  async function cargarCamposDestino() {
+    const res = await fetch(`${API_BASE}/api/etl/campos-destino/`, {
+      signal: AbortSignal.timeout(window.COLFLUX_CONFIG.requestTimeoutMs),
+    });
+    if (!res.ok) throw new Error(`campos-destino HTTP ${res.status}`);
+    const data = await res.json();
+    state.modelosDestino = data.modelos || {};
+  }
+
+  // ── Renderizar Paso 2 ─────────────────────────────────────────────────────
+  function renderPaso2() {
+    // Selector de hoja
+    const sheetSelect = document.getElementById('sheetSelect');
+    sheetSelect.innerHTML = '';
+    (state.sheets.length ? state.sheets : ['—']).forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s; opt.textContent = s;
+      sheetSelect.appendChild(opt);
+    });
+    document.getElementById('filasDetectadas').textContent =
+      state.totalFilas ? `${state.totalFilas.toLocaleString()} filas detectadas` : '';
+
+    // Cabecera del panel
+    document.getElementById('mapeoHeader').textContent =
+      `Mapeo de columnas (${state.columnas.length} columnas)`;
+
+    // Filas de mapeo
+    renderMapeoRows();
+  }
+
+  function renderMapeoRows() {
+    const list = document.getElementById('mapeoList');
+    list.innerHTML = '';
+    const modeloKeys = Object.keys(state.modelosDestino);
+
+    state.columnas.forEach((col, idx) => {
+      const row = document.createElement('div');
+      row.className = 'mapeo-row';
+
+      // Muestra: hasta 2 valores, separados por coma
+      const muestra = (col.muestra || []).slice(0, 2).map(v => `"${v}"`).join(', ');
+
+      // Lado izquierdo: info de la columna
+      const infoDiv = document.createElement('div');
+      infoDiv.className = 'mapeo-col-info';
+      infoDiv.innerHTML = `
+        <div class="mapeo-col-name">
+          ${escapeHtml(col.nombre)}
+          <span class="mapeo-dtype">${escapeHtml(col.dtype || 'string')}</span>
+          <span class="mapeo-nulls">${col.nulls ?? 0} nulos</span>
+        </div>
+        ${muestra ? `<div class="mapeo-sample">muestra: ${escapeHtml(muestra)}</div>` : ''}
+      `;
+
+      // Flecha
+      const arrowDiv = document.createElement('div');
+      arrowDiv.className = 'mapeo-arrow';
+      arrowDiv.textContent = '→';
+
+      // Lado derecho: selects de modelo y campo
+      const destDiv = document.createElement('div');
+      destDiv.className = 'mapeo-col-destino';
+
+      const selModelo = document.createElement('select');
+      selModelo.dataset.idx = idx;
+      selModelo.classList.add('sel-modelo');
+
+      const optIgnorar = document.createElement('option');
+      optIgnorar.value = ''; optIgnorar.textContent = '— ignorar —';
+      selModelo.appendChild(optIgnorar);
+
+      modeloKeys.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m; opt.textContent = m;
+        selModelo.appendChild(opt);
+      });
+
+      const selCampo = document.createElement('select');
+      selCampo.dataset.idx = idx;
+      selCampo.classList.add('sel-campo');
+      selCampo.disabled = true;
+      selCampo.innerHTML = '<option value="">— campo —</option>';
+
+      selModelo.addEventListener('change', () => {
+        const modelo = selModelo.value;
+        selCampo.innerHTML = '';
+        if (!modelo) {
+          selCampo.disabled = true;
+          selCampo.innerHTML = '<option value="">— campo —</option>';
+        } else {
+          selCampo.disabled = false;
+          const campos = state.modelosDestino[modelo] || [];
+          campos.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c; opt.textContent = c;
+            selCampo.appendChild(opt);
+          });
+        }
+      });
+
+      destDiv.appendChild(selModelo);
+      destDiv.appendChild(selCampo);
+
+      row.appendChild(infoDiv);
+      row.appendChild(arrowDiv);
+      row.appendChild(destDiv);
+      list.appendChild(row);
+    });
+  }
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // ── Volver al paso 1 ──────────────────────────────────────────────────────
+  document.getElementById('btnVolverPaso1').addEventListener('click', () => {
+    showSection(1);
+  });
+
+  // ── Paso 2 → guardar mapeo ────────────────────────────────────────────────
+  document.getElementById('btnGuardarMapeo').addEventListener('click', async () => {
+    showError('step2Error', '');
+    const btn = document.getElementById('btnGuardarMapeo');
+
+    // Construir array de mapeos
+    const filas = document.querySelectorAll('#mapeoList .mapeo-row');
+    const mapeos = [];
+    filas.forEach((row, idx) => {
+      const col = state.columnas[idx];
+      const selModelo = row.querySelector('.sel-modelo');
+      const selCampo  = row.querySelector('.sel-campo');
+      mapeos.push({
+        columna_origen:  col.nombre,
+        modelo_destino:  selModelo.value  || '',
+        campo_destino:   selCampo.value   || '',
+        transformacion:  'directo',
+      });
+    });
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Guardando…';
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/fuentes-datos/${state.fuenteId}/carga/${state.cargaId}/mapeo/`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mapeos }),
+          signal: AbortSignal.timeout(window.COLFLUX_CONFIG.requestTimeoutMs),
+        }
+      );
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || err.error || `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      showToast(`Mapeo guardado ✓ (${data.guardados ?? mapeos.length} campos)`);
+      showSection(3);
+
+    } catch (e) {
+      showError('step2Error', `Error al guardar el mapeo: ${e.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = 'Guardar mapeo →';
+    }
+  });
+
+  // ── Paso 3: validación y calidad del dato ────────────────────────────────
+  async function iniciarValidacion() {
+    document.getElementById('calidadLoading').style.display = 'block';
+    document.getElementById('calidadContent').style.display = 'none';
+    document.getElementById('paso3Error').style.display = 'none';
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/fuentes-datos/${state.fuenteId}/carga/${state.cargaId}/validar/`,
+        { method: 'POST' }
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      renderCalidad(data);
+    } catch (e) {
+      document.getElementById('paso3Error').textContent = e.message || 'Error al validar';
+      document.getElementById('paso3Error').style.display = 'block';
+    } finally {
+      document.getElementById('calidadLoading').style.display = 'none';
+      document.getElementById('calidadContent').style.display = 'block';
+    }
+  }
+
+  function renderCalidad(data) {
+    const r = data.resumen || {};
+
+    // ── Resumen ──
+    const statDefs = [
+      { valor: r.total_filas,        label: 'Total filas',         color: '#1a2236' },
+      { valor: r.filas_limpias,      label: 'Filas limpias',       color: '#166534' },
+      { valor: r.filas_con_errores,  label: 'Filas con errores',   color: 'var(--red)' },
+      { valor: r.total_errores,      label: 'Total errores',       color: 'var(--amber)' },
+    ];
+    const resumenEl = document.getElementById('calidadResumen');
+    resumenEl.innerHTML = '';
+    statDefs.forEach(({ valor, label, color }) => {
+      const div = document.createElement('div');
+      div.className = 'calidad-stat';
+      div.innerHTML = `<strong style="color:${color};">${valor ?? '—'}</strong><span>${label}</span>`;
+      resumenEl.appendChild(div);
+    });
+
+    // ── Columnas ──
+    const colsEl = document.getElementById('calidadColumnas');
+    colsEl.innerHTML = '';
+    (data.columnas || []).forEach(col => {
+      const tieneErrores = col.errores && col.errores.length > 0;
+      const wrapper = document.createElement('div');
+      wrapper.className = 'calidad-col';
+
+      const destino = [col.modelo_destino, col.campo_destino].filter(Boolean).join(' → ');
+      const badgeClass = tieneErrores ? 'calidad-col-badge-err' : 'calidad-col-badge-ok';
+      const badgeText  = tieneErrores
+        ? `${col.errores.length} error${col.errores.length > 1 ? 'es' : ''}`
+        : '✓ OK';
+
+      const header = document.createElement('div');
+      header.className = 'calidad-col-header';
+      header.innerHTML = `
+        <div>
+          <div class="calidad-col-title">${escapeHtml(col.columna)}</div>
+          ${destino ? `<div class="calidad-col-destino">${escapeHtml(destino)}</div>` : ''}
+        </div>
+        <span class="badge ${badgeClass}">${badgeText}</span>
+      `;
+
+      wrapper.appendChild(header);
+
+      if (tieneErrores) {
+        const body = document.createElement('div');
+        body.className = 'calidad-col-body';
+
+        col.errores.forEach(err => {
+          const errRow = document.createElement('div');
+          errRow.className = 'calidad-error-row';
+          const valorDisplay = err.valor === null || err.valor === undefined ? '<em style="color:var(--gray);">nulo</em>' : escapeHtml(String(err.valor));
+          const tipoClass = `tipo-${escapeHtml(err.tipo || '')}`;
+          errRow.innerHTML = `
+            <span class="calidad-fila">Fila ${err.fila ?? '?'}</span>
+            <span class="calidad-valor">${valorDisplay}</span>
+            <span class="calidad-tipo ${tipoClass}">${escapeHtml(err.tipo || 'desconocido')}</span>
+          `;
+          body.appendChild(errRow);
+        });
+
+        header.addEventListener('click', () => body.classList.toggle('open'));
+        wrapper.appendChild(body);
+      }
+
+      colsEl.appendChild(wrapper);
+    });
+  }
+
+  document.getElementById('btnImportar').addEventListener('click', () => {
+    alert('Fase 5: importación próximamente');
+  });
+
+  document.getElementById('btnVolverPaso2').addEventListener('click', () => {
+    showSection(2);
+  });
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  initPage();
+</script>
+</body>
+</html>

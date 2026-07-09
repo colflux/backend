@@ -59,3 +59,62 @@ class FuenteDatos(TimestampedModel):
 
     def __str__(self):
         return f"{self.nombre} ({self.get_tipo_display()})"
+
+
+class CargaArchivo(TimestampedModel):
+    ESTADO_CHOICES = [
+        ("subido", "Archivo subido"),
+        ("mapeado", "Mapeo definido"),
+        ("validado", "Validación completada"),
+        ("importado", "Importado a BD"),
+    ]
+
+    fuente = models.ForeignKey(
+        FuenteDatos, on_delete=models.CASCADE,
+        related_name="cargas", verbose_name="fuente de datos",
+    )
+    archivo = models.FileField("archivo", upload_to="cargas/%Y/%m/")
+    hoja_activa = models.CharField("hoja activa", max_length=255, blank=True)
+    estado = models.CharField("estado", max_length=20, choices=ESTADO_CHOICES, default="subido")
+    columnas_raw = models.JSONField("columnas inspeccionadas", default=list)
+    total_filas = models.IntegerField("total de filas", default=0)
+
+    class Meta:
+        verbose_name = "carga de archivo"
+        verbose_name_plural = "cargas de archivos"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Carga #{self.pk} — {self.fuente.nombre}"
+
+
+class MapeoColumna(TimestampedModel):
+    TRANSFORMACION_CHOICES = [
+        ("directo", "Directo"),
+        ("lookup", "Lookup / FK"),
+        ("split", "Split"),
+        ("fecha", "Parsear fecha"),
+        ("ignorar", "Ignorar"),
+    ]
+
+    carga           = models.ForeignKey(
+        CargaArchivo, on_delete=models.CASCADE,
+        related_name="mapeos", verbose_name="carga",
+    )
+    columna_origen  = models.CharField("columna origen", max_length=255)
+    modelo_destino  = models.CharField("modelo destino", max_length=100, blank=True)
+    campo_destino   = models.CharField("campo destino", max_length=100, blank=True)
+    transformacion  = models.CharField(
+        "transformación", max_length=20,
+        choices=TRANSFORMACION_CHOICES, default="directo",
+    )
+
+    class Meta:
+        verbose_name = "mapeo de columna"
+        verbose_name_plural = "mapeos de columnas"
+        unique_together = [("carga", "columna_origen")]
+        ordering = ["columna_origen"]
+
+    def __str__(self):
+        destino = f"{self.modelo_destino}.{self.campo_destino}" if self.modelo_destino else "ignorar"
+        return f"{self.columna_origen} → {destino}"

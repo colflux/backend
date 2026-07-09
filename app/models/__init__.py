@@ -14,9 +14,9 @@ from .torre import ConfiguracionSensorGas, Equipo, TorreEc, TorreFuenteEnergia
 
 from .suelo import CaracterizacionMuestreoSuelo, MonitoreoSuelo
 
-from .publicacion import Autor, Publicacion, PublicacionAutor, PublicacionSitio, ResultadoPublicacion
+from .publicacion import Autor, Publicacion, PublicacionAutor, PublicacionSitio, PublicacionType, ResultadoPublicacion
 
-from .datos import FuenteDatos, Reportador
+from .datos import CargaArchivo, FuenteDatos, MapeoColumna, Reportador
 
 __all__ = [
     "TimestampedModel",
@@ -51,10 +51,13 @@ __all__ = [
     # Gestión de datos
     "Reportador",
     "FuenteDatos",
+    "CargaArchivo",
+    "MapeoColumna",
     # Publicaciones
     "Autor",
     "Publicacion",
     "PublicacionAutor",
     "PublicacionSitio",
+    "PublicacionType",
     "ResultadoPublicacion",
 ]

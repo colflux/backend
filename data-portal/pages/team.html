@@ -96,10 +96,11 @@
     .matrix tr:hover td { background: #f8fafc; }
 
     /* Footer */
-    footer { background: var(--green-d); color: rgba(255,255,255,.7); padding: 36px 0; text-align: center; font-size: .85rem; }
-    footer strong { color: white; }
-    footer a { color: #a7f3d0; text-decoration: none; }
-    .footer-links { display: flex; justify-content: center; gap: 20px; margin-top: 12px; flex-wrap: wrap; }
+    footer { background: #0d1117; color: rgba(255,255,255,.5); padding: 28px 0; font-size: .82rem; }
+    footer a { color: rgba(255,255,255,.6); text-decoration: none; }
+    footer a:hover { color: white; }
+    .footer-inner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+    .footer-links { display: flex; gap: 20px; }
 
     /* ── Organigrama ── */
     .org-wrap { display: flex; flex-direction: column; align-items: center; gap: 0; }
@@ -126,21 +127,7 @@
 </head>
 <body>
 
-<!-- Nav -->
-<nav>
-  <div class="nav-inner">
-    <a class="nav-logo" href="../index.html">🌿 COLFLUX · OE2</a>
-    <ul class="nav-links">
-      <li><a href="../index.html">Plan de trabajo</a></li>
-      <li><a href="#equipo">Equipo</a></li>
-      <li><a href="#roles">Roles</a></li>
-      <li><a href="#matriz">Matriz</a></li>
-      <li><a href="db.html">🗄️ Base de datos</a></li>
-      <li><a href="data.html">📂 Datos</a></li>
-    </ul>
-    <a class="nav-pill" href="https://github.com/vivianabautistaxyz/backend-colflux" target="_blank">GitHub →</a>
-  </div>
-</nav>
+<div id="app-nav"></div>
 
 <!-- Hero -->
 <section class="hero">
@@ -332,19 +319,9 @@
   </div>
 </section>
 
-<!-- Footer -->
-<footer>
-  <div class="container">
-    <p><strong>COLFLUX OE2</strong> — Equipo y responsabilidades · Jun 2025</p>
-    <div class="footer-links">
-      <a href="../index.html">Plan de trabajo</a>
-      <a href="#equipo">Equipo</a>
-      <a href="#matriz">Matriz</a>
-      <a href="https://github.com/vivianabautistaxyz/backend-colflux" target="_blank">GitHub</a>
-    </div>
-  </div>
-</footer>
+<div id="app-footer"></div>
 
+<script src="../assets/js/layout.js"></script>
 <script>
 // ─── Datos del equipo ────────────────────────────────────────────────────────
 // Para agregar una persona: copiar un objeto y completar los campos.

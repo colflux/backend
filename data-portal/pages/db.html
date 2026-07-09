@@ -126,22 +126,13 @@
     footer a { color: rgba(255,255,255,.6); text-decoration: none; }
     footer a:hover { color: white; }
     .footer-links { display: flex; gap: 20px; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
 
-<nav>
-  <div class="nav-inner">
-    <a class="nav-logo" href="../index.html">🌿 COLFLUX · OE2</a>
-    <ul class="nav-links">
-      <li><a href="../index.html">Plan de trabajo</a></li>
-      <li><a href="team.html">Equipo</a></li>
-      <li><a href="db.html" class="active" style="color:var(--green);font-weight:700;">Base de datos</a></li>
-      <li><a href="data.html">📂 Datos</a></li>
-    </ul>
-    <a class="nav-pill" href="https://dbdiagram.io/d/colfux-db-67b2aae2263d6cf9a05d08d0" target="_blank">Abrir diagrama →</a>
-  </div>
-</nav>
+<div id="app-nav"></div>
 
 <div class="hero">
   <div class="container">
@@ -166,40 +157,38 @@
   </div>
 </div>
 
-<!-- ── Embed ── -->
-<section>
+<!-- ── Diagrama ERD ── -->
+<section id="erd-section">
   <div class="container">
-    <p class="section-eyebrow">Diagrama interactivo</p>
-    <h2 class="stitle">Diagrama entidad-relación</h2>
+    <p class="section-eyebrow">Diagrama entidad-relación</p>
+    <h2 class="stitle">Modelo entidad-relación</h2>
     <p class="sdesc">
-      Diagrama interactivo en dbdiagram.io. Si el navegador bloquea el embed,
-      usa el botón <strong>Abrir en dbdiagram.io</strong> para verlo en pantalla completa.
+      Generado automáticamente desde los modelos Django. Se actualiza cada vez que
+      el modelo de datos cambia — no requiere edición manual.
     </p>
 
-    <div class="embed-wrapper" id="embedWrapper">
+    <div class="embed-wrapper" id="erdWrapper">
       <div class="embed-toolbar">
         <div class="embed-dots">
-          <div class="embed-dot"></div>
-          <div class="embed-dot"></div>
-          <div class="embed-dot"></div>
+          <div class="embed-dot"></div><div class="embed-dot"></div><div class="embed-dot"></div>
         </div>
-        <span class="embed-url">dbdiagram.io/d/colfux-db-67b2aae2263d6cf9a05d08d0</span>
-        <a class="embed-open" href="https://dbdiagram.io/d/colfux-db-67b2aae2263d6cf9a05d08d0" target="_blank">Abrir en pestaña ↗</a>
+        <span class="embed-url" id="erdMeta">Cargando…</span>
+        <button class="embed-open" id="btnRecargar" style="background:none;border:none;cursor:pointer;font-size:.78rem;font-weight:700;color:var(--green);">↺ Recargar</button>
       </div>
-      <iframe
-        id="dbFrame"
-        class="embed-frame"
-        src="https://dbdiagram.io/d/colfux-db-67b2aae2263d6cf9a05d08d0"
-        title="Diagrama COLFLUX DB"
-        loading="lazy"
-      ></iframe>
-      <div class="embed-fallback" id="fallback">
-        <div class="embed-fallback-icon">🗄️</div>
-        <h3>El diagrama no puede mostrarse aquí</h3>
-        <p>dbdiagram.io restringe la incrustación en iframes. Ábrelo directamente en su sitio para ver el modelo completo e interactivo.</p>
-        <a class="btn-primary" href="https://dbdiagram.io/d/colfux-db-67b2aae2263d6cf9a05d08d0" target="_blank">
-          🔗 Abrir en dbdiagram.io →
-        </a>
+
+      <div id="erdLoading" style="text-align:center;padding:60px 0;">
+        <div style="width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--green-d);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 14px;"></div>
+        <p style="color:var(--gray);font-size:.88rem;">Generando diagrama desde los modelos…</p>
+      </div>
+
+      <div id="erdContainer" style="display:none;padding:24px;overflow-x:auto;background:white;min-height:400px;">
+        <!-- Mermaid renderiza aquí -->
+      </div>
+
+      <div id="erdError" style="display:none;padding:40px;text-align:center;color:var(--gray);">
+        <div style="font-size:2rem;margin-bottom:10px;">⚠️</div>
+        <p style="font-size:.88rem;">No se pudo generar el diagrama. Verifica que el servidor esté corriendo.</p>
+        <button onclick="cargarErd()" style="margin-top:12px;background:var(--green-d);color:white;border:none;border-radius:8px;padding:8px 18px;cursor:pointer;font-size:.84rem;font-weight:700;">Reintentar</button>
       </div>
     </div>
   </div>
@@ -610,53 +599,59 @@
   </div>
 </section>
 
-<footer>
-  <div class="container">
-    <div class="footer-inner">
-      <span>🌿 COLFLUX OE2 — Modelo de BD</span>
-      <div class="footer-links">
-        <a href="https://github.com/vivianabautistaxyz/backend-colflux" target="_blank">GitHub</a>
-        <a href="https://dbdiagram.io/d/colfux-db-67b2aae2263d6cf9a05d08d0" target="_blank">dbdiagram.io</a>
-        <a href="../index.html">Plan de trabajo</a>
-        <a href="team.html">Equipo</a>
-      </div>
-    </div>
-  </div>
-</footer>
+<div id="app-footer"></div>
 
+<!-- Mermaid.js -->
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="../assets/js/layout.js"></script>
+<script src="../config/services.js"></script>
 <script>
-  // Detecta si el iframe fue bloqueado y muestra el fallback
-  const frame = document.getElementById('dbFrame');
-  const fallback = document.getElementById('fallback');
-
-  // Timeout: si en 4s el iframe no cargó contenido accesible, mostramos fallback
-  const timer = setTimeout(() => {
-    try {
-      // Intento de acceso cross-origin (lanzará error si fue bloqueado)
-      const loaded = frame.contentDocument || frame.contentWindow.document;
-      if (!loaded || loaded.body.innerHTML.trim() === '') throw new Error('empty');
-    } catch {
-      frame.style.display = 'none';
-      fallback.classList.add('visible');
-    }
-  }, 4000);
-
-  frame.addEventListener('load', () => {
-    clearTimeout(timer);
-    try {
-      const doc = frame.contentDocument || frame.contentWindow.document;
-      if (!doc || doc.body.innerHTML.trim() === '') throw new Error('blocked');
-    } catch {
-      frame.style.display = 'none';
-      fallback.classList.add('visible');
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: 'default',
+    er: { diagramPadding: 20, layoutDirection: 'TB', minEntityWidth: 100, fontSize: 12 },
+    themeVariables: {
+      primaryColor: '#e6f4f0',
+      primaryTextColor: '#0d4f40',
+      primaryBorderColor: '#18735d',
+      lineColor: '#64748b',
+      secondaryColor: '#e6f3fb',
+      tertiaryColor: '#f1f5f9',
     }
   });
 
-  frame.addEventListener('error', () => {
-    clearTimeout(timer);
-    frame.style.display = 'none';
-    fallback.classList.add('visible');
-  });
+  const API_BASE = window.COLFLUX_CONFIG.apiBaseUrl;
+
+  async function cargarErd() {
+    document.getElementById('erdLoading').style.display = 'block';
+    document.getElementById('erdContainer').style.display = 'none';
+    document.getElementById('erdError').style.display = 'none';
+
+    try {
+      const res = await fetch(API_BASE + '/api/db-erd/');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+
+      // Actualizar metadata en toolbar
+      const fecha = new Date(data.generado_en).toLocaleTimeString('es-CO');
+      document.getElementById('erdMeta').textContent =
+        `${data.total_modelos} entidades · generado ${fecha}`;
+
+      // Renderizar con Mermaid
+      const container = document.getElementById('erdContainer');
+      container.innerHTML = `<div class="mermaid">${data.mermaid}</div>`;
+      await mermaid.run({ nodes: container.querySelectorAll('.mermaid') });
+
+      document.getElementById('erdLoading').style.display = 'none';
+      container.style.display = 'block';
+    } catch(e) {
+      document.getElementById('erdLoading').style.display = 'none';
+      document.getElementById('erdError').style.display = 'block';
+    }
+  }
+
+  document.getElementById('btnRecargar').addEventListener('click', cargarErd);
+  cargarErd();
 </script>
 </body>
 </html>
