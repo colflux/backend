@@ -1,0 +1,61 @@
+data-portal/config/services.js
+  s_5ff1ca1eafc639::t_a38c1663dd90a3 8-10
+app/views.py
+  s_adac5e498fca69::t_1df112cd3bb6b2 317
+  s_adac5e498fca69::t_8956b65272df58 169-173
+  s_adac5e498fca69::t_f556d8a727416b 290
+  s_adac5e498fca69::t_2d3f8ccae321a5 207,230
+  s_adac5e498fca69::t_39c590da167af5 252-278
+specs/etl-pipeline.md
+  s_adac5e498fca69::t_e965c3fd28f4a0 5-7,12-13,27-28,31-32,34,39,41-47,49,51,55,57-68,70-77,79-80,84-85,89,91,93,95-101,104-108,110-112,115,117-129,131-133,136-139,141,143,145-158,162,164-176,178-190,192-217,222,224-227,229-230,234-250,254-259,261,265-278,280,282,286,290,292-293,299
+app/models/datos.py
+  s_adac5e498fca69::t_6493f304a84583 111-114
+app/migrations/0007_add_mapeo_valores_to_mapeocolumna.py
+  s_adac5e498fca69::t_2ae2462efc4869 1-23
+data-portal/pages/etl-upload.html
+  s_adac5e498fca69::t_bffac29ebb3d48 800,802,804-805,811
+  s_adac5e498fca69::t_1e9c081285a40a 222-246
+  s_adac5e498fca69::t_531d7da76700a9 443-444
+  s_adac5e498fca69::t_bcf5f98a3551ee 626-629,632,674-748,760-761,765,768-769,776-779
+data-portal/pages/data.html
+  s_5ff1ca1eafc639::t_db214a21a718cc 67-90,274-286,468,487-492
+app/apps.py
+  s_adac5e498fca69::t_cb920a92eececd 45,51
+  s_adac5e498fca69::t_1d456ca70f7708 55,58-64
+  s_adac5e498fca69::t_6b421fe555848b 14
+  s_adac5e498fca69::t_0e55ba0b88ac2a 8-13,15-44,46-50,52-54,56-57,65-66
+data-portal/pages/db.html
+  s_adac5e498fca69::t_052ad2757452b8 367
+  s_adac5e498fca69::t_24ce9b5acf0682 590
+  s_adac5e498fca69::t_27c279a81a0e38 384-387,390
+data-portal/pages/catalogo-tecnico.html
+  s_adac5e498fca69::t_b589e7747006cd 149,153-154,159,161,163-167
+.gitignore
+  s_adac5e498fca69::t_0bc3b278b187aa 10
+colflux/urls.py
+  s_adac5e498fca69::t_4794426bfbf1d1 5,11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "4b2ba771626d269059b6eb6dca95026d83918817",
+  "prompts": {},
+  "sessions": {
+    "s_5ff1ca1eafc639": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f4893-efb7-7ca1-8310-387629d0fb2f",
+        "model": "gpt-5.5"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    },
+    "s_adac5e498fca69": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0f6d4710-c3a5-4cdb-9620-dc6d284f642f",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    }
+  }
+}
