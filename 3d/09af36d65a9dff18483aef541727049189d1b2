@@ -1,0 +1,29 @@
+app/api/institucion/views.py
+  s_5ff1ca1eafc639::t_0ace432b42b2c2 1-8
+app/api/institucion/serializers.py
+  s_5ff1ca1eafc639::t_0ace432b42b2c2 1-15
+app/api/institucion/__init__.py
+  s_5ff1ca1eafc639::t_0ace432b42b2c2 1
+app/api/urls.py
+  s_5ff1ca1eafc639::t_0ace432b42b2c2 9,17
+data-portal/pages/team.html
+  s_5ff1ca1eafc639::t_0098c7183e7d61 125-126,135-136,138-140
+  s_5ff1ca1eafc639::t_7752fc37999211 75-81,111,129,141-146,148-150,152,154-156,158-161,210,266-269,271-351,355
+  s_5ff1ca1eafc639::t_c354e4673c7cd0 112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "3d09af36d65a9dff18483aef541727049189d1b2",
+  "prompts": {},
+  "sessions": {
+    "s_5ff1ca1eafc639": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f4893-efb7-7ca1-8310-387629d0fb2f",
+        "model": "gpt-5.5"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    }
+  }
+}
