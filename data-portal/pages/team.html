@@ -49,51 +49,12 @@
     h2.stitle { font-size: clamp(1.4rem, 3vw, 1.9rem); font-weight: 800; letter-spacing: -.02em; margin-bottom: 8px; }
     .sdesc { color: var(--gray); font-size: .92rem; max-width: 580px; margin-bottom: 36px; }
 
-    /* Institution bands */
-    .inst-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 32px; }
-    .inst-tab { padding: 7px 18px; border-radius: 8px; font-size: .85rem; font-weight: 700; cursor: pointer; border: 2px solid transparent; transition: all .2s; }
-    .inst-tab.active, .inst-tab:hover { opacity: 1; }
-    .inst-tab[data-inst="all"]    { background: var(--gray-l);   color: #374151; border-color: var(--border); }
-    .inst-tab[data-inst="PUJ"]    { background: var(--green-l);  color: var(--green-d); border-color: var(--green); }
-    .inst-tab[data-inst="IDEAM"]  { background: var(--blue-l);   color: var(--blue); border-color: var(--blue); }
-    .inst-tab[data-inst="UDENAR"] { background: var(--purple-l); color: var(--purple); border-color: var(--purple); }
-    .inst-tab[data-inst="UROSARIO"]{ background: var(--amber-l); color: var(--amber); border-color: var(--amber); }
-
-    /* Team grid */
-    .team-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px; }
-    .team-card { border: 1.5px solid var(--border); border-radius: 14px; overflow: hidden; background: white; box-shadow: 0 2px 8px rgba(0,0,0,.05); transition: transform .2s, box-shadow .2s; }
-    .team-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,.09); }
-    .team-card-top { padding: 18px 20px 14px; }
-    .team-avatar { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; font-weight: 800; color: white; margin-bottom: 12px; }
-    .team-card h3 { font-size: .98rem; font-weight: 700; margin-bottom: 2px; }
-    .team-card .role { font-size: .82rem; color: var(--gray); margin-bottom: 10px; }
-    .inst-chip { display: inline-flex; align-items: center; font-size: .72rem; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
-    .team-card-acts { padding: 12px 20px; border-top: 1px solid var(--border); background: #fafbfc; display: flex; flex-direction: column; gap: 6px; }
-    .act-tag { font-size: .78rem; display: flex; align-items: center; gap: 7px; color: #374151; }
-    .act-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .team-card .tbd-note { font-size: .78rem; color: var(--amber); font-style: italic; padding: 10px 20px; border-top: 1px solid var(--border); }
-    .tbd-card { border-style: dashed; opacity: .7; }
-    .tbd-card .team-avatar { background: var(--gray-l) !important; color: var(--gray); }
-
     /* Roles legend */
     .roles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; margin-bottom: 40px; }
     .role-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: white; }
     .role-icon { font-size: 1.2rem; flex-shrink: 0; }
     .role-item h4 { font-size: .85rem; font-weight: 700; margin-bottom: 2px; }
     .role-item p  { font-size: .78rem; color: var(--gray); line-height: 1.4; }
-
-    /* Matrix */
-    .matrix-wrap { overflow-x: auto; }
-    .matrix { border-collapse: collapse; width: 100%; min-width: 700px; font-size: .82rem; }
-    .matrix th, .matrix td { border: 1px solid var(--border); padding: 10px 12px; text-align: center; }
-    .matrix th { background: var(--gray-l); font-weight: 700; color: #374151; }
-    .matrix th.act-head { color: white; }
-    .matrix td.person { text-align: left; font-weight: 600; min-width: 160px; }
-    .matrix td.inst-col { font-size: .75rem; font-weight: 700; padding: 4px 8px; }
-    .cell-lead { background: var(--green-l); color: var(--green-d); font-weight: 700; border-radius: 4px; padding: 2px 6px; font-size: .75rem; }
-    .cell-support { background: var(--blue-l); color: var(--blue); border-radius: 4px; padding: 2px 6px; font-size: .75rem; }
-    .cell-tbd { color: var(--amber); font-style: italic; font-size: .75rem; }
-    .matrix tr:hover td { background: #f8fafc; }
 
     /* Responsables */
     .section-head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
@@ -111,6 +72,13 @@
     .responsable-name { font-weight: 800; color: #1a2236; }
     .responsable-muted { color: var(--gray); font-size: .8rem; }
     .state-box { text-align: center; padding: 36px 20px; color: var(--gray); }
+    .institution-admin { border: 1.5px solid var(--border); border-radius: 12px; background: white; padding: 16px; margin-bottom: 28px; }
+    .institution-form { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto; gap: 10px; align-items: end; margin-bottom: 14px; }
+    .institution-form .field-group { gap: 5px; }
+    .institution-list { display: flex; gap: 8px; flex-wrap: wrap; }
+    .institution-chip { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--border); border-radius: 20px; padding: 5px 10px; background: var(--gray-l); font-size: .78rem; font-weight: 700; color: #374151; }
+    .institution-chip a { color: var(--blue); text-decoration: none; font-weight: 600; }
+    .institution-status { font-size: .78rem; color: var(--gray); font-weight: 600; }
 
     /* Footer */
     footer { background: #0d1117; color: rgba(255,255,255,.5); padding: 28px 0; font-size: .82rem; }
@@ -118,26 +86,6 @@
     footer a:hover { color: white; }
     .footer-inner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
     .footer-links { display: flex; gap: 20px; }
-
-    /* ── Organigrama ── */
-    .org-wrap { display: flex; flex-direction: column; align-items: center; gap: 0; }
-    .org-level { display: flex; justify-content: center; gap: 40px; }
-    .org-level-2 { gap: 80px; }
-    .org-connector { width: 2px; height: 28px; background: var(--border); }
-    .org-node { display: flex; flex-direction: column; align-items: center; text-align: center; min-width: 140px; }
-    .org-node.node-top .org-avatar { width: 56px; height: 56px; font-size: 1.1rem; }
-    .org-node.node-sm .org-avatar { width: 38px; height: 38px; font-size: .8rem; }
-    .org-avatar { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; color: white; margin-bottom: 8px; font-size: .95rem; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
-    .avatar-tbd { opacity: .6; }
-    .org-name { font-size: .85rem; font-weight: 700; color: #1a2236; margin-bottom: 2px; }
-    .org-role { font-size: .72rem; color: var(--gray); line-height: 1.3; max-width: 130px; }
-    .org-teams { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; justify-content: center; width: 100%; padding-top: 4px; }
-    .org-team { flex: 1; min-width: 200px; max-width: 280px; }
-    .team-label { color: white; font-size: .78rem; font-weight: 700; padding: 8px 12px; border-radius: 8px 8px 0 0; text-align: center; }
-    .team-members { border: 1.5px solid var(--border); border-top: none; border-radius: 0 0 10px 10px; padding: 12px; display: flex; flex-direction: column; gap: 12px; background: white; }
-    .team-members .org-node { flex-direction: row; text-align: left; gap: 10px; min-width: unset; }
-    .team-members .org-node .org-avatar { margin-bottom: 0; flex-shrink: 0; }
-    .team-members .org-node .org-role { font-size: .75rem; }
 
     /* Drawer */
     .drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 200; opacity: 0; pointer-events: none; transition: opacity .25s; }
@@ -160,7 +108,8 @@
     .btn-cancel { background: white; color: var(--gray); border: 1.5px solid var(--border); border-radius: 8px; padding: 10px 16px; font-size: .88rem; font-weight: 600; font-family: inherit; cursor: pointer; }
     .form-error { font-size: .8rem; color: #dc2626; font-weight: 600; }
 
-    @media (max-width: 600px) { .nav-links { display: none; } .org-level-2 { gap: 24px; } .org-teams { flex-direction: column; } }
+    @media (max-width: 700px) { .institution-form { grid-template-columns: 1fr; } }
+    @media (max-width: 600px) { .nav-links { display: none; } }
   </style>
 </head>
 <body>
@@ -173,153 +122,44 @@
     <div class="hero-badge">👥 Equipo · Pre-inicio Jun 2025</div>
     <h1>Equipo <em>COLFLUX OE2</em></h1>
     <p class="hero-lead">
-      Mapeo de personas, roles y responsabilidades por actividad.
-      Los responsables marcados con ⚠ están pendientes de confirmar en sesión de kickoff.
+      Administración de responsables e instituciones asociadas al proyecto.
+      Gestiona contactos operativos y entidades desde la API local.
     </p>
     <div class="hero-actions">
-      <a href="#matriz" class="btn-white">Ver matriz de responsabilidades →</a>
+      <a href="#responsables" class="btn-white">Gestionar responsables →</a>
       <a href="../index.html" class="btn-outline">← Plan de trabajo</a>
     </div>
   </div>
 </section>
 
-<!-- ── Organigrama ── -->
-<section id="roles">
-  <div class="container">
-    <div class="eyebrow">Organigrama</div>
-    <h2 class="stitle">Estructura del equipo</h2>
-    <p class="sdesc">Jerarquía y tres equipos especializados. Los nombres sin foto están pendientes de confirmar.</p>
-
-    <div class="org-wrap">
-
-      <!-- Nivel 1: Coinvestigador -->
-      <div class="org-level">
-        <div class="org-node node-top">
-          <div class="org-avatar avatar-named" style="background:#6b4f9e;">MG</div>
-          <div class="org-name">Mauricio González</div>
-          <div class="org-role">Coinvestigador</div>
-        </div>
-      </div>
-
-      <div class="org-connector"></div>
-
-      <!-- Nivel 2: Líder -->
-      <div class="org-level">
-        <div class="org-node">
-          <div class="org-avatar avatar-tbd" style="background:#9b59b6;">?</div>
-          <div class="org-name">Por confirmar</div>
-          <div class="org-role">Líder de Gestión de Proyectos</div>
-        </div>
-      </div>
-
-      <div class="org-connector"></div>
-
-      <!-- Nivel 3: ETL Senior + Arquitecto -->
-      <div class="org-level org-level-2">
-        <div class="org-node">
-          <div class="org-avatar avatar-tbd" style="background:#8e44ad;">?</div>
-          <div class="org-name">Por confirmar</div>
-          <div class="org-role">Ingeniero de Datos ETL Senior</div>
-        </div>
-        <div class="org-node">
-          <div class="org-avatar avatar-tbd" style="background:#e74c3c;">?</div>
-          <div class="org-name">Por confirmar</div>
-          <div class="org-role">Arquitecto de Plataforma</div>
-        </div>
-      </div>
-
-      <div class="org-connector"></div>
-
-      <!-- Nivel 4: Tres equipos -->
-      <div class="org-teams">
-
-        <!-- Equipo Datos -->
-        <div class="org-team">
-          <div class="team-label" style="background:#8e44ad;">📦 Equipo de Datos y Curaduría</div>
-          <div class="team-members">
-            <div class="org-node node-sm">
-              <div class="org-avatar avatar-tbd" style="background:#a29bfe;">?</div>
-              <div class="org-name">Por confirmar</div>
-              <div class="org-role">Asistentes de Plataforma</div>
-            </div>
-            <div class="org-node node-sm">
-              <div class="org-avatar avatar-tbd" style="background:#a29bfe;">?</div>
-              <div class="org-name">Por confirmar</div>
-              <div class="org-role">Prof. Alimentación Plataforma</div>
-            </div>
-            <div class="org-node node-sm">
-              <div class="org-avatar avatar-tbd" style="background:#a29bfe;">?</div>
-              <div class="org-name">Por confirmar</div>
-              <div class="org-role">Profesional Apoyo Transversal</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Equipo Plataforma -->
-        <div class="org-team">
-          <div class="team-label" style="background:#1a6e9b;">💻 Equipo Desarrollo de Plataforma</div>
-          <div class="team-members">
-            <div class="org-node node-sm">
-              <div class="org-avatar avatar-tbd" style="background:#2980b9;">?</div>
-              <div class="org-name">Por confirmar</div>
-              <div class="org-role">Ingeniero Front End</div>
-            </div>
-            <div class="org-node node-sm">
-              <div class="org-avatar avatar-tbd" style="background:#2980b9;">?</div>
-              <div class="org-name">Por confirmar</div>
-              <div class="org-role">Ingeniero Backend API</div>
-            </div>
-            <div class="org-node node-sm">
-              <div class="org-avatar avatar-tbd" style="background:#2980b9;">?</div>
-              <div class="org-name">Por confirmar</div>
-              <div class="org-role">Ingeniero Cloud / DevOps</div>
-            </div>
-            <div class="org-node node-sm">
-              <div class="org-avatar avatar-tbd" style="background:#27ae60;">?</div>
-              <div class="org-name">Por confirmar</div>
-              <div class="org-role">Ingeniero de Pruebas</div>
-            </div>
-            <div class="org-node node-sm">
-              <div class="org-avatar avatar-tbd" style="background:#27ae60;">?</div>
-              <div class="org-name">Por confirmar</div>
-              <div class="org-role">Ingeniero de Seguridad</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Equipo IA -->
-        <div class="org-team">
-          <div class="team-label" style="background:#18735d;">🤖 Equipo Inteligencia Artificial</div>
-          <div class="team-members">
-            <div class="org-node node-sm">
-              <div class="org-avatar avatar-tbd" style="background:#27ae60;">?</div>
-              <div class="org-name">Por confirmar</div>
-              <div class="org-role">Experto IA</div>
-            </div>
-          </div>
-        </div>
-
-      </div><!-- /org-teams -->
-    </div><!-- /org-wrap -->
-  </div>
-</section>
-
-<!-- ── Equipo por institución ── -->
+<!-- ── Instituciones ── -->
 <section id="equipo">
   <div class="container">
     <div class="eyebrow">Equipo</div>
-    <h2 class="stitle">Personas por institución</h2>
-    <p class="sdesc">Filtra por institución para ver los integrantes. Los perfiles en gris están pendientes de confirmar.</p>
+    <h2 class="stitle">Instituciones</h2>
+    <p class="sdesc">Registra y consulta instituciones asociadas desde la API.</p>
 
-    <div class="inst-tabs" id="instTabs">
-      <button class="inst-tab active" data-inst="all">Todos</button>
-      <button class="inst-tab" data-inst="PUJ">PUJ</button>
-      <button class="inst-tab" data-inst="IDEAM">IDEAM</button>
-      <button class="inst-tab" data-inst="UDENAR">UDENAR</button>
-      <button class="inst-tab" data-inst="UROSARIO">UROSARIO</button>
+    <div class="institution-admin">
+      <div class="institution-form">
+        <div class="field-group">
+          <label>Institución <span>*</span></label>
+          <input type="text" id="institucionNombre" placeholder="Ej: Universidad Nacional">
+        </div>
+        <div class="field-group">
+          <label>Correo de contacto</label>
+          <input type="email" id="institucionCorreo" placeholder="contacto@institucion.edu.co">
+        </div>
+        <button class="btn-primary" id="institucionSubmit" onclick="submitInstitucion()">＋ Agregar</button>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
+        <strong style="font-size:.86rem;">Instituciones registradas</strong>
+        <span class="institution-status" id="institucionesStatus">Conectando…</span>
+      </div>
+      <div class="institution-list" id="institucionesList">
+        <span class="institution-status">Cargando instituciones…</span>
+      </div>
+      <div class="form-error" id="institucionError" style="display:none;margin-top:10px;"></div>
     </div>
-
-    <div class="team-grid" id="teamGrid"></div>
   </div>
 </section>
 
@@ -358,40 +198,6 @@
   </div>
 </section>
 
-<!-- ── Matriz de responsabilidades ── -->
-<section id="matriz">
-  <div class="container">
-    <div class="eyebrow">Distribución</div>
-    <h2 class="stitle">Matriz de responsabilidades</h2>
-    <p class="sdesc">
-      Quién lidera (L) y quién apoya (A) en cada actividad principal.
-      Las celdas vacías son gaps que deben resolverse en la sesión de kickoff.
-    </p>
-
-    <div class="matrix-wrap">
-      <table class="matrix">
-        <thead>
-          <tr>
-            <th style="text-align:left;">Persona / Rol</th>
-            <th>Inst.</th>
-            <th class="act-head" style="background:#18735d;">A2.1<br><small style="font-weight:400;opacity:.8;">BD</small></th>
-            <th class="act-head" style="background:#1a6e9b;">A2.2<br><small style="font-weight:400;opacity:.8;">Prototipo</small></th>
-            <th class="act-head" style="background:#6b4f9e;">A2.3<br><small style="font-weight:400;opacity:.8;">TRL6</small></th>
-            <th class="act-head" style="background:#d97706;">A2.4<br><small style="font-weight:400;opacity:.8;">Hardware</small></th>
-          </tr>
-        </thead>
-        <tbody id="matrixBody"></tbody>
-      </table>
-    </div>
-
-    <div style="display:flex;gap:16px;margin-top:16px;flex-wrap:wrap;">
-      <div style="display:flex;align-items:center;gap:7px;font-size:.8rem;"><span class="cell-lead" style="font-size:.75rem;">L</span> Lidera</div>
-      <div style="display:flex;align-items:center;gap:7px;font-size:.8rem;"><span class="cell-support" style="font-size:.75rem;">A</span> Apoya</div>
-      <div style="display:flex;align-items:center;gap:7px;font-size:.8rem;"><span class="cell-tbd">?</span> Por confirmar</div>
-    </div>
-  </div>
-</section>
-
 <div id="app-footer"></div>
 
 <script src="../assets/js/layout.js"></script>
@@ -400,102 +206,12 @@
 <script>
 const API_BASE = window.COLFLUX_CONFIG.apiBaseUrl;
 
-// ─── Datos del equipo ────────────────────────────────────────────────────────
-// Para agregar una persona: copiar un objeto y completar los campos.
-// tbd: true = perfil pendiente de confirmar (aparece en gris)
-const team = [
-  // Dirección
-  { name: 'Mauricio González', role: 'Coinvestigador', inst: 'PUJ', color: '#6b4f9e', tbd: false,
-    activities: [{ code: 'A2.1', label: 'Base de Datos', level: 'lidera' }, { code: 'A2.2', label: 'Prototipo', level: 'lidera' }, { code: 'A2.3', label: 'Plataforma TRL6', level: 'lidera' }, { code: 'A2.4', label: 'Instrumentación', level: 'lidera' }] },
-  { name: 'Por confirmar', role: 'Líder de Gestión de Proyectos', inst: 'PUJ', color: '#8e44ad', tbd: true,
-    activities: [{ code: 'A2.1', label: 'Base de Datos', level: 'lidera' }, { code: 'A2.2', label: 'Prototipo', level: 'lidera' }, { code: 'A2.3', label: 'Plataforma TRL6', level: 'lidera' }] },
-
-  // Ingeniería
-  { name: 'Por confirmar', role: 'Ingeniero de Datos ETL Senior', inst: 'PUJ', color: '#8e44ad', tbd: true,
-    activities: [{ code: 'A2.1', label: 'Base de Datos', level: 'lidera' }, { code: 'A2.2', label: 'Prototipo', level: 'apoya' }, { code: 'A2.3', label: 'Plataforma TRL6', level: 'apoya' }] },
-  { name: 'Por confirmar', role: 'Arquitecto de Plataforma', inst: 'PUJ', color: '#e74c3c', tbd: true,
-    activities: [{ code: 'A2.2', label: 'Prototipo', level: 'lidera' }, { code: 'A2.3', label: 'Plataforma TRL6', level: 'lidera' }] },
-
-  // Equipo Datos y Curaduría
-  { name: 'Por confirmar', role: 'Asistentes de Plataforma', inst: 'IDEAM', color: '#9b59b6', tbd: true,
-    activities: [{ code: 'A2.1', label: 'Base de Datos', level: 'apoya' }, { code: 'A2.2', label: 'Prototipo', level: 'apoya' }] },
-  { name: 'Por confirmar', role: 'Prof. Alimentación Plataforma', inst: 'IDEAM', color: '#9b59b6', tbd: true,
-    activities: [{ code: 'A2.1', label: 'Base de Datos', level: 'lidera' }, { code: 'A2.2', label: 'Prototipo', level: 'apoya' }] },
-  { name: 'Por confirmar', role: 'Profesional Apoyo Transversal', inst: 'UDENAR', color: '#9b59b6', tbd: true,
-    activities: [{ code: 'A2.1', label: 'Base de Datos', level: 'apoya' }, { code: 'A2.3', label: 'Plataforma TRL6', level: 'apoya' }] },
-
-  // Equipo Plataforma
-  { name: 'Por confirmar', role: 'Ingeniero Front End', inst: 'PUJ', color: '#2980b9', tbd: true,
-    activities: [{ code: 'A2.2', label: 'Prototipo', level: 'lidera' }, { code: 'A2.3', label: 'Plataforma TRL6', level: 'lidera' }] },
-  { name: 'Por confirmar', role: 'Ingeniero Backend API', inst: 'PUJ', color: '#2980b9', tbd: true,
-    activities: [{ code: 'A2.2', label: 'Prototipo', level: 'lidera' }, { code: 'A2.3', label: 'Plataforma TRL6', level: 'lidera' }] },
-  { name: 'Por confirmar', role: 'Ingeniero Cloud / DevOps', inst: 'UROSARIO', color: '#2980b9', tbd: true,
-    activities: [{ code: 'A2.2', label: 'Prototipo', level: 'apoya' }, { code: 'A2.3', label: 'Plataforma TRL6', level: 'lidera' }] },
-  { name: 'Por confirmar', role: 'Ingeniero de Pruebas', inst: 'UDENAR', color: '#27ae60', tbd: true,
-    activities: [{ code: 'A2.2', label: 'Prototipo', level: 'apoya' }, { code: 'A2.3', label: 'Plataforma TRL6', level: 'apoya' }] },
-  { name: 'Por confirmar', role: 'Ingeniero de Seguridad', inst: 'PUJ', color: '#27ae60', tbd: true,
-    activities: [{ code: 'A2.2', label: 'Prototipo', level: 'apoya' }, { code: 'A2.3', label: 'Plataforma TRL6', level: 'apoya' }] },
-
-  // Equipo IA
-  { name: 'Por confirmar', role: 'Experto IA', inst: 'UROSARIO', color: '#18735d', tbd: true,
-    activities: [{ code: 'A2.2', label: 'Prototipo', level: 'lidera' }, { code: 'A2.3', label: 'Plataforma TRL6', level: 'lidera' }] },
-];
-
-const instColors = {
-  PUJ:     { bg: '#e6f4f0', color: '#18735d' },
-  IDEAM:   { bg: '#e6f3fb', color: '#1a6e9b' },
-  UDENAR:  { bg: '#f0ecfa', color: '#6b4f9e' },
-  UROSARIO:{ bg: '#fef3c7', color: '#d97706' },
-};
-
-const actColors = { 'A2.1': '#18735d', 'A2.2': '#1a6e9b', 'A2.3': '#6b4f9e', 'A2.4': '#d97706' };
 let responsables = [];
+let instituciones = [];
 
 window.COLFLUX_DATA.responsableDrawer.init({
   getApiBase: () => API_BASE,
   onSaved: () => fetchResponsables(),
-});
-
-// ─── Render team cards ───────────────────────────────────────────────────────
-function getInitials(name) {
-  if (name === 'Por confirmar') return '?';
-  return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
-}
-
-function renderTeam(filter = 'all') {
-  const grid = document.getElementById('teamGrid');
-  const filtered = filter === 'all' ? team : team.filter(p => p.inst === filter);
-
-  grid.innerHTML = filtered.map(p => {
-    const ic = instColors[p.inst];
-    const acts = p.activities.map(a =>
-      `<div class="act-tag">
-        <div class="act-dot" style="background:${actColors[a.code]};"></div>
-        <span><strong>${a.code}</strong> — ${a.label} · <em style="color:${a.level === 'lidera' ? '#18735d' : '#1a6e9b'}">${a.level}</em></span>
-      </div>`
-    ).join('');
-
-    return `
-    <div class="team-card ${p.tbd ? 'tbd-card' : ''}">
-      <div class="team-card-top">
-        <div class="team-avatar" style="background:${p.tbd ? '' : p.color};">${getInitials(p.name)}</div>
-        <h3>${p.name}</h3>
-        <div class="role">${p.role}</div>
-        <span class="inst-chip" style="background:${ic.bg};color:${ic.color};">${p.inst}</span>
-      </div>
-      <div class="team-card-acts">${acts}</div>
-      ${p.tbd ? '<div class="tbd-note">⚠ Confirmar en kickoff</div>' : ''}
-    </div>`;
-  }).join('');
-}
-
-// ─── Filter tabs ─────────────────────────────────────────────────────────────
-document.querySelectorAll('.inst-tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.inst-tab').forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
-    renderTeam(tab.dataset.inst);
-  });
 });
 
 // ─── Responsables ────────────────────────────────────────────────────────────
@@ -547,33 +263,96 @@ async function fetchResponsables() {
 
 document.getElementById('responsableSearch').addEventListener('input', renderResponsables);
 
-// ─── Render matrix ───────────────────────────────────────────────────────────
-function renderMatrix() {
-  const tbody = document.getElementById('matrixBody');
-  const acts = ['A2.1', 'A2.2', 'A2.3', 'A2.4'];
+// ─── Instituciones ───────────────────────────────────────────────────────────
+function renderInstituciones() {
+  const list = document.getElementById('institucionesList');
+  list.innerHTML = '';
 
-  tbody.innerHTML = team.map(p => {
-    const ic = instColors[p.inst];
-    const cells = acts.map(a => {
-      const match = p.activities.find(x => x.code === a);
-      if (!match) return `<td>—</td>`;
-      if (match.level === 'lidera')  return `<td><span class="cell-lead">L</span></td>`;
-      if (match.level === 'apoya')   return `<td><span class="cell-support">A</span></td>`;
-      return `<td><span class="cell-tbd">?</span></td>`;
-    }).join('');
+  if (instituciones.length === 0) {
+    const empty = document.createElement('span');
+    empty.className = 'institution-status';
+    empty.textContent = 'No hay instituciones registradas.';
+    list.appendChild(empty);
+    return;
+  }
 
-    return `
-    <tr>
-      <td class="person">${p.tbd ? '<span style="color:var(--amber);">⚠</span> ' : ''}${p.name}</td>
-      <td class="inst-col"><span style="background:${ic.bg};color:${ic.color};padding:2px 8px;border-radius:4px;font-size:.72rem;font-weight:700;">${p.inst}</span></td>
-      ${cells}
-    </tr>`;
-  }).join('');
+  for (const inst of instituciones) {
+    const chip = document.createElement('span');
+    chip.className = 'institution-chip';
+
+    const name = document.createElement('span');
+    name.textContent = inst.nombre;
+    chip.appendChild(name);
+
+    if (inst.correo) {
+      const link = document.createElement('a');
+      link.href = `mailto:${inst.correo}`;
+      link.textContent = inst.correo;
+      chip.appendChild(link);
+    }
+
+    list.appendChild(chip);
+  }
 }
 
-renderTeam();
-renderMatrix();
+async function fetchInstituciones() {
+  const status = document.getElementById('institucionesStatus');
+  status.textContent = 'Conectando…';
+
+  try {
+    const res = await fetch(`${API_BASE}/api/instituciones/`, { signal: AbortSignal.timeout(window.COLFLUX_CONFIG.requestTimeoutMs) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    instituciones = Array.isArray(data) ? data : data.results || [];
+    status.textContent = `${instituciones.length} institución${instituciones.length !== 1 ? 'es' : ''}`;
+    renderInstituciones();
+  } catch (e) {
+    status.textContent = 'API no disponible';
+    document.getElementById('institucionesList').innerHTML = '<span class="institution-status">No fue posible cargar instituciones.</span>';
+  }
+}
+
+async function submitInstitucion() {
+  const nombreEl = document.getElementById('institucionNombre');
+  const correoEl = document.getElementById('institucionCorreo');
+  const errEl = document.getElementById('institucionError');
+  const btn = document.getElementById('institucionSubmit');
+  const nombre = nombreEl.value.trim();
+
+  if (!nombre) {
+    errEl.textContent = 'El nombre de la institución es obligatorio.';
+    errEl.style.display = 'block';
+    nombreEl.focus();
+    return;
+  }
+
+  errEl.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Guardando…';
+
+  try {
+    const res = await fetch(`${API_BASE}/api/instituciones/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre, correo: correoEl.value.trim() }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.nombre?.[0] || data?.correo?.[0] || data?.error || `Error ${res.status}`);
+
+    nombreEl.value = '';
+    correoEl.value = '';
+    await fetchInstituciones();
+  } catch (e) {
+    errEl.textContent = e.message || 'Error al guardar institución.';
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '＋ Agregar';
+  }
+}
+
 fetchResponsables();
+fetchInstituciones();
 </script>
 </body>
 </html>

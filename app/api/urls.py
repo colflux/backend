@@ -6,6 +6,7 @@ from app.api.dashboard.views import DashboardView
 from app.api.datos.views import FuenteDatosViewSet, fuentes_datos_api
 from app.api.erd.views import db_erd
 from app.api.etl.views import campos_destino, mapeo_carga, upload_archivo, validar_carga
+from app.api.institucion.views import InstitucionViewSet
 from app.api.proyecto.views import ProyectoViewSet
 from app.api.reportador.views import ReportadorViewSet
 
@@ -13,6 +14,7 @@ router = DefaultRouter()
 router.register("api/fuentes-datos-crud", FuenteDatosViewSet, basename="fuentes-datos-crud")
 router.register("api/proyectos", ProyectoViewSet, basename="proyectos")
 router.register("api/responsables", ReportadorViewSet, basename="responsables")
+router.register("api/instituciones", InstitucionViewSet, basename="instituciones")
 
 urlpatterns = [
     path("", DashboardView.as_view(), name="dashboard"),
