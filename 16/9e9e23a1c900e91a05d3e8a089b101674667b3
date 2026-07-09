@@ -1,0 +1,22 @@
+data-portal/pages/db.html
+  s_adac5e498fca69::t_fccdab7bdef47d 166-167,170-175,177-178,181-189,192-193
+  s_adac5e498fca69::t_196834a8fe76cf 441-442
+  s_adac5e498fca69::t_4c98bb1722a1a2 197-198,200-202,204-207,209-211,213,215-258,260-287,289-319,321-339,341-345,347-350,352-364
+  s_adac5e498fca69::t_cc5fd47a8f05e7 368-378,380-381,383,385-391,395-440,443-588
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "169e9e23a1c900e91a05d3e8a089b101674667b3",
+  "prompts": {},
+  "sessions": {
+    "s_adac5e498fca69": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0f6d4710-c3a5-4cdb-9620-dc6d284f642f",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    }
+  }
+}
