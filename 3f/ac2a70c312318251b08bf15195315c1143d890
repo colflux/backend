@@ -1,0 +1,136 @@
+colflux/settings.py
+  s_91c279908e74b2::t_1ab83df32df8a4 93-95
+data-portal/index.html
+  s_91c279908e74b2::t_2d155a6c027a47 151
+  s_91c279908e74b2::t_b0349b1533c87f 809
+app/migrations/0006_publicaciontype_descripcion.py
+  s_91c279908e74b2::t_ba54a194074060 1-42
+app/management/commands/generate_catalogo.py
+  s_91c279908e74b2::t_f0d4005e82a5bc 56-65
+  s_91c279908e74b2::t_a45f484a5a382d 8
+  s_91c279908e74b2::t_de33b7c7bacee8 1-7,9-55,66-80
+data-portal/assets/js/layout.js
+  s_91c279908e74b2::t_da18a360fe76f0 2-5,8-12,16-17,23,39-41,48,50
+  s_91c279908e74b2::t_51914f261827ae 1,6-7,13-15,18-22,24-38,42-47,49,51-52
+specs/context/task.md
+  h_4c45a411e833c4 1-6
+data-portal/pages/db.html
+  s_91c279908e74b2::t_2a466d204df033 606
+  s_91c279908e74b2::t_7310a6f3e3bf60 135
+  s_91c279908e74b2::t_9e4de974ff4ae9 604-605,607,609-619,621-628,631-649,651,653-654
+  s_91c279908e74b2::t_d209b4c0a3148a 160-161,163-164,166-167,170,173,175-176,178-191
+  s_91c279908e74b2::t_8a6a4a28729502 129-130
+  s_91c279908e74b2::t_279bac400022aa 602
+colflux/urls.py
+  s_91c279908e74b2::t_625ba9c62c9547 1-2,11-13
+app/views.py
+  s_91c279908e74b2::t_582b50aa68b0c8 405,411-414
+  s_91c279908e74b2::t_02ce7e5a8ce517 253-302
+  s_91c279908e74b2::t_2801a253ac3d35 2,6
+  s_91c279908e74b2::t_a580522eb283dc 152-252
+  s_91c279908e74b2::t_d8f3aed2a65686 430
+  s_91c279908e74b2::t_efea88ded50bc6 303-304,503-687
+  s_91c279908e74b2::t_4bd26cf945a39e 425-429,431-502
+  s_91c279908e74b2::t_b836edc2d8bf5e 305-308,310-342,347-363,372-404,406-410,415-424
+  s_91c279908e74b2::t_ae1653f4810c31 343-346
+  s_91c279908e74b2::t_15c1c9528ecf2b 364-371
+  s_91c279908e74b2::t_ed5e598c5ee7da 4-5
+  s_91c279908e74b2::t_1951dd51d37e3d 309
+  s_91c279908e74b2::t_9f52257eab6703 11
+app/migrations/0003_cargaarchivo.py
+  s_91c279908e74b2::t_8ed94f2e0fa68f 1-78
+.gitignore
+  s_adac5e498fca69::t_33f97eb2322a57 9
+  s_adac5e498fca69::t_4669b6c271defe 10-11
+data-portal/pages/data.html
+  s_91c279908e74b2::t_99973b37a57913 419
+  s_91c279908e74b2::t_478c7cdc9a718f 121
+  s_91c279908e74b2::t_a82f925a34b2f7 540-543
+  s_91c279908e74b2::t_baaffceea1e4fc 417
+  s_91c279908e74b2::t_c72b65691c8ee2 207
+  s_91c279908e74b2::t_bf288d42ffbb64 573
+Dockerfile
+  s_91c279908e74b2::t_3a2ed6b44f4460 14
+data-portal/pages/etl-upload.html
+  s_91c279908e74b2::t_38a5030d9d9f29 221-265
+  s_91c279908e74b2::t_9cca18f4c11256 458
+  s_91c279908e74b2::t_fe20a1cb681fe7 353-361
+  s_91c279908e74b2::t_a54f10d75a6784 411-457,459-461,464,467,478,481,495,497,499,505,508-510,512,515-671,674-677,679-734
+  s_91c279908e74b2::t_ed64f9ab6c6a3a 736-836
+  s_91c279908e74b2::t_35e9cc7e63b744 376-397,399
+  s_91c279908e74b2::t_9dcf5a8569bf1e 404
+  s_91c279908e74b2::t_ae0a73535ac94c 406
+  s_91c279908e74b2::t_b18233cd1b1272 1-134,215-220,266-269,271-308,312-321,323-332,335,337,400-403,405,407-410,462-463,465-466,468-477,479-480,482-494,496,498,500-504,506-507,511,513-514,672-673,678,735,837-841
+  s_91c279908e74b2::t_74b121b3e70e34 135-214
+  s_91c279908e74b2::t_01db805765f01f 309-311,322,333-334,336,338-352,362-375,398
+  s_91c279908e74b2::t_5f3f5a403e9bd0 270
+specs/etl-pipeline.md
+  s_91c279908e74b2::t_7aaff604284a85 1-264
+app/urls.py
+  s_91c279908e74b2::t_a4f1a54acd06fb 14
+  s_91c279908e74b2::t_789a41206bdeba 15
+  s_91c279908e74b2::t_d3bab8fc93f7d1 13
+  s_91c279908e74b2::t_c5a778e93ba6d8 12
+  s_91c279908e74b2::t_2b78e75010e47b 9,11
+.claude/settings.local.json
+  s_91c279908e74b2::t_ba30a8a43862b4 33-34
+app/models/__init__.py
+  s_91c279908e74b2::t_fe5d2d44228316 17
+  s_91c279908e74b2::t_b06825b391d52e 54
+  s_91c279908e74b2::t_e8bb0e5b242f9e 19
+  s_91c279908e74b2::t_2e44d40de4aead 55
+  s_91c279908e74b2::t_80a0060f098e71 61
+app/models/datos.py
+  s_91c279908e74b2::t_2a2309248b9385 89-120
+  s_91c279908e74b2::t_8b81b7ca0a898d 62-88
+data-portal/pages/catalogo-tecnico.html
+  s_91c279908e74b2::t_39ac94032800d7 146
+  s_91c279908e74b2::t_1e1b09f21ebc85 86-95
+  s_91c279908e74b2::t_5096982fb38f34 264-265
+  s_91c279908e74b2::t_ad20968ebd6695 117
+  s_91c279908e74b2::t_958464ae8f8b24 148
+  s_91c279908e74b2::t_cad8d629eab573 268-286
+  s_91c279908e74b2::t_bab4d2ea0a6ed4 154-155,165-167
+  s_91c279908e74b2::t_92eaf1d819022b 1-85,96-116,118-145,147,149-153,156-164,168-263,266-267,287-313
+data-portal/pages/team.html
+  s_91c279908e74b2::t_0995ce750ae8a1 324
+  s_91c279908e74b2::t_4d72ccd2ae4d74 130
+  s_91c279908e74b2::t_c1a83d68864a8c 99-103
+  s_91c279908e74b2::t_ce23e1d3ba3ac3 322
+app/models/publicacion.py
+  s_91c279908e74b2::t_671e17530bb121 7-8,10-19,21-28
+  s_91c279908e74b2::t_52a8ba0dd5e33e 9
+app/migrations/0005_publicaciontype_publicacion_bibliography_type_fk.py
+  s_91c279908e74b2::t_51467a61a67e4e 1-65
+app/migrations/0004_mapeocolumna.py
+  s_91c279908e74b2::t_b385e3badd6fe1 1-76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "3fac2a70c312318251b08bf15195315c1143d890",
+  "prompts": {},
+  "humans": {
+    "h_4c45a411e833c4": {
+      "author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_91c279908e74b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "397b3811-ccdf-4c42-a821-e18b09961a1a",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    },
+    "s_adac5e498fca69": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0f6d4710-c3a5-4cdb-9620-dc6d284f642f",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    }
+  }
+}
