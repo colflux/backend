@@ -1,0 +1,22 @@
+data-portal/assets/js/data-page/responsable-drawer.js
+  s_5ff1ca1eafc639::t_d37c39668a0c61 7,21,64,72-73,105-116,146,148,150-151,154-161,190-194
+data-portal/pages/team.html
+  s_5ff1ca1eafc639::t_07d4b61a19e4db 74-77,202,206,231-240,255,261,264-267,269-274,292-315
+  s_5ff1ca1eafc639::t_74e75e56b86dff 85-88,223,349-367,405,408-412,421,432-463
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "48020de1ef3461510ce85e284ada9e0b83f31d8c",
+  "prompts": {},
+  "sessions": {
+    "s_5ff1ca1eafc639": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f4893-efb7-7ca1-8310-387629d0fb2f",
+        "model": "gpt-5.5"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    }
+  }
+}
