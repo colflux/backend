@@ -29,7 +29,8 @@
       "Bash(.venv/bin/pip show *)",
       "Bash(pkill -9 -f \"manage.py runserver\")",
       "Bash(.venv/bin/python manage.py runserver --noreload)",
-      "Bash(pkill -f \"http.server 8080\")"
+      "Bash(pkill -f \"http.server 8080\")",
+      "Bash(docker-compose version *)"
     ]
   }
 }

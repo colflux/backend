@@ -9,7 +9,7 @@ Prototipo Django para modelar, administrar y visualizar datos de gases de efecto
 - Admin de Django para mantener catalogos.
 - Visualizador preliminar con agregaciones por ano, sector y gas.
 - Docker Compose con PostgreSQL.
-- Landing page estatica en `docs/` lista para publicar con GitHub Pages.
+- Portal estatico de prototipos en `data-portal/`, conectado a la API Django.
 - Plantilla de mapeo para columnas de Excel en `data/excel_mapping_template.csv`.
 
 ## Ejecutar con Docker
@@ -72,6 +72,14 @@ el deploy para cargar datos iniciales de demostracion. El comando evita duplicar
 los registros existentes. Si ya no quieres cargar datos demo en cada deploy,
 elimina esa variable o cambiala a `0`.
 
-## Publicar landing en GitHub Pages
+## Ejecutar el portal de datos
 
-En GitHub, ve a Settings > Pages y selecciona la carpeta `docs/` de la rama principal.
+Con Django ejecutandose en el puerto 8000, inicia otro servidor desde la raiz
+del repositorio:
+
+```bash
+python -m http.server 8080 --directory data-portal
+```
+
+Abre http://localhost:8080. La configuracion publica de servicios se encuentra
+en `data-portal/config/services.js`; no guardes credenciales en esa carpeta.

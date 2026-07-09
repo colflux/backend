@@ -9,10 +9,15 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ghg -d ghg"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   web:
     build: .
-    command: sh -c "python manage.py migrate && python manage.py seed_ghg_data && python manage.py collectstatic --noinput && gunicorn colflux.wsgi:application --bind 0.0.0.0:8000"
+    command: sh -c "python manage.py migrate && python manage.py collectstatic --noinput && gunicorn colflux.wsgi:application --bind 0.0.0.0:8000"
     environment:
       DATABASE_URL: postgres://ghg:ghg@db:5432/ghg
       DJANGO_DEBUG: "1"
@@ -20,7 +25,8 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     volumes:
       - .:/app
 

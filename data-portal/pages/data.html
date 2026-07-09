@@ -205,9 +205,9 @@
 
 <nav>
   <div class="nav-inner">
-    <a class="nav-logo" href="index.html">🌿 COLFLUX · OE2</a>
+    <a class="nav-logo" href="../index.html">🌿 COLFLUX · OE2</a>
     <ul class="nav-links">
-      <li><a href="index.html">Plan de trabajo</a></li>
+      <li><a href="../index.html">Plan de trabajo</a></li>
       <li><a href="team.html">Equipo</a></li>
       <li><a href="db.html">Base de datos</a></li>
       <li><a href="data.html" class="active">Gestión de datos</a></li>
@@ -431,14 +431,15 @@
       <div class="footer-links">
         <a href="https://github.com/colflux/backend" target="_blank">GitHub</a>
         <a href="db.html">Base de datos</a>
-        <a href="index.html">Plan de trabajo</a>
+        <a href="../index.html">Plan de trabajo</a>
       </div>
     </div>
   </div>
 </footer>
 
+<script src="../config/services.js"></script>
 <script>
-  const API_BASE = 'https://backend-143s.onrender.com';
+  const API_BASE = window.COLFLUX_CONFIG.apiBaseUrl;
   const API_URL  = `${API_BASE}/api/fuentes-datos/`;
 
   const TIPO_ICONS = {
@@ -452,7 +453,7 @@
   // ── Fetch ──────────────────────────────────────────────────────────────────
   async function fetchData() {
     try {
-      const res = await fetch(API_URL, { signal: AbortSignal.timeout(5000) });
+      const res = await fetch(API_URL, { signal: AbortSignal.timeout(window.COLFLUX_CONFIG.requestTimeoutMs) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       allData = await res.json();
       setStatus(true);
@@ -599,7 +600,7 @@
         <div class="icon">🔌</div>
         <h3>API no disponible</h3>
         <p>No fue posible conectar con la API desplegada en Render.</p>
-        <code style="display:block;background:var(--gray-l);padding:10px 16px;border-radius:8px;font-size:.82rem;margin:12px auto;max-width:320px">https://backend-143s.onrender.com</code>
+        <code style="display:block;background:var(--gray-l);padding:10px 16px;border-radius:8px;font-size:.82rem;margin:12px auto;max-width:320px">${API_BASE}</code>
         <a href="javascript:location.reload()">Reintentar →</a>
       </div>`;
   }
