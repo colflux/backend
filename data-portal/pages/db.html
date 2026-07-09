@@ -163,495 +163,429 @@
     <p class="section-eyebrow">Diagrama entidad-relación</p>
     <h2 class="stitle">Modelo entidad-relación</h2>
     <p class="sdesc">
-      Generado automáticamente desde los modelos Django. Se actualiza cada vez que
-      el modelo de datos cambia — no requiere edición manual.
+      Generado desde <code>catalogo.json</code> — se actualiza cada vez que arranca la aplicación.
+      Haz clic en una entidad para ver sus campos.
     </p>
 
-    <div class="embed-wrapper" id="erdWrapper">
-      <div class="embed-toolbar">
-        <div class="embed-dots">
-          <div class="embed-dot"></div><div class="embed-dot"></div><div class="embed-dot"></div>
+    <div style="border:1.5px solid var(--border);border-radius:16px;overflow:hidden;background:white;box-shadow:0 4px 24px rgba(0,0,0,.06);">
+      <div style="background:white;border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;gap:6px;">
+          <div style="width:12px;height:12px;border-radius:50%;background:#ff5f56;"></div>
+          <div style="width:12px;height:12px;border-radius:50%;background:#ffbd2e;"></div>
+          <div style="width:12px;height:12px;border-radius:50%;background:#27c93f;"></div>
         </div>
-        <span class="embed-url" id="erdMeta">Cargando…</span>
-        <button class="embed-open" id="btnRecargar" style="background:none;border:none;cursor:pointer;font-size:.78rem;font-weight:700;color:var(--green);">↺ Recargar</button>
+        <span id="erd-meta" style="font-family:'JetBrains Mono',monospace;font-size:.75rem;color:var(--gray);background:var(--gray-l);padding:4px 12px;border-radius:6px;">catalogo.json</span>
+        <span style="font-size:.75rem;color:var(--gray);">Clic en entidad para ver campos</span>
       </div>
 
-      <div id="erdLoading" style="text-align:center;padding:60px 0;">
-        <div style="width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--green-d);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 14px;"></div>
-        <p style="color:var(--gray);font-size:.88rem;">Generando diagrama desde los modelos…</p>
-      </div>
-
-      <div id="erdContainer" style="display:none;padding:24px;overflow-x:auto;background:white;min-height:400px;">
-        <!-- Mermaid renderiza aquí -->
-      </div>
-
-      <div id="erdError" style="display:none;padding:40px;text-align:center;color:var(--gray);">
-        <div style="font-size:2rem;margin-bottom:10px;">⚠️</div>
-        <p style="font-size:.88rem;">No se pudo generar el diagrama. Verifica que el servidor esté corriendo.</p>
-        <button onclick="cargarErd()" style="margin-top:12px;background:var(--green-d);color:white;border:none;border-radius:8px;padding:8px 18px;cursor:pointer;font-size:.84rem;font-weight:700;">Reintentar</button>
+      <div id="erd-scroll" style="overflow:auto;max-height:640px;background:#fafbfc;">
+        <div id="erd-canvas" style="position:relative;padding:32px;display:inline-block;min-width:100%;">
+          <div id="erd-loading" style="text-align:center;padding:60px 80px;">
+            <div style="width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--green-d);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px;"></div>
+            <p style="color:var(--gray);font-size:.88rem;">Cargando diagrama…</p>
+          </div>
+          <svg id="erd-svg" style="position:absolute;top:0;left:0;pointer-events:none;overflow:visible;" width="0" height="0"></svg>
+          <div id="erd-groups" style="display:none;position:relative;z-index:1;align-items:flex-start;gap:28px;"></div>
+        </div>
       </div>
     </div>
+
+    <div id="erd-legend" style="display:none;gap:10px;flex-wrap:wrap;margin-top:14px;"></div>
   </div>
 </section>
 
-<!-- ── Schema ── -->
-<section id="schema">
+<!-- ── Explorador de relaciones ── -->
+<section id="entity-explorer" style="background:#fafbfc;">
   <div class="container">
-    <p class="section-eyebrow">Estructura</p>
-    <h2 class="stitle">Tablas por módulo</h2>
-    <p class="sdesc">25 tablas organizadas en 8 módulos funcionales.</p>
+    <p class="section-eyebrow">Explorador de relaciones</p>
+    <h2 class="stitle">Relaciones de la entidad</h2>
+    <p class="sdesc">Selecciona una entidad en el diagrama para ver sus conexiones directas.</p>
 
-    <div class="groups-grid">
-
-      <!-- Geografía -->
-      <div class="group-card">
-        <div class="group-header" style="background:#34495e;">
-          <h3>📍 Geografía</h3>
-          <span class="group-count">4 tablas</span>
-        </div>
-        <div class="group-tables">
-          <div class="table-row">
-            <span class="table-name">region</span>
-            <div class="table-fields">
-              <span class="field-tag pk">id</span>
-              <span class="field-tag">nombre</span>
-            </div>
-          </div>
-          <div class="table-row">
-            <span class="table-name">departamento</span>
-            <div class="table-fields">
-              <span class="field-tag pk">id</span>
-              <span class="field-tag">nombre</span>
-              <span class="field-tag fk">region_id</span>
-            </div>
-          </div>
-          <div class="table-row">
-            <span class="table-name">municipio</span>
-            <div class="table-fields">
-              <span class="field-tag pk">id</span>
-              <span class="field-tag">nombre</span>
-              <span class="field-tag fk">departamento_id</span>
-            </div>
-          </div>
-          <div class="table-row">
-            <span class="table-name">sistema_referencia</span>
-            <div class="table-fields">
-              <span class="field-tag pk">id</span>
-              <span class="field-tag">nombre (EPSG)</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Cobertura -->
-      <div class="group-card">
-        <div class="group-header" style="background:#27ae60;">
-          <h3>🌿 Cobertura / Disturbio</h3>
-          <span class="group-count">3 tablas</span>
-        </div>
-        <div class="group-tables">
-          <div class="table-row">
-            <span class="table-name">cobertura</span>
-            <div class="table-fields">
-              <span class="field-tag pk">id</span>
-              <span class="field-tag">cobertura_clc</span>
-              <span class="field-tag">nombre_comun</span>
-              <span class="field-tag">clima_koeppen</span>
-              <span class="field-tag">igbp</span>
-            </div>
-          </div>
-          <div class="table-row">
-            <span class="table-name">vegetacion</span>
-            <div class="table-fields">
-              <span class="field-tag pk">id</span>
-              <span class="field-tag">tipo_cobertura</span>
-              <span class="field-tag">especies_dominantes</span>
-              <span class="field-tag">altura_dosel</span>
-            </div>
-          </div>
-          <div class="table-row">
-            <span class="table-name">disturbio</span>
-            <div class="table-fields">
-              <span class="field-tag pk">id</span>
-              <span class="field-tag">tipo</span>
-              <span class="field-tag">estado_actual</span>
-              <span class="field-tag">fecha_inicio</span>
-              <span class="field-tag">anios_disturbio</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Sitio -->
-      <div class="group-card">
-        <div class="group-header" style="background:#f1c40f; color:#1a2236;">
-          <h3>📌 Sitio de monitoreo</h3>
-          <span class="group-count" style="background:rgba(0,0,0,.15); color:#1a2236;">4 tablas</span>
-        </div>
-        <div class="group-tables">
-          <div class="table-row">
-            <span class="table-name">sitio</span>
-            <div class="table-fields">
-              <span class="field-tag pk">id</span>
-              <span class="field-tag">nombre</span>
-              <span class="field-tag">latitud / longitud</span>
-              <span class="field-tag fk">municipio</span>
-              <span class="field-tag fk">cobertura</span>
-              <span class="field-tag fk">disturbio</span>
-              <span class="field-tag fk">vegetacion</span>
-            </div>
-          </div>
-          <div class="table-row">
-            <span class="table-name">parcela</span>
-            <div class="table-fields">
-              <span class="field-tag pk">id</span>
-              <span class="field-tag fk">sitio_id</span>
-              <span class="field-tag">unidad_muestreo</span>
-              <span class="field-tag">area</span>
-              <span class="field-tag">estatus</span>
-            </div>
-          </div>
-          <div class="table-row">
-            <span class="table-name">transecto</span>
-            <div class="table-fields">
-              <span class="field-tag pk">id</span>
-              <span class="field-tag fk">sitio_id</span>
-              <span class="field-tag fk">parcela_id</span>
-            </div>
-          </div>
-          <div class="table-row">
-            <span class="table-name">monitoreo_parcela</span>
-            <div class="table-fields">
-              <span class="field-tag pk">id</span>
-              <span class="field-tag fk">parcela_id</span>
-              <span class="field-tag">tipo_monitoreo</span>
-              <span class="field-tag">protocolo</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Proyecto -->
-      <div class="group-card">
-        <div class="group-header" style="background:#e84393;">
-          <h3>🗂 Proyecto</h3>
-          <span class="group-count">3 tablas</span>
-        </div>
-        <div class="group-tables">
-          <div class="table-row">
-            <span class="table-name">proyecto</span>
-            <div class="table-fields">
-              <span class="field-tag pk">id</span>
-              <span class="field-tag">codigo</span>
-              <span class="field-tag">nombre</span>
-              <span class="field-tag">coordinador</span>
-              <span class="field-tag">escala_espacial</span>
-              <span class="field-tag fk">sitio_id</span>
-            </div>
-          </div>
-          <div class="table-row">
-            <span class="table-name">aliado</span>
-            <div class="table-fields">
-              <span class="field-tag pk">id</span>
-              <span class="field-tag">nombre</span>
-              <span class="field-tag">correo</span>
-            </div>
-          </div>
-          <div class="table-row">
-            <span class="table-name">proyecto_aliado</span>
-            <div class="table-fields">
-              <span class="field-tag m2m">M2M</span>
-              <span class="field-tag fk">proyecto_id</span>
-              <span class="field-tag fk">aliado_id</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Flujo Cámaras -->
-      <div class="group-card">
-        <div class="group-header" style="background:#9b59b6;">
-          <h3>🎥 Flujo Cámaras</h3>
-          <span class="group-count">1 tabla</span>
-        </div>
-        <div class="group-tables">
-          <div class="table-row">
-            <span class="table-name">flujo_camaras</span>
-            <div class="table-fields">
-              <span class="field-tag pk">id</span>
-              <span class="field-tag fk">sitio_id</span>
-              <span class="field-tag">microtopografia</span>
-              <span class="field-tag">diametro_anillo</span>
-              <span class="field-tag">cob. vegetal ×3</span>
-              <span class="field-tag">distancias ×4</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Torre EC -->
-      <div class="group-card">
-        <div class="group-header" style="background:#2980b9;">
-          <h3>📡 Torre EC</h3>
-          <span class="group-count">4 tablas</span>
-        </div>
-        <div class="group-tables">
-          <div class="table-row">
-            <span class="table-name">torre_ec</span>
-            <div class="table-fields">
-              <span class="field-tag pk">id</span>
-              <span class="field-tag fk">sitio_id</span>
-              <span class="field-tag">altura_torre</span>
-              <span class="field-tag">altura_canopy</span>
-              <span class="field-tag">frecuencia_adq.</span>
-            </div>
-          </div>
-          <div class="table-row">
-            <span class="table-name">torre_fuente_energia</span>
-            <div class="table-fields">
-              <span class="field-tag pk">id</span>
-              <span class="field-tag fk">torre_id</span>
-              <span class="field-tag">tipo_fuente</span>
-            </div>
-          </div>
-          <div class="table-row">
-            <span class="table-name">configuracion_sensor_gas</span>
-            <div class="table-fields">
-              <span class="field-tag pk">id</span>
-              <span class="field-tag fk">torre_id</span>
-              <span class="field-tag">gas (CO₂/CH₄/N₂O)</span>
-              <span class="field-tag">longitud_tubo</span>
-            </div>
-          </div>
-          <div class="table-row">
-            <span class="table-name">equipo</span>
-            <div class="table-fields">
-              <span class="field-tag pk">id</span>
-              <span class="field-tag fk">torre_id</span>
-              <span class="field-tag">tipo_equipo</span>
-              <span class="field-tag">modelo</span>
-              <span class="field-tag">serial</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Suelo -->
-      <div class="group-card">
-        <div class="group-header" style="background:#f39c12;">
-          <h3>🪨 Suelo</h3>
-          <span class="group-count">2 tablas</span>
-        </div>
-        <div class="group-tables">
-          <div class="table-row">
-            <span class="table-name">caracterizacion_muestreo_suelo</span>
-            <div class="table-fields">
-              <span class="field-tag pk">id</span>
-              <span class="field-tag fk">sitio_id</span>
-              <span class="field-tag">tipo_de_suelo</span>
-              <span class="field-tag">profundidad_perfil</span>
-              <span class="field-tag">intervalos_perfil</span>
-            </div>
-          </div>
-          <div class="table-row">
-            <span class="table-name">monitoreo_suelo</span>
-            <div class="table-fields">
-              <span class="field-tag pk">id</span>
-              <span class="field-tag fk">caracterizacion_id</span>
-              <span class="field-tag">tipo (COS/DA…)</span>
-              <span class="field-tag">protocolo</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Publicaciones -->
-      <div class="group-card">
-        <div class="group-header" style="background:#16a085;">
-          <h3>📄 Publicaciones</h3>
-          <span class="group-count">5 tablas</span>
-        </div>
-        <div class="group-tables">
-          <div class="table-row">
-            <span class="table-name">publicacion</span>
-            <div class="table-fields">
-              <span class="field-tag pk">id</span>
-              <span class="field-tag">titulo</span>
-              <span class="field-tag">doi / isbn</span>
-              <span class="field-tag">journal</span>
-              <span class="field-tag">anio</span>
-            </div>
-          </div>
-          <div class="table-row">
-            <span class="table-name">autor</span>
-            <div class="table-fields">
-              <span class="field-tag pk">id</span>
-              <span class="field-tag">nombre</span>
-            </div>
-          </div>
-          <div class="table-row">
-            <span class="table-name">publicacion_autor</span>
-            <div class="table-fields">
-              <span class="field-tag m2m">M2M</span>
-              <span class="field-tag fk">publicacion_id</span>
-              <span class="field-tag fk">autor_id</span>
-            </div>
-          </div>
-          <div class="table-row">
-            <span class="table-name">publicacion_sitio</span>
-            <div class="table-fields">
-              <span class="field-tag m2m">M2M</span>
-              <span class="field-tag fk">publicacion_id</span>
-              <span class="field-tag fk">sitio_id</span>
-            </div>
-          </div>
-          <div class="table-row">
-            <span class="table-name">resultado_publicacion</span>
-            <div class="table-fields">
-              <span class="field-tag pk">id</span>
-              <span class="field-tag fk">publicacion_id</span>
-              <span class="field-tag">variable</span>
-              <span class="field-tag">valor / unidad</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
+    <div id="explorer-empty" style="border:1.5px dashed var(--border);border-radius:14px;padding:52px 0;text-align:center;color:var(--gray);background:white;">
+      <div style="font-size:2.2rem;opacity:.3;margin-bottom:10px;">◈</div>
+      <p style="font-size:.88rem;">Haz clic en una entidad del diagrama de arriba</p>
     </div>
-  </div>
-</section>
 
-<!-- ── Relaciones clave ── -->
-<section>
-  <div class="container">
-    <p class="section-eyebrow">Relaciones</p>
-    <h2 class="stitle">Relaciones clave</h2>
-    <p class="sdesc"><code>sitio</code> es el nodo central: la mayoría de entidades lo referencian.</p>
-
-    <div class="rel-list">
-      <div class="rel-item">
-        <span class="rel-from">municipio</span>
-        <span class="rel-arrow">→</span>
-        <span class="rel-to">departamento → region</span>
-        <span class="rel-type many-one">N:1 en cascada</span>
-      </div>
-      <div class="rel-item">
-        <span class="rel-from">sitio</span>
-        <span class="rel-arrow">→</span>
-        <span class="rel-to">municipio, cobertura, vegetacion, disturbio, sistema_referencia</span>
-        <span class="rel-type many-one">N:1</span>
-      </div>
-      <div class="rel-item">
-        <span class="rel-from">parcela</span>
-        <span class="rel-arrow">→</span>
-        <span class="rel-to">sitio</span>
-        <span class="rel-type many-one">N:1</span>
-      </div>
-      <div class="rel-item">
-        <span class="rel-from">proyecto</span>
-        <span class="rel-arrow">→</span>
-        <span class="rel-to">sitio (sitio principal)</span>
-        <span class="rel-type many-one">N:1 nullable</span>
-      </div>
-      <div class="rel-item">
-        <span class="rel-from">proyecto ↔ aliado</span>
-        <span class="rel-arrow">↔</span>
-        <span class="rel-to">proyecto_aliado</span>
-        <span class="rel-type many-many">M:N</span>
-      </div>
-      <div class="rel-item">
-        <span class="rel-from">flujo_camaras</span>
-        <span class="rel-arrow">→</span>
-        <span class="rel-to">sitio</span>
-        <span class="rel-type many-one">N:1</span>
-      </div>
-      <div class="rel-item">
-        <span class="rel-from">torre_ec</span>
-        <span class="rel-arrow">→</span>
-        <span class="rel-to">sitio</span>
-        <span class="rel-type many-one">N:1</span>
-      </div>
-      <div class="rel-item">
-        <span class="rel-from">equipo / config_sensor_gas / fuente_energia</span>
-        <span class="rel-arrow">→</span>
-        <span class="rel-to">torre_ec</span>
-        <span class="rel-type many-one">N:1</span>
-      </div>
-      <div class="rel-item">
-        <span class="rel-from">caracterizacion_muestreo_suelo</span>
-        <span class="rel-arrow">→</span>
-        <span class="rel-to">sitio</span>
-        <span class="rel-type many-one">N:1</span>
-      </div>
-      <div class="rel-item">
-        <span class="rel-from">publicacion ↔ sitio</span>
-        <span class="rel-arrow">↔</span>
-        <span class="rel-to">publicacion_sitio</span>
-        <span class="rel-type many-many">M:N</span>
-      </div>
-      <div class="rel-item">
-        <span class="rel-from">publicacion ↔ autor</span>
-        <span class="rel-arrow">↔</span>
-        <span class="rel-to">publicacion_autor</span>
-        <span class="rel-type many-many">M:N</span>
-      </div>
-    </div>
+    <div id="explorer-content" style="display:none;"></div>
   </div>
 </section>
 
 <div id="app-footer"></div>
 
-<!-- Mermaid.js -->
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-<script src="../assets/js/layout.js"></script>
-<script src="../config/services.js"></script>
 <script>
-  mermaid.initialize({
-    startOnLoad: false,
-    theme: 'default',
-    er: { diagramPadding: 20, layoutDirection: 'TB', minEntityWidth: 100, fontSize: 12 },
-    themeVariables: {
-      primaryColor: '#e6f4f0',
-      primaryTextColor: '#0d4f40',
-      primaryBorderColor: '#18735d',
-      lineColor: '#64748b',
-      secondaryColor: '#e6f3fb',
-      tertiaryColor: '#f1f5f9',
+(function () {
+  function relCard(modelName, fieldName, direction) {
+    const em = window._erdEM;
+    if (!em || !em[modelName]) return null;
+    const e = em[modelName];
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;align-items:stretch;gap:8px;margin-bottom:10px;';
+
+    const arrow = document.createElement('div');
+    arrow.style.cssText = 'display:flex;align-items:center;color:#94a3b8;font-size:.9rem;flex-shrink:0;';
+    arrow.textContent = direction === 'out' ? '→' : '←';
+
+    const card = document.createElement('div');
+    card.style.cssText = `flex:1;border:2px solid ${e.color};border-radius:8px;overflow:hidden;background:white;cursor:pointer;transition:box-shadow .15s;`;
+
+    const hdr = document.createElement('div');
+    hdr.style.cssText = `background:${e.color};color:white;padding:5px 10px;font-weight:700;font-size:.76rem;font-family:'JetBrains Mono',monospace;`;
+    hdr.textContent = modelName;
+
+    const via = document.createElement('div');
+    via.style.cssText = 'padding:3px 10px;font-size:.68rem;color:#64748b;font-family:"JetBrains Mono",monospace;border-bottom:1px solid #f1f5f9;';
+    via.innerHTML = `via <strong>.${fieldName}</strong>`;
+
+    const grp = document.createElement('div');
+    grp.style.cssText = `padding:3px 10px 5px;font-size:.64rem;color:${e.color};font-weight:600;`;
+    grp.textContent = `${e.icon} ${e.groupName}`;
+
+    card.appendChild(hdr);
+    card.appendChild(via);
+    card.appendChild(grp);
+
+    card.addEventListener('click', () => {
+      const node = document.querySelector(`#erd-groups [data-model="${modelName}"]`);
+      if (node) { node.click(); node.scrollIntoView({ behavior:'smooth', block:'nearest' }); }
+    });
+    card.addEventListener('mouseenter', () => { card.style.boxShadow = '0 2px 10px rgba(0,0,0,.12)'; });
+    card.addEventListener('mouseleave', () => { card.style.boxShadow = ''; });
+
+    if (direction === 'out') { wrap.appendChild(card); wrap.appendChild(arrow); }
+    else                     { wrap.appendChild(arrow); wrap.appendChild(card); }
+    return wrap;
+  }
+
+  function centerCard(modelName) {
+    const em = window._erdEM;
+    if (!em || !em[modelName]) return null;
+    const e = em[modelName];
+
+    const card = document.createElement('div');
+    card.style.cssText = `border:2px solid ${e.color};border-radius:10px;overflow:hidden;background:white;box-shadow:0 0 0 4px ${e.color}22, 0 6px 24px rgba(0,0,0,.1);`;
+
+    const hdr = document.createElement('div');
+    hdr.style.cssText = `background:${e.color};color:white;padding:9px 13px;font-weight:800;font-size:.86rem;font-family:'JetBrains Mono',monospace;display:flex;justify-content:space-between;align-items:center;`;
+    hdr.innerHTML = `<span>${modelName}</span><span style="font-size:.65rem;opacity:.75;font-weight:400;">${e.icon} ${e.groupName}</span>`;
+
+    card.appendChild(hdr);
+
+    e.fields.forEach(f => {
+      const row = document.createElement('div');
+      row.style.cssText = 'padding:4px 11px;font-size:.71rem;display:flex;align-items:center;gap:5px;border-bottom:1px solid #f1f5f9;';
+      const badge = f.es_fk
+        ? `<span style="font-size:.59rem;background:#dbeafe;color:#1d4ed8;padding:1px 3px;border-radius:2px;font-weight:700;flex-shrink:0;">FK</span>`
+        : `<span style="display:inline-block;width:18px;"></span>`;
+      const fkTarget = f.es_fk && f.modelo_fk ? `<span style="color:#1d4ed8;font-size:.62rem;flex-shrink:0;">→ ${f.modelo_fk}</span>` : '';
+      const type = f.tipo_raw.replace('Field','');
+      row.innerHTML = `${badge}<span style="font-family:'JetBrains Mono',monospace;flex:1;color:#1e293b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.nombre}</span>${fkTarget}<span style="color:#94a3b8;font-size:.6rem;flex-shrink:0;margin-left:4px;">${type}</span>`;
+      card.appendChild(row);
+    });
+
+    return card;
+  }
+
+  function showDetail(modelName) {
+    const em = window._erdEM;
+    const rels = window._erdRels;
+    if (!em || !rels || !em[modelName]) return;
+
+    const out = rels.filter(r => r.from === modelName);
+    const inc = rels.filter(r => r.to   === modelName);
+    const color = em[modelName].color;
+
+    document.getElementById('explorer-empty').style.display = 'none';
+    const content = document.getElementById('explorer-content');
+    content.style.display = 'block';
+    content.innerHTML = '';
+
+    const grid = document.createElement('div');
+    grid.style.cssText = 'display:grid;grid-template-columns:1fr 210px 1fr;gap:20px;align-items:start;';
+
+    // Left — outgoing FKs
+    const left = document.createElement('div');
+    const leftLbl = document.createElement('div');
+    leftLbl.style.cssText = `font-size:.68rem;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:${color};margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid ${color};`;
+    leftLbl.textContent = `${modelName} apunta a →`;
+    left.appendChild(leftLbl);
+    if (out.length === 0) {
+      const p = document.createElement('p');
+      p.style.cssText = 'font-size:.8rem;color:var(--gray);font-style:italic;';
+      p.textContent = 'Sin FK salientes';
+      left.appendChild(p);
+    } else {
+      out.forEach(r => { const c = relCard(r.to, r.field, 'out'); if (c) left.appendChild(c); });
     }
+
+    // Center — selected entity
+    const center = document.createElement('div');
+    const cc = centerCard(modelName);
+    if (cc) center.appendChild(cc);
+
+    // Right — incoming FKs
+    const right = document.createElement('div');
+    const rightLbl = document.createElement('div');
+    rightLbl.style.cssText = `font-size:.68rem;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:${color};margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid ${color};`;
+    rightLbl.textContent = `← apuntada por`;
+    right.appendChild(rightLbl);
+    if (inc.length === 0) {
+      const p = document.createElement('p');
+      p.style.cssText = 'font-size:.8rem;color:var(--gray);font-style:italic;';
+      p.textContent = 'Sin FK entrantes';
+      right.appendChild(p);
+    } else {
+      inc.forEach(r => { const c = relCard(r.from, r.field, 'in'); if (c) right.appendChild(c); });
+    }
+
+    grid.appendChild(left);
+    grid.appendChild(center);
+    grid.appendChild(right);
+    content.appendChild(grid);
+  }
+
+  function hideDetail() {
+    document.getElementById('explorer-empty').style.display = 'block';
+    document.getElementById('explorer-content').style.display = 'none';
+  }
+
+  // Escucha clicks en el ERD via delegación
+  document.addEventListener('click', function (e) {
+    const node = e.target.closest('#erd-groups [data-model]');
+    if (!node) return;
+    setTimeout(() => {
+      const body = node.querySelector('div:last-child');
+      const isOpen = body && body.style.display !== 'none';
+      if (isOpen) showDetail(node.dataset.model);
+      else        hideDetail();
+    }, 30);
   });
+})();
+</script>
 
-  const API_BASE = window.COLFLUX_CONFIG.apiBaseUrl;
+<script src="../assets/js/layout.js"></script>
+<script>
+(function () {
+  const PALETTE = [
+    '#475569','#16a34a','#d97706','#db2777',
+    '#7c3aed','#2563eb','#ea580c','#0891b2','#dc2626'
+  ];
+  const _colorMap = {};
+  let _pi = 0;
+  function gColor(name) {
+    if (!_colorMap[name]) _colorMap[name] = PALETTE[_pi++ % PALETTE.length];
+    return _colorMap[name];
+  }
 
-  async function cargarErd() {
-    document.getElementById('erdLoading').style.display = 'block';
-    document.getElementById('erdContainer').style.display = 'none';
-    document.getElementById('erdError').style.display = 'none';
+  let _rels = [];
+  let _em = {};
 
+  async function buildERD() {
     try {
-      const res = await fetch(API_BASE + '/api/db-erd/');
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const data = await res.json();
-
-      // Actualizar metadata en toolbar
-      const fecha = new Date(data.generado_en).toLocaleTimeString('es-CO');
-      document.getElementById('erdMeta').textContent =
-        `${data.total_modelos} entidades · generado ${fecha}`;
-
-      // Renderizar con Mermaid
-      const container = document.getElementById('erdContainer');
-      container.innerHTML = `<div class="mermaid">${data.mermaid}</div>`;
-      await mermaid.run({ nodes: container.querySelectorAll('.mermaid') });
-
-      document.getElementById('erdLoading').style.display = 'none';
-      container.style.display = 'block';
-    } catch(e) {
-      document.getElementById('erdLoading').style.display = 'none';
-      document.getElementById('erdError').style.display = 'block';
+      const r = await fetch('../assets/data/catalogo.json');
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      render(await r.json());
+    } catch (e) {
+      document.getElementById('erd-loading').innerHTML =
+        '<div style="font-size:1.5rem;margin-bottom:8px;">⚠️</div>' +
+        '<p style="color:var(--gray);font-size:.88rem;">No se pudo cargar catalogo.json</p>';
     }
   }
 
-  document.getElementById('btnRecargar').addEventListener('click', cargarErd);
-  cargarErd();
+  function render(data) {
+    _rels = [];
+    _em = {};
+
+    data.grupos.forEach(g => {
+      const c = gColor(g.nombre);
+      g.entidades.forEach(e => {
+        _em[e.nombre] = { groupName: g.nombre, icon: g.icono || '', color: c, fields: e.campos, element: null };
+      });
+    });
+
+    Object.entries(_em).forEach(([name, e]) => {
+      e.fields.forEach(f => {
+        if (f.es_fk && f.modelo_fk && _em[f.modelo_fk])
+          _rels.push({ from: name, to: f.modelo_fk, field: f.nombre });
+      });
+    });
+
+    const groupsEl = document.getElementById('erd-groups');
+    groupsEl.innerHTML = '';
+
+    data.grupos.forEach(g => {
+      const c = gColor(g.nombre);
+      const col = document.createElement('div');
+      col.style.cssText = 'display:flex;flex-direction:column;gap:8px;flex-shrink:0;';
+
+      const lbl = document.createElement('div');
+      lbl.style.cssText = `font-size:.65rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:${c};padding:3px 2px 4px;border-bottom:2px solid ${c};margin-bottom:2px;white-space:nowrap;`;
+      lbl.textContent = `${g.icono || ''} ${g.nombre}`;
+      col.appendChild(lbl);
+
+      g.entidades.forEach(e => {
+        const el = buildNode(e, c);
+        _em[e.nombre].element = el;
+        col.appendChild(el);
+      });
+
+      groupsEl.appendChild(col);
+    });
+
+    document.getElementById('erd-loading').style.display = 'none';
+    groupsEl.style.display = 'flex';
+    document.getElementById('erd-meta').textContent =
+      `${Object.keys(_em).length} entidades · ${_rels.length} relaciones · catalogo.json`;
+
+    buildLegend(data.grupos);
+    window._erdEM   = _em;
+    window._erdRels = _rels;
+    requestAnimationFrame(() => requestAnimationFrame(drawLines));
+  }
+
+  function buildNode(entidad, color) {
+    const el = document.createElement('div');
+    el.dataset.model = entidad.nombre;
+    el.style.cssText = `border:2px solid ${color};border-radius:8px;overflow:hidden;cursor:pointer;background:white;transition:box-shadow .15s;width:172px;`;
+
+    const hdr = document.createElement('div');
+    hdr.style.cssText = `background:${color};color:white;padding:6px 10px;font-weight:700;font-size:.78rem;font-family:'JetBrains Mono',monospace;display:flex;align-items:center;justify-content:space-between;user-select:none;`;
+    hdr.innerHTML = `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${entidad.nombre}</span><span style="font-size:.6rem;opacity:.7;margin-left:4px;flex-shrink:0;">${entidad.total_campos}f</span>`;
+
+    const body = document.createElement('div');
+    body.style.cssText = 'display:none;';
+
+    entidad.campos.forEach(f => {
+      const row = document.createElement('div');
+      row.style.cssText = 'padding:3px 8px;font-size:.69rem;display:flex;align-items:center;gap:4px;border-bottom:1px solid #f1f5f9;';
+      const badge = f.es_fk
+        ? `<span style="font-size:.57rem;background:#dbeafe;color:#1d4ed8;padding:1px 3px;border-radius:2px;font-weight:700;flex-shrink:0;">FK</span>`
+        : '';
+      const type = f.tipo_raw.replace('Field', '');
+      row.innerHTML = `${badge}<span style="font-family:'JetBrains Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#1e293b;flex:1;">${f.nombre}</span><span style="color:#94a3b8;font-size:.6rem;flex-shrink:0;">${type}</span>`;
+      body.appendChild(row);
+    });
+
+    el.appendChild(hdr);
+    el.appendChild(body);
+
+    el.addEventListener('click', () => {
+      const open = body.style.display !== 'none';
+      document.querySelectorAll('#erd-groups [data-model]').forEach(n => {
+        n.querySelector('div:last-child').style.display = 'none';
+        n.style.boxShadow = '';
+      });
+      if (!open) {
+        body.style.display = 'block';
+        el.style.boxShadow = `0 0 0 3px ${color}55, 0 4px 16px rgba(0,0,0,.1)`;
+      }
+      requestAnimationFrame(() => requestAnimationFrame(drawLines));
+    });
+
+    return el;
+  }
+
+  function nodePos(el) {
+    const cr = document.getElementById('erd-canvas').getBoundingClientRect();
+    const er = el.getBoundingClientRect();
+    return { x: er.left - cr.left, y: er.top - cr.top, w: er.width, h: er.height };
+  }
+
+  function drawLines() {
+    const svg = document.getElementById('erd-svg');
+    const canvas = document.getElementById('erd-canvas');
+    const groups = document.getElementById('erd-groups');
+    svg.setAttribute('width',  canvas.scrollWidth);
+    svg.setAttribute('height', canvas.scrollHeight);
+    svg.innerHTML = '';
+
+    // arrowhead marker
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    defs.innerHTML = `<marker id="arr" markerWidth="7" markerHeight="5" refX="5" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#94a3b8"/></marker>`;
+    svg.appendChild(defs);
+
+    _rels.forEach(rel => {
+      const fe = _em[rel.from]?.element;
+      const te = _em[rel.to]?.element;
+      if (!fe || !te || fe === te) return;
+
+      const fp = nodePos(fe);
+      const tp = nodePos(te);
+      if (fp.x === 0 && fp.y === 0 && tp.x === 0 && tp.y === 0) return;
+
+      const fMidY = fp.y + fp.h * 0.35;
+      const tMidY = tp.y + tp.h * 0.35;
+      let x1, y1, x2, y2;
+
+      if (fp.x + fp.w + 8 < tp.x) {
+        x1 = fp.x + fp.w; y1 = fMidY; x2 = tp.x;        y2 = tMidY;
+      } else if (tp.x + tp.w + 8 < fp.x) {
+        x1 = fp.x;        y1 = fMidY; x2 = tp.x + tp.w; y2 = tMidY;
+      } else {
+        // same column: connect bottom→top
+        if (fp.y < tp.y) {
+          x1 = fp.x + fp.w * 0.5; y1 = fp.y + fp.h;
+          x2 = tp.x + tp.w * 0.5; y2 = tp.y;
+        } else {
+          x1 = fp.x + fp.w * 0.5; y1 = fp.y;
+          x2 = tp.x + tp.w * 0.5; y2 = tp.y + tp.h;
+        }
+      }
+
+      const color = _em[rel.from]?.color || '#94a3b8';
+      const dx = Math.abs(x2 - x1);
+      const cp = Math.max(dx * 0.5, 36);
+
+      let d;
+      if (dx > 20) {
+        const cx1 = x1 + (x2 > x1 ?  cp : -cp);
+        const cx2 = x2 + (x2 > x1 ? -cp :  cp);
+        d = `M${x1},${y1} C${cx1},${y1} ${cx2},${y2} ${x2},${y2}`;
+      } else {
+        const lx = Math.min(fp.x, tp.x) - 28;
+        d = `M${x1},${y1} C${lx},${y1} ${lx},${y2} ${x2},${y2}`;
+      }
+
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', d);
+      path.setAttribute('stroke', color);
+      path.setAttribute('stroke-width', '1.5');
+      path.setAttribute('fill', 'none');
+      path.setAttribute('opacity', '0.4');
+      path.setAttribute('marker-end', 'url(#arr)');
+      svg.appendChild(path);
+
+      // cardinality labels: N near source, 1 near target
+      const addTxt = (x, y, txt) => {
+        const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        t.setAttribute('x', x); t.setAttribute('y', y);
+        t.setAttribute('font-size', '9'); t.setAttribute('font-weight', '700');
+        t.setAttribute('fill', color); t.setAttribute('opacity', '0.85');
+        t.setAttribute('font-family', 'JetBrains Mono, monospace');
+        t.textContent = txt;
+        svg.appendChild(t);
+      };
+      const goRight = x2 > x1;
+      addTxt(x1 + (goRight ?  5 : -12), y1 - 3, 'N');
+      addTxt(x2 + (goRight ? -12 :  4), y2 - 3, '1');
+    });
+  }
+
+  function buildLegend(grupos) {
+    const el = document.getElementById('erd-legend');
+    el.innerHTML = '';
+    grupos.forEach(g => {
+      const c = gColor(g.nombre);
+      const item = document.createElement('div');
+      item.style.cssText = 'display:flex;align-items:center;gap:5px;font-size:.72rem;color:#475569;';
+      item.innerHTML = `<span style="width:10px;height:10px;border-radius:50%;background:${c};flex-shrink:0;"></span>${g.icono || ''} ${g.nombre}`;
+      el.appendChild(item);
+    });
+    el.style.display = 'flex';
+  }
+
+  buildERD();
+})();
 </script>
 </body>
 </html>
