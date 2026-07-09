@@ -3,20 +3,59 @@ from django.db import models
 from .base import TimestampedModel
 
 
-class Reportador(TimestampedModel):
-    nombre = models.CharField("nombre", max_length=255)
-    cargo = models.CharField("cargo", max_length=255, blank=True)
-    correo_institucional = models.EmailField("correo institucional", blank=True)
-    correo = models.EmailField("correo personal", blank=True)
-    institucion_asociada = models.CharField("institución asociada", max_length=255, blank=True)
+class RolUsuario(TimestampedModel):
+    codigo = models.CharField("código", max_length=80, unique=True)
+    nombre = models.CharField("nombre", max_length=120)
 
     class Meta:
-        verbose_name = "reportador"
-        verbose_name_plural = "reportadores"
+        verbose_name = "rol de usuario"
+        verbose_name_plural = "roles de usuario"
         ordering = ["nombre"]
 
     def __str__(self):
         return self.nombre
+
+
+class Usuario(TimestampedModel):
+    nombre = models.CharField("nombre", max_length=255)
+    cargo = models.CharField("cargo", max_length=255, blank=True)
+    correo_institucional = models.EmailField("correo institucional", blank=True)
+    correo = models.EmailField("correo personal", blank=True)
+    institucion = models.ForeignKey(
+        "app.Institucion",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="usuarios",
+        verbose_name="institución",
+    )
+    roles = models.ManyToManyField(
+        RolUsuario,
+        through="UsuarioRol",
+        related_name="usuarios",
+        blank=True,
+    )
+
+    class Meta:
+        verbose_name = "usuario"
+        verbose_name_plural = "usuarios"
+        ordering = ["nombre"]
+
+    def __str__(self):
+        return self.nombre
+
+
+class UsuarioRol(models.Model):
+    usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE)
+    rol = models.ForeignKey(RolUsuario, on_delete=models.CASCADE)
+
+    class Meta:
+        verbose_name = "usuario rol"
+        verbose_name_plural = "usuarios roles"
+        unique_together = [("usuario", "rol")]
+
+    def __str__(self):
+        return f"{self.usuario} — {self.rol}"
 
 
 class FuenteDatos(TimestampedModel):
@@ -41,7 +80,7 @@ class FuenteDatos(TimestampedModel):
         related_name="fuentes_datos", verbose_name="proyecto",
     )
     reportador = models.ForeignKey(
-        Reportador, on_delete=models.SET_NULL, null=True, blank=True,
+        Usuario, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="fuentes_datos", verbose_name="reportador",
     )
 

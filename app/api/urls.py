@@ -7,10 +7,13 @@ from app.api.etl.views import campos_destino, mapeo_carga, upload_archivo, valid
 from app.api.institucion.views import InstitucionViewSet
 from app.api.proyecto.views import ProyectoViewSet
 from app.api.reportador.views import ReportadorViewSet
+from app.api.usuario.views import RolUsuarioViewSet, UsuarioViewSet
 
 router = DefaultRouter()
 router.register("api/fuentes-datos-crud", FuenteDatosViewSet, basename="fuentes-datos-crud")
 router.register("api/proyectos", ProyectoViewSet, basename="proyectos")
+router.register("api/usuarios", UsuarioViewSet, basename="usuarios")
+router.register("api/roles-usuario", RolUsuarioViewSet, basename="roles-usuario")
 router.register("api/responsables", ReportadorViewSet, basename="responsables")
 router.register("api/instituciones", InstitucionViewSet, basename="instituciones")
 

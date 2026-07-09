@@ -2,6 +2,8 @@
   window.COLFLUX_DATA = window.COLFLUX_DATA || {};
 
   let context = null;
+  let instituciones = [];
+  let roles = [];
 
   function get(id) {
     return document.getElementById(id);
@@ -15,7 +17,7 @@
 <div class="drawer-overlay" id="responsableDrawerOverlay" onclick="closeResponsableDrawer()"></div>
 <div class="drawer" id="responsableDrawer">
   <div class="drawer-header">
-    <h3>👤 Nuevo responsable</h3>
+    <h3>👤 Nuevo usuario</h3>
     <button class="drawer-close" onclick="closeResponsableDrawer()">✕</button>
   </div>
   <div class="drawer-body">
@@ -32,15 +34,23 @@
       <input type="text" id="rCargo" placeholder="Coordinador, analista, investigador...">
     </div>
     <div class="field-group">
-      <label>Institución asociada</label>
-      <input type="text" id="rInstitucion" placeholder="Universidad, grupo o entidad">
+      <label>Institución</label>
+      <select id="rInstitucion">
+        <option value="">Sin institución</option>
+      </select>
+    </div>
+    <div class="field-group">
+      <label>Roles</label>
+      <div id="rRoles" class="roles-checklist">
+        <label><input type="checkbox" value="reportador" checked> Reportador</label>
+      </div>
     </div>
     <div class="form-error" id="rFormError" style="display:none;"></div>
   </div>
   <div class="drawer-footer">
     <button class="btn-cancel" onclick="closeResponsableDrawer()">Cancelar</button>
     <button class="btn-submit" id="rBtnSubmit" onclick="submitResponsable()">
-      <span id="rSubmitLabel">Guardar responsable</span>
+      <span id="rSubmitLabel">Guardar usuario</span>
     </button>
   </div>
 </div>`;
@@ -50,9 +60,61 @@
   }
 
   function resetForm() {
-    ['rNombre', 'rCorreo', 'rCargo', 'rInstitucion'].forEach(id => {
+    ['rNombre', 'rCorreo', 'rCargo'].forEach(id => {
       get(id).value = '';
     });
+    get('rInstitucion').value = '';
+    document.querySelectorAll('#rRoles input[type="checkbox"]').forEach(input => {
+      input.checked = input.value === 'reportador';
+    });
+  }
+
+  function renderInstitucionesSelect() {
+    const select = get('rInstitucion');
+    if (!select) return;
+    select.innerHTML = '<option value="">Sin institución</option>';
+    instituciones.forEach(inst => {
+      const opt = document.createElement('option');
+      opt.value = inst.id;
+      opt.textContent = inst.nombre;
+      select.appendChild(opt);
+    });
+  }
+
+  function renderRoles() {
+    const container = get('rRoles');
+    if (!container) return;
+    const items = roles.length ? roles : [{ codigo: 'reportador', nombre: 'Reportador' }];
+    container.innerHTML = '';
+    items.forEach(rol => {
+      const label = document.createElement('label');
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.value = rol.codigo;
+      input.checked = rol.codigo === 'reportador';
+      label.appendChild(input);
+      label.appendChild(document.createTextNode(` ${rol.nombre}`));
+      container.appendChild(label);
+    });
+  }
+
+  async function loadCatalogos() {
+    const base = context.getApiBase();
+    const timeout = window.COLFLUX_CONFIG?.requestTimeoutMs || 8000;
+    const [instRes, rolesRes] = await Promise.all([
+      fetch(`${base}/api/instituciones/`, { signal: AbortSignal.timeout(timeout) }),
+      fetch(`${base}/api/roles-usuario/`, { signal: AbortSignal.timeout(timeout) }),
+    ]);
+    if (instRes.ok) {
+      const data = await instRes.json();
+      instituciones = Array.isArray(data) ? data : data.results || [];
+      renderInstitucionesSelect();
+    }
+    if (rolesRes.ok) {
+      const data = await rolesRes.json();
+      roles = Array.isArray(data) ? data : data.results || [];
+      renderRoles();
+    }
   }
 
   function errorMessage(data, fallback) {
@@ -70,6 +132,7 @@
     get('rFormError').style.display = 'none';
     get('responsableDrawerOverlay').classList.add('open');
     get('responsableDrawer').classList.add('open');
+    loadCatalogos().catch(() => {});
     get('rNombre').focus();
   }
 
@@ -105,7 +168,8 @@
           nombre,
           cargo: get('rCargo').value.trim(),
           correo: get('rCorreo').value.trim(),
-          institucion_asociada: get('rInstitucion').value.trim(),
+          institucion: get('rInstitucion').value || null,
+          roles: Array.from(document.querySelectorAll('#rRoles input[type="checkbox"]:checked')).map(input => input.value),
         }),
       });
       const data = await res.json();
@@ -118,7 +182,7 @@
       errEl.style.display = 'block';
     } finally {
       btn.disabled = false;
-      lbl.textContent = 'Guardar responsable';
+      lbl.textContent = 'Guardar usuario';
     }
   }
 

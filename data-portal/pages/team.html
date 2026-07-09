@@ -100,8 +100,10 @@
     .field-group { display: flex; flex-direction: column; gap: 6px; }
     .field-group label { font-size: .8rem; font-weight: 700; color: #374151; }
     .field-group label span { color: #dc2626; margin-left: 2px; }
-    .field-group input, .field-group textarea { border: 1.5px solid var(--border); border-radius: 8px; padding: 9px 12px; font-size: .88rem; font-family: inherit; color: #1a2236; background: white; outline: none; transition: border-color .2s; width: 100%; }
-    .field-group input:focus, .field-group textarea:focus { border-color: var(--green); }
+    .field-group input, .field-group textarea, .field-group select { border: 1.5px solid var(--border); border-radius: 8px; padding: 9px 12px; font-size: .88rem; font-family: inherit; color: #1a2236; background: white; outline: none; transition: border-color .2s; width: 100%; }
+    .field-group input:focus, .field-group textarea:focus, .field-group select:focus { border-color: var(--green); }
+    .roles-checklist { display: grid; gap: 7px; border: 1.5px solid var(--border); border-radius: 8px; padding: 10px 12px; background: white; }
+    .roles-checklist label { display: flex; align-items: center; gap: 7px; font-size: .84rem; font-weight: 600; color: #374151; }
     .drawer-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 10px; align-items: center; }
     .btn-submit { flex: 1; background: var(--green-d); color: white; border: none; border-radius: 8px; padding: 10px 20px; font-size: .88rem; font-weight: 700; font-family: inherit; cursor: pointer; }
     .btn-submit:disabled { opacity: .5; cursor: not-allowed; }
@@ -122,11 +124,11 @@
     <div class="hero-badge">👥 Equipo · Pre-inicio Jun 2025</div>
     <h1>Equipo <em>COLFLUX OE2</em></h1>
     <p class="hero-lead">
-      Administración de responsables e instituciones asociadas al proyecto.
-      Gestiona contactos operativos y entidades desde la API local.
+      Administración de usuarios, roles e instituciones asociadas al proyecto.
+      Gestiona contactos operativos, permisos funcionales y entidades desde la API local.
     </p>
     <div class="hero-actions">
-      <a href="#responsables" class="btn-white">Gestionar responsables →</a>
+      <a href="#responsables" class="btn-white">Gestionar usuarios →</a>
       <a href="../index.html" class="btn-outline">← Plan de trabajo</a>
     </div>
   </div>
@@ -163,20 +165,20 @@
   </div>
 </section>
 
-<!-- ── Responsables ── -->
+<!-- ── Usuarios ── -->
 <section id="responsables">
   <div class="container">
     <div class="section-head-row">
       <div>
         <div class="eyebrow">Administración</div>
-        <h2 class="stitle">Responsables registrados</h2>
-        <p class="sdesc">Gestión operativa de personas responsables de fuentes de datos, cargas y seguimiento.</p>
+        <h2 class="stitle">Usuarios registrados</h2>
+        <p class="sdesc">Gestión operativa de personas, instituciones y roles como reportador, investigador o administrador de datos.</p>
       </div>
-      <button class="btn-primary" onclick="openResponsableDrawer()">＋ Nuevo responsable</button>
+      <button class="btn-primary" onclick="openResponsableDrawer()">＋ Nuevo usuario</button>
     </div>
 
     <div class="responsables-toolbar">
-      <input type="text" id="responsableSearch" placeholder="Buscar por nombre, cargo, correo o institución">
+      <input type="text" id="responsableSearch" placeholder="Buscar por nombre, cargo, correo, institución o rol">
       <span class="api-mini-status" id="responsablesStatus">Conectando…</span>
     </div>
 
@@ -188,10 +190,11 @@
             <th>Cargo</th>
             <th>Correo</th>
             <th>Institución</th>
+            <th>Roles</th>
           </tr>
         </thead>
         <tbody id="responsablesBody">
-          <tr><td colspan="4"><div class="state-box">Cargando responsables…</div></td></tr>
+          <tr><td colspan="5"><div class="state-box">Cargando usuarios…</div></td></tr>
         </tbody>
       </table>
     </div>
@@ -206,62 +209,65 @@
 <script>
 const API_BASE = window.COLFLUX_CONFIG.apiBaseUrl;
 
-let responsables = [];
+let usuarios = [];
 let instituciones = [];
 
 window.COLFLUX_DATA.responsableDrawer.init({
   getApiBase: () => API_BASE,
-  onSaved: () => fetchResponsables(),
+  onSaved: () => fetchUsuarios(),
 });
 
-// ─── Responsables ────────────────────────────────────────────────────────────
-function renderResponsables() {
+// ─── Usuarios ────────────────────────────────────────────────────────────────
+function renderUsuarios() {
   const tbody = document.getElementById('responsablesBody');
   const q = document.getElementById('responsableSearch').value.trim().toLowerCase();
   const filtered = q
-    ? responsables.filter(r =>
+    ? usuarios.filter(r =>
         (r.nombre || '').toLowerCase().includes(q) ||
         (r.cargo || '').toLowerCase().includes(q) ||
         (r.correo || r.correo_institucional || '').toLowerCase().includes(q) ||
-        (r.institucion_asociada || '').toLowerCase().includes(q)
+        (r.institucion_nombre || '').toLowerCase().includes(q) ||
+        (r.roles || []).join(' ').toLowerCase().includes(q)
       )
-    : responsables;
+    : usuarios;
 
   if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="4"><div class="state-box">No hay responsables para mostrar.</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5"><div class="state-box">No hay usuarios para mostrar.</div></td></tr>';
     return;
   }
 
   tbody.innerHTML = filtered.map(r => {
     const correo = r.correo || r.correo_institucional || '';
+    const roles = (r.roles || []).length ? r.roles.join(', ') : '<span class="responsable-muted">Sin roles</span>';
     return `
       <tr>
         <td><div class="responsable-name">${r.nombre}</div><div class="responsable-muted">ID ${r.id}</div></td>
         <td>${r.cargo || '<span class="responsable-muted">Sin cargo</span>'}</td>
         <td>${correo ? `<a href="mailto:${correo}">${correo}</a>` : '<span class="responsable-muted">Sin correo</span>'}</td>
-        <td>${r.institucion_asociada || '<span class="responsable-muted">Sin institución</span>'}</td>
+        <td>${r.institucion_nombre || '<span class="responsable-muted">Sin institución</span>'}</td>
+        <td>${roles}</td>
       </tr>`;
   }).join('');
 }
 
-async function fetchResponsables() {
+async function fetchUsuarios() {
   const status = document.getElementById('responsablesStatus');
   status.textContent = 'Conectando…';
 
   try {
-    const res = await fetch(`${API_BASE}/api/responsables/`, { signal: AbortSignal.timeout(window.COLFLUX_CONFIG.requestTimeoutMs) });
+    const res = await fetch(`${API_BASE}/api/usuarios/`, { signal: AbortSignal.timeout(window.COLFLUX_CONFIG.requestTimeoutMs) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    responsables = Array.isArray(data) ? data : data.results || [];
-    status.textContent = `${responsables.length} responsable${responsables.length !== 1 ? 's' : ''}`;
-    renderResponsables();
+    usuarios = Array.isArray(data) ? data : data.results || [];
+    status.textContent = `${usuarios.length} usuario${usuarios.length !== 1 ? 's' : ''}`;
+    renderUsuarios();
   } catch (e) {
     status.textContent = 'API no disponible';
-    document.getElementById('responsablesBody').innerHTML = '<tr><td colspan="4"><div class="state-box">No fue posible cargar responsables desde la API.</div></td></tr>';
+    document.getElementById('responsablesBody').innerHTML = '<tr><td colspan="5"><div class="state-box">No fue posible cargar usuarios desde la API.</div></td></tr>';
   }
 }
 
-document.getElementById('responsableSearch').addEventListener('input', renderResponsables);
+document.getElementById('responsableSearch').addEventListener('input', renderUsuarios);
 
 // ─── Instituciones ───────────────────────────────────────────────────────────
 function renderInstituciones() {
@@ -351,7 +357,7 @@ async function submitInstitucion() {
   }
 }
 
-fetchResponsables();
+fetchUsuarios();
 fetchInstituciones();
 </script>
 </body>

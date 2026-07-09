@@ -3,13 +3,13 @@ from django.db import models
 from .base import TimestampedModel
 
 
-class Aliado(TimestampedModel):
+class Institucion(TimestampedModel):
     nombre = models.CharField("nombre", max_length=255)
     correo = models.EmailField("correo electrónico", blank=True)
 
     class Meta:
-        verbose_name = "aliado"
-        verbose_name_plural = "aliados"
+        verbose_name = "institución"
+        verbose_name_plural = "instituciones"
         ordering = ["nombre"]
 
     def __str__(self):
@@ -44,7 +44,12 @@ class Proyecto(TimestampedModel):
         "app.Sitio", on_delete=models.SET_NULL, related_name="proyectos",
         null=True, blank=True, verbose_name="sitio principal",
     )
-    aliados = models.ManyToManyField(Aliado, through="ProyectoAliado", related_name="proyectos", blank=True)
+    instituciones = models.ManyToManyField(
+        Institucion,
+        through="ProyectoInstitucion",
+        related_name="proyectos",
+        blank=True,
+    )
 
     class Meta:
         verbose_name = "proyecto"
@@ -55,14 +60,14 @@ class Proyecto(TimestampedModel):
         return f"{self.codigo} — {self.nombre}"
 
 
-class ProyectoAliado(models.Model):
+class ProyectoInstitucion(models.Model):
     proyecto = models.ForeignKey(Proyecto, on_delete=models.CASCADE)
-    aliado = models.ForeignKey(Aliado, on_delete=models.CASCADE)
+    institucion = models.ForeignKey(Institucion, on_delete=models.CASCADE)
 
     class Meta:
-        verbose_name = "proyecto aliado"
-        verbose_name_plural = "proyectos aliados"
-        unique_together = [("proyecto", "aliado")]
+        verbose_name = "proyecto institución"
+        verbose_name_plural = "proyectos instituciones"
+        unique_together = [("proyecto", "institucion")]
 
     def __str__(self):
-        return f"{self.proyecto} — {self.aliado}"
+        return f"{self.proyecto} — {self.institucion}"

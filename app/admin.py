@@ -1,11 +1,11 @@
 from django.contrib import admin
 
 from .models import (
-    Aliado, Autor, CaracterizacionMuestreoSuelo, Cobertura,
-    FuenteDatos, Reportador,
+    Autor, CaracterizacionMuestreoSuelo, Cobertura,
+    FuenteDatos, Institucion, RolUsuario, Usuario, UsuarioRol,
     ConfiguracionSensorGas, Departamento, Disturbio, Equipo,
     FlujoCamaras, MonitoreoParcela, MonitoreoSuelo, Municipio,
-    Parcela, Proyecto, ProyectoAliado, Publicacion, PublicacionAutor,
+    Parcela, Proyecto, ProyectoInstitucion, Publicacion, PublicacionAutor,
     PublicacionSitio, Region, ResultadoPublicacion, Sitio,
     SistemaReferencia, TorreEc, TorreFuenteEnergia, Transecto, Vegetacion,
 )
@@ -82,10 +82,16 @@ class MonitoreoParcelaAdmin(admin.ModelAdmin):
     raw_id_fields = ("parcela",)
 
 
-@admin.register(Aliado)
-class AliadoAdmin(admin.ModelAdmin):
+@admin.register(Institucion)
+class InstitucionAdmin(admin.ModelAdmin):
     list_display = ("nombre", "correo")
     search_fields = ("nombre",)
+
+
+@admin.register(ProyectoInstitucion)
+class ProyectoInstitucionAdmin(admin.ModelAdmin):
+    list_display = ("proyecto", "institucion")
+    raw_id_fields = ("proyecto", "institucion")
 
 
 @admin.register(Proyecto)
@@ -154,10 +160,24 @@ class AutorAdmin(admin.ModelAdmin):
     search_fields = ("nombre",)
 
 
-@admin.register(Reportador)
-class ReportadorAdmin(admin.ModelAdmin):
-    list_display = ("nombre", "correo_institucional", "correo", "institucion_asociada")
-    search_fields = ("nombre", "correo_institucional", "institucion_asociada")
+@admin.register(RolUsuario)
+class RolUsuarioAdmin(admin.ModelAdmin):
+    list_display = ("codigo", "nombre")
+    search_fields = ("codigo", "nombre")
+
+
+@admin.register(Usuario)
+class UsuarioAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "cargo", "correo_institucional", "correo", "institucion")
+    search_fields = ("nombre", "correo_institucional", "institucion__nombre")
+    list_filter = ("institucion", "roles")
+    raw_id_fields = ("institucion",)
+
+
+@admin.register(UsuarioRol)
+class UsuarioRolAdmin(admin.ModelAdmin):
+    list_display = ("usuario", "rol")
+    raw_id_fields = ("usuario", "rol")
 
 
 @admin.register(FuenteDatos)

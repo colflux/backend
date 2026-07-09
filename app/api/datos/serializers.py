@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from app.api.proyecto.serializers import ProyectoResumenSerializer
-from app.models import FuenteDatos, Proyecto, Reportador
+from app.models import FuenteDatos, Proyecto, RolUsuario, Usuario
 
 
 class FuenteDatosSerializer(serializers.ModelSerializer):
@@ -46,7 +46,13 @@ class FuenteDatosSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         responsable = validated_data.pop("responsable", "").strip()
         if responsable:
-            validated_data["reportador"], _ = Reportador.objects.get_or_create(nombre=responsable)
+            reportador, _ = Usuario.objects.get_or_create(nombre=responsable)
+            rol_reportador, _ = RolUsuario.objects.get_or_create(
+                codigo="reportador",
+                defaults={"nombre": "Reportador"},
+            )
+            reportador.roles.add(rol_reportador)
+            validated_data["reportador"] = reportador
         return super().create(validated_data)
 
     def to_representation(self, instance):

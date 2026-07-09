@@ -37,12 +37,12 @@ GRUPOS_CATALOGO = [
     {
         "nombre": "Proyecto",
         "icono": "🗂️",
-        "entidades": ["Proyecto", "Aliado"],
+        "entidades": ["Proyecto", "Institucion", "ProyectoInstitucion"],
     },
     {
-        "nombre": "Datos y ETL",
+        "nombre": "Usuarios, Roles y ETL",
         "icono": "📂",
-        "entidades": ["FuenteDatos", "Reportador", "CargaArchivo", "MapeoColumna"],
+        "entidades": ["Usuario", "RolUsuario", "UsuarioRol", "FuenteDatos", "CargaArchivo", "MapeoColumna"],
     },
 ]
 

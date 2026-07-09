@@ -6,7 +6,7 @@ from .cobertura import Cobertura, Disturbio, Vegetacion
 
 from .sitio import MonitoreoParcela, Parcela, Sitio, Transecto
 
-from .proyecto import Aliado, Proyecto, ProyectoAliado
+from .proyecto import Institucion, Proyecto, ProyectoInstitucion
 
 from .flujo_camaras import FlujoCamaras
 
@@ -16,7 +16,7 @@ from .suelo import CaracterizacionMuestreoSuelo, MonitoreoSuelo
 
 from .publicacion import Autor, Publicacion, PublicacionAutor, PublicacionSitio, PublicacionType, ResultadoPublicacion
 
-from .datos import CargaArchivo, FuenteDatos, MapeoColumna, Reportador
+from .datos import CargaArchivo, FuenteDatos, MapeoColumna, RolUsuario, Usuario, UsuarioRol
 
 __all__ = [
     "TimestampedModel",
@@ -35,9 +35,9 @@ __all__ = [
     "Sitio",
     "Transecto",
     # Proyecto
-    "Aliado",
+    "Institucion",
     "Proyecto",
-    "ProyectoAliado",
+    "ProyectoInstitucion",
     # Flujo Cámaras
     "FlujoCamaras",
     # Torre EC
@@ -49,7 +49,9 @@ __all__ = [
     "CaracterizacionMuestreoSuelo",
     "MonitoreoSuelo",
     # Gestión de datos
-    "Reportador",
+    "Usuario",
+    "RolUsuario",
+    "UsuarioRol",
     "FuenteDatos",
     "CargaArchivo",
     "MapeoColumna",
