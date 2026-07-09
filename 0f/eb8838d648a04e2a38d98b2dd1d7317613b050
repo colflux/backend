@@ -1,0 +1,28 @@
+app/migrations/0008_reportador_cargo.py
+  s_5ff1ca1eafc639::t_bc209b6b98b69f 1-16
+app/api/urls.py
+  s_5ff1ca1eafc639::t_3a9edf674c7810 29
+app/api/reportador/serializers.py
+  s_5ff1ca1eafc639::t_3a9edf674c7810 7,17
+data-portal/assets/js/data-page/responsable-drawer.js
+  s_5ff1ca1eafc639::t_3a9edf674c7810 31-33,53,106
+  s_5ff1ca1eafc639::t_b7f808cb63162e 101
+app/models/datos.py
+  s_5ff1ca1eafc639::t_3a9edf674c7810 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "0feb8838d648a04e2a38d98b2dd1d7317613b050",
+  "prompts": {},
+  "sessions": {
+    "s_5ff1ca1eafc639": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f4893-efb7-7ca1-8310-387629d0fb2f",
+        "model": "gpt-5.5"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    }
+  }
+}
