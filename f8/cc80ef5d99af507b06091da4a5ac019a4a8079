@@ -1,0 +1,19 @@
+data-portal/pages/team.html
+  s_5ff1ca1eafc639::t_1c6d15062e649e 98-114,142-162,326-360,398-399,401-402,452-457,501-549,576
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "f8cc80ef5d99af507b06091da4a5ac019a4a8079",
+  "prompts": {},
+  "sessions": {
+    "s_5ff1ca1eafc639": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f4893-efb7-7ca1-8310-387629d0fb2f",
+        "model": "gpt-5.5"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    }
+  }
+}
