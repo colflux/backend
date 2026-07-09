@@ -28,6 +28,10 @@
       <input type="email" id="rCorreo" placeholder="responsable@universidad.edu.co">
     </div>
     <div class="field-group">
+      <label>Cargo</label>
+      <input type="text" id="rCargo" placeholder="Coordinador, analista, investigador...">
+    </div>
+    <div class="field-group">
       <label>Institución asociada</label>
       <input type="text" id="rInstitucion" placeholder="Universidad, grupo o entidad">
     </div>
@@ -46,7 +50,7 @@
   }
 
   function resetForm() {
-    ['rNombre', 'rCorreo', 'rInstitucion'].forEach(id => {
+    ['rNombre', 'rCorreo', 'rCargo', 'rInstitucion'].forEach(id => {
       get(id).value = '';
     });
   }
@@ -94,11 +98,12 @@
     lbl.textContent = 'Guardando…';
 
     try {
-      const res = await fetch(`${context.getApiBase()}/api/responsables/crear/`, {
+      const res = await fetch(`${context.getApiBase()}/api/responsables/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nombre,
+          cargo: get('rCargo').value.trim(),
           correo: get('rCorreo').value.trim(),
           institucion_asociada: get('rInstitucion').value.trim(),
         }),

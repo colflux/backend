@@ -16,7 +16,6 @@ router.register("api/responsables", ReportadorViewSet, basename="responsables")
 
 urlpatterns = [
     path("", DashboardView.as_view(), name="dashboard"),
-    path("", include(router.urls)),
     path("api/fuentes-datos/", fuentes_datos_api, name="fuentes-datos-api"),
     path("api/fuentes-datos/crear/", FuenteDatosViewSet.as_view({"post": "create"}), name="fuentes-datos-crear"),
     path("api/fuentes-datos/<int:fuente_id>/upload/", upload_archivo, name="fuentes-datos-upload"),
@@ -27,4 +26,5 @@ urlpatterns = [
     path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/validar/", validar_carga, name="validar-carga"),
     path("api/catalogo-tecnico/", catalogo_tecnico, name="catalogo-tecnico"),
     path("api/db-erd/", db_erd, name="db-erd"),
+    path("", include(router.urls)),
 ]

@@ -4,6 +4,7 @@ from app.models import Reportador
 
 
 class ReportadorSerializer(serializers.ModelSerializer):
+    cargo = serializers.CharField(required=False, allow_blank=True)
     correo = serializers.EmailField(required=False, allow_blank=True)
     correo_institucional = serializers.EmailField(required=False, allow_blank=True)
     institucion_asociada = serializers.CharField(required=False, allow_blank=True)
@@ -13,6 +14,7 @@ class ReportadorSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "nombre",
+            "cargo",
             "correo",
             "correo_institucional",
             "institucion_asociada",

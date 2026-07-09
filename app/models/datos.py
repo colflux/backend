@@ -5,6 +5,7 @@ from .base import TimestampedModel
 
 class Reportador(TimestampedModel):
     nombre = models.CharField("nombre", max_length=255)
+    cargo = models.CharField("cargo", max_length=255, blank=True)
     correo_institucional = models.EmailField("correo institucional", blank=True)
     correo = models.EmailField("correo personal", blank=True)
     institucion_asociada = models.CharField("institución asociada", max_length=255, blank=True)
