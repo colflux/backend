@@ -1,0 +1,51 @@
+data-portal/pages/db.html
+  s_ce85b79c47b1af::t_7778511595a6bf 1-662
+data-portal/README.md
+  s_ce85b79c47b1af::t_28cb7282af1215 1-33
+data-portal/index.html
+  s_ce85b79c47b1af::t_7778511595a6bf 1-824
+.claude/settings.local.json
+  s_91c279908e74b2::t_039c8346a9b19c 32-33
+colflux/settings.py
+  s_ce85b79c47b1af::t_7d4e06e6172fd2 96
+docker-compose.yml
+  s_91c279908e74b2::t_bf6222910b8cf5 12-16,28-29
+  s_91c279908e74b2::t_1a273514527cba 20
+data-portal/assets/css/README.md
+  s_ce85b79c47b1af::t_28cb7282af1215 1-5
+data-portal/config/services.js
+  s_ce85b79c47b1af::t_28cb7282af1215 1-16
+data-portal/assets/js/README.md
+  s_ce85b79c47b1af::t_28cb7282af1215 1-4
+README.md
+  s_ce85b79c47b1af::t_28cb7282af1215 12,75,77-85
+data-portal/pages/data.html
+  s_ce85b79c47b1af::t_f949f55945f0ea 440,603
+  s_ce85b79c47b1af::t_7778511595a6bf 1-439,441-602,604-790
+data-portal/pages/team.html
+  s_ce85b79c47b1af::t_7778511595a6bf 1-469
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "10ad3dba59645d988b12d48064da8474cf992cf2",
+  "prompts": {},
+  "sessions": {
+    "s_91c279908e74b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "397b3811-ccdf-4c42-a821-e18b09961a1a",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    },
+    "s_ce85b79c47b1af": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f4456-423f-7711-bb7f-3bef558419bc",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    }
+  }
+}
