@@ -5,7 +5,7 @@ from django.apps import apps
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
-from app.views import ENTIDADES_SEMILLA, GRUPOS_CATALOGO, TIPO_MAP, _semilla_rows
+from app.api.catalogo.views import ENTIDADES_SEMILLA, GRUPOS_CATALOGO, TIPO_MAP, _semilla_rows
 
 
 class Command(BaseCommand):

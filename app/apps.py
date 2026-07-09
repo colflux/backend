@@ -11,7 +11,7 @@ class EmissionsConfig(AppConfig):
         import json
 
         try:
-            from app.views import GRUPOS_CATALOGO, TIPO_MAP
+            from app.api.catalogo.views import GRUPOS_CATALOGO, TIPO_MAP
             from django.apps import apps as django_apps
 
             grupos = []

@@ -31,7 +31,8 @@
       "Bash(.venv/bin/python manage.py runserver --noreload)",
       "Bash(pkill -f \"http.server 8080\")",
       "Bash(docker-compose version *)",
-      "Bash(docker-compose exec *)"
+      "Bash(docker-compose exec *)",
+      "Bash(/Users/labautista/.pyenv/versions/3.12.9/bin/python3 -m venv .venv)"
     ]
   }
 }
