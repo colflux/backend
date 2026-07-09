@@ -83,3 +83,23 @@ python -m http.server 8080 --directory data-portal
 
 Abre http://localhost:8080. La configuracion publica de servicios se encuentra
 en `data-portal/config/services.js`; no guardes credenciales en esa carpeta.
+
+## Actualizar catálogo y modelo entidad-relación
+
+Las páginas estáticas `data-portal/pages/db.html` y
+`data-portal/pages/catalogo-tecnico.html` no consultan una API para dibujar el
+modelo. Ambas leen los assets generados en `data-portal/assets/data/`.
+
+Cada vez que cambies modelos Django en `app/models/`, actualiza esos assets con:
+
+```bash
+python manage.py generate_catalogo
+```
+
+Ese comando regenera:
+
+- `data-portal/assets/data/catalogo.json`
+- `data-portal/assets/data/catalogo.js`
+
+Después de correrlo, revisa y versiona esos archivos junto con el cambio del
+modelo para que el portal estático quede sincronizado con el repositorio.

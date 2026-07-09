@@ -9,7 +9,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from app.models import CargaArchivo, FuenteDatos, MapeoColumna
 
-from app.api.catalogo.views import GRUPOS_CATALOGO, TIPO_MAP
+from app.catalogo.generator import GRUPOS_CATALOGO, campo_to_catalogo
 
 
 def _infer_dtype(series):
@@ -123,16 +123,7 @@ def campos_destino(request):
                     continue
                 if field.name in ("id", "created_at", "updated_at"):
                     continue
-                tipo_raw = field.__class__.__name__
-                campos.append({
-                    "nombre": field.name,
-                    "verbose_name": str(getattr(field, "verbose_name", field.name)),
-                    "tipo": TIPO_MAP.get(tipo_raw, tipo_raw),
-                    "tipo_raw": tipo_raw,
-                    "requerido": not (getattr(field, "blank", True) or getattr(field, "null", True)),
-                    "choices": [{"valor": c[0], "etiqueta": c[1]} for c in (getattr(field, "choices", None) or [])],
-                    "es_fk": tipo_raw == "ForeignKey",
-                })
+                campos.append(campo_to_catalogo(field))
             if campos:
                 modelos[nombre] = campos
     return JsonResponse({"modelos": modelos}, json_dumps_params={"ensure_ascii": False})

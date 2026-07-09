@@ -1,10 +1,8 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from app.api.catalogo.views import catalogo_tecnico
 from app.api.dashboard.views import DashboardView
 from app.api.datos.views import FuenteDatosViewSet, fuentes_datos_api
-from app.api.erd.views import db_erd
 from app.api.etl.views import campos_destino, mapeo_carga, upload_archivo, validar_carga
 from app.api.institucion.views import InstitucionViewSet
 from app.api.proyecto.views import ProyectoViewSet
@@ -26,7 +24,5 @@ urlpatterns = [
     path("api/etl/campos-destino/", campos_destino, name="etl-campos-destino"),
     path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/mapeo/", mapeo_carga, name="mapeo-carga"),
     path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/validar/", validar_carga, name="validar-carga"),
-    path("api/catalogo-tecnico/", catalogo_tecnico, name="catalogo-tecnico"),
-    path("api/db-erd/", db_erd, name="db-erd"),
     path("", include(router.urls)),
 ]
