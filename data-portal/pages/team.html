@@ -71,6 +71,10 @@
     .responsables-table tr:last-child td { border-bottom: none; }
     .responsable-name { font-weight: 800; color: #1a2236; }
     .responsable-muted { color: var(--gray); font-size: .8rem; }
+    .table-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn-action { border: 1.5px solid var(--border); background: white; color: #374151; border-radius: 8px; padding: 7px 10px; font-size: .78rem; font-weight: 700; font-family: inherit; cursor: pointer; }
+    .btn-action:hover { border-color: var(--green); color: var(--green-d); }
+    .btn-action.danger:hover { border-color: #dc2626; color: #dc2626; }
     .state-box { text-align: center; padding: 36px 20px; color: var(--gray); }
     .institution-admin { border: 1.5px solid var(--border); border-radius: 12px; background: white; padding: 16px; margin-bottom: 28px; }
     .institution-form { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto; gap: 10px; align-items: end; margin-bottom: 14px; }
@@ -78,6 +82,10 @@
     .institution-list { display: flex; gap: 8px; flex-wrap: wrap; }
     .institution-chip { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--border); border-radius: 20px; padding: 5px 10px; background: var(--gray-l); font-size: .78rem; font-weight: 700; color: #374151; }
     .institution-chip a { color: var(--blue); text-decoration: none; font-weight: 600; }
+    .institution-actions { display: inline-flex; gap: 4px; margin-left: 2px; }
+    .institution-action { border: none; background: white; color: #475569; border-radius: 999px; padding: 3px 7px; font-size: .72rem; font-weight: 800; font-family: inherit; cursor: pointer; }
+    .institution-action:hover { color: var(--green-d); }
+    .institution-action.danger:hover { color: #dc2626; }
     .institution-status { font-size: .78rem; color: var(--gray); font-weight: 600; }
 
     /* Footer */
@@ -191,10 +199,11 @@
             <th>Correo</th>
             <th>Institución</th>
             <th>Roles</th>
+            <th>Acciones</th>
           </tr>
         </thead>
         <tbody id="responsablesBody">
-          <tr><td colspan="5"><div class="state-box">Cargando usuarios…</div></td></tr>
+          <tr><td colspan="6"><div class="state-box">Cargando usuarios…</div></td></tr>
         </tbody>
       </table>
     </div>
@@ -211,6 +220,7 @@ const API_BASE = window.COLFLUX_CONFIG.apiBaseUrl;
 
 let usuarios = [];
 let instituciones = [];
+let editingInstitucionId = null;
 
 window.COLFLUX_DATA.responsableDrawer.init({
   getApiBase: () => API_BASE,
@@ -218,6 +228,16 @@ window.COLFLUX_DATA.responsableDrawer.init({
 });
 
 // ─── Usuarios ────────────────────────────────────────────────────────────────
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[ch]));
+}
+
 function renderUsuarios() {
   const tbody = document.getElementById('responsablesBody');
   const q = document.getElementById('responsableSearch').value.trim().toLowerCase();
@@ -232,20 +252,26 @@ function renderUsuarios() {
     : usuarios;
 
   if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5"><div class="state-box">No hay usuarios para mostrar.</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6"><div class="state-box">No hay usuarios para mostrar.</div></td></tr>';
     return;
   }
 
   tbody.innerHTML = filtered.map(r => {
     const correo = r.correo || r.correo_institucional || '';
-    const roles = (r.roles || []).length ? r.roles.join(', ') : '<span class="responsable-muted">Sin roles</span>';
+    const roles = (r.roles || []).length ? escapeHtml(r.roles.join(', ')) : '<span class="responsable-muted">Sin roles</span>';
     return `
       <tr>
-        <td><div class="responsable-name">${r.nombre}</div><div class="responsable-muted">ID ${r.id}</div></td>
-        <td>${r.cargo || '<span class="responsable-muted">Sin cargo</span>'}</td>
-        <td>${correo ? `<a href="mailto:${correo}">${correo}</a>` : '<span class="responsable-muted">Sin correo</span>'}</td>
-        <td>${r.institucion_nombre || '<span class="responsable-muted">Sin institución</span>'}</td>
+        <td><div class="responsable-name">${escapeHtml(r.nombre)}</div><div class="responsable-muted">ID ${escapeHtml(r.id)}</div></td>
+        <td>${r.cargo ? escapeHtml(r.cargo) : '<span class="responsable-muted">Sin cargo</span>'}</td>
+        <td>${correo ? `<a href="mailto:${escapeHtml(correo)}">${escapeHtml(correo)}</a>` : '<span class="responsable-muted">Sin correo</span>'}</td>
+        <td>${r.institucion_nombre ? escapeHtml(r.institucion_nombre) : '<span class="responsable-muted">Sin institución</span>'}</td>
         <td>${roles}</td>
+        <td>
+          <div class="table-actions">
+            <button class="btn-action" onclick="editUsuario(${Number(r.id)})">Editar</button>
+            <button class="btn-action danger" onclick="deleteUsuario(${Number(r.id)})">Eliminar</button>
+          </div>
+        </td>
       </tr>`;
   }).join('');
 }
@@ -263,7 +289,30 @@ async function fetchUsuarios() {
     renderUsuarios();
   } catch (e) {
     status.textContent = 'API no disponible';
-    document.getElementById('responsablesBody').innerHTML = '<tr><td colspan="5"><div class="state-box">No fue posible cargar usuarios desde la API.</div></td></tr>';
+    document.getElementById('responsablesBody').innerHTML = '<tr><td colspan="6"><div class="state-box">No fue posible cargar usuarios desde la API.</div></td></tr>';
+  }
+}
+
+function editUsuario(id) {
+  const usuario = usuarios.find(item => Number(item.id) === Number(id));
+  if (!usuario) return;
+  openResponsableDrawer(usuario);
+}
+
+async function deleteUsuario(id) {
+  const usuario = usuarios.find(item => Number(item.id) === Number(id));
+  const nombre = usuario?.nombre || `ID ${id}`;
+  if (!confirm(`¿Eliminar el usuario "${nombre}"? Esta acción no se puede deshacer.`)) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/usuarios/${id}/`, {
+      method: 'DELETE',
+      signal: AbortSignal.timeout(window.COLFLUX_CONFIG.requestTimeoutMs),
+    });
+    if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status}`);
+    await fetchUsuarios();
+  } catch (e) {
+    alert('No fue posible eliminar el usuario desde la API.');
   }
 }
 
@@ -296,6 +345,25 @@ function renderInstituciones() {
       link.textContent = inst.correo;
       chip.appendChild(link);
     }
+
+    const actions = document.createElement('span');
+    actions.className = 'institution-actions';
+
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'institution-action';
+    editBtn.textContent = 'Editar';
+    editBtn.onclick = () => editInstitucion(inst.id);
+    actions.appendChild(editBtn);
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'institution-action danger';
+    deleteBtn.textContent = 'Eliminar';
+    deleteBtn.onclick = () => deleteInstitucion(inst.id);
+    actions.appendChild(deleteBtn);
+
+    chip.appendChild(actions);
 
     list.appendChild(chip);
   }
@@ -334,11 +402,14 @@ async function submitInstitucion() {
 
   errEl.style.display = 'none';
   btn.disabled = true;
-  btn.textContent = 'Guardando…';
+  btn.textContent = editingInstitucionId ? 'Actualizando…' : 'Guardando…';
 
   try {
-    const res = await fetch(`${API_BASE}/api/instituciones/`, {
-      method: 'POST',
+    const url = editingInstitucionId
+      ? `${API_BASE}/api/instituciones/${editingInstitucionId}/`
+      : `${API_BASE}/api/instituciones/`;
+    const res = await fetch(url, {
+      method: editingInstitucionId ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ nombre, correo: correoEl.value.trim() }),
     });
@@ -347,6 +418,7 @@ async function submitInstitucion() {
 
     nombreEl.value = '';
     correoEl.value = '';
+    editingInstitucionId = null;
     await fetchInstituciones();
   } catch (e) {
     errEl.textContent = e.message || 'Error al guardar institución.';
@@ -354,6 +426,41 @@ async function submitInstitucion() {
   } finally {
     btn.disabled = false;
     btn.textContent = '＋ Agregar';
+  }
+}
+
+function editInstitucion(id) {
+  const inst = instituciones.find(item => Number(item.id) === Number(id));
+  if (!inst) return;
+  editingInstitucionId = inst.id;
+  document.getElementById('institucionNombre').value = inst.nombre || '';
+  document.getElementById('institucionCorreo').value = inst.correo || '';
+  document.getElementById('institucionSubmit').textContent = 'Guardar cambios';
+  document.getElementById('institucionError').style.display = 'none';
+  document.getElementById('institucionNombre').focus();
+}
+
+async function deleteInstitucion(id) {
+  const inst = instituciones.find(item => Number(item.id) === Number(id));
+  const nombre = inst?.nombre || `ID ${id}`;
+  if (!confirm(`¿Eliminar la institución "${nombre}"? Esta acción no se puede deshacer.`)) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/instituciones/${id}/`, {
+      method: 'DELETE',
+      signal: AbortSignal.timeout(window.COLFLUX_CONFIG.requestTimeoutMs),
+    });
+    if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status}`);
+    if (Number(editingInstitucionId) === Number(id)) {
+      editingInstitucionId = null;
+      document.getElementById('institucionNombre').value = '';
+      document.getElementById('institucionCorreo').value = '';
+      document.getElementById('institucionSubmit').textContent = '＋ Agregar';
+    }
+    await fetchInstituciones();
+    await fetchUsuarios();
+  } catch (e) {
+    alert('No fue posible eliminar la institución desde la API.');
   }
 }
 

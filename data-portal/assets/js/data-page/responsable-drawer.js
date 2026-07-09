@@ -4,6 +4,7 @@
   let context = null;
   let instituciones = [];
   let roles = [];
+  let editingUser = null;
 
   function get(id) {
     return document.getElementById(id);
@@ -17,7 +18,7 @@
 <div class="drawer-overlay" id="responsableDrawerOverlay" onclick="closeResponsableDrawer()"></div>
 <div class="drawer" id="responsableDrawer">
   <div class="drawer-header">
-    <h3>👤 Nuevo usuario</h3>
+    <h3 id="responsableDrawerTitle">👤 Nuevo usuario</h3>
     <button class="drawer-close" onclick="closeResponsableDrawer()">✕</button>
   </div>
   <div class="drawer-body">
@@ -60,6 +61,7 @@
   }
 
   function resetForm() {
+    editingUser = null;
     ['rNombre', 'rCorreo', 'rCargo'].forEach(id => {
       get(id).value = '';
     });
@@ -67,6 +69,8 @@
     document.querySelectorAll('#rRoles input[type="checkbox"]').forEach(input => {
       input.checked = input.value === 'reportador';
     });
+    get('responsableDrawerTitle').textContent = '👤 Nuevo usuario';
+    get('rSubmitLabel').textContent = 'Guardar usuario';
   }
 
   function renderInstitucionesSelect() {
@@ -95,6 +99,18 @@
       label.appendChild(input);
       label.appendChild(document.createTextNode(` ${rol.nombre}`));
       container.appendChild(label);
+    });
+  }
+
+  function setFormValues(user) {
+    get('rNombre').value = user?.nombre || '';
+    get('rCorreo').value = user?.correo || user?.correo_institucional || '';
+    get('rCargo').value = user?.cargo || '';
+    get('rInstitucion').value = user?.institucion || '';
+
+    const userRoles = new Set(user?.roles || []);
+    document.querySelectorAll('#rRoles input[type="checkbox"]').forEach(input => {
+      input.checked = userRoles.has(input.value);
     });
   }
 
@@ -127,12 +143,22 @@
     return fallback;
   }
 
-  function openResponsableDrawer() {
+  async function openResponsableDrawer(user = null) {
     mountDrawer();
+    editingUser = user;
     get('rFormError').style.display = 'none';
+    get('responsableDrawerTitle').textContent = user ? '👤 Editar usuario' : '👤 Nuevo usuario';
+    get('rSubmitLabel').textContent = user ? 'Guardar cambios' : 'Guardar usuario';
     get('responsableDrawerOverlay').classList.add('open');
     get('responsableDrawer').classList.add('open');
-    loadCatalogos().catch(() => {});
+    try {
+      await loadCatalogos();
+    } catch (e) {
+      // El usuario puede seguir editando datos básicos aunque fallen catálogos auxiliares.
+    }
+    if (user) {
+      setFormValues(user);
+    }
     get('rNombre').focus();
   }
 
@@ -161,8 +187,11 @@
     lbl.textContent = 'Guardando…';
 
     try {
-      const res = await fetch(`${context.getApiBase()}/api/responsables/`, {
-        method: 'POST',
+      const url = editingUser
+        ? `${context.getApiBase()}/api/usuarios/${editingUser.id}/`
+        : `${context.getApiBase()}/api/usuarios/`;
+      const res = await fetch(url, {
+        method: editingUser ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nombre,
