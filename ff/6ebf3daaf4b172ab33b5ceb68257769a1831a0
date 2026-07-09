@@ -1,0 +1,56 @@
+app/api/reportador/serializers.py
+  s_5ff1ca1eafc639::t_26257739b3eff9 1
+  s_5ff1ca1eafc639::t_deca0da40339aa 4-5
+app/api/usuario/__init__.py
+  s_5ff1ca1eafc639::t_26257739b3eff9 1
+data-portal/pages/team.html
+  s_5ff1ca1eafc639::t_90f9f92463f8be 103-106,127-128,131,174-175,177,181,193,212,217,220-221,225,229-230,232,235,241,247-248,253,258,261-263,266,270,360
+  s_5ff1ca1eafc639::t_b89f6cac0e8ba5 168,197
+app/models/__init__.py
+  s_5ff1ca1eafc639::t_bf75f413879b25 9,19,38,40,52-54
+app/api/urls.py
+  s_5ff1ca1eafc639::t_26257739b3eff9 10
+  s_5ff1ca1eafc639::t_deca0da40339aa 15-16
+app/api/institucion/views.py
+  s_5ff1ca1eafc639::t_deca0da40339aa 3,7
+app/api/reportador/views.py
+  s_5ff1ca1eafc639::t_26257739b3eff9 1
+app/api/usuario/serializers.py
+  s_5ff1ca1eafc639::t_26257739b3eff9 1-79
+data-portal/pages/data.html
+  s_5ff1ca1eafc639::t_b89f6cac0e8ba5 195-196
+app/api/datos/serializers.py
+  s_5ff1ca1eafc639::t_deca0da40339aa 4,49-55
+app/migrations/0009_usuario_roles_institucion.py
+  s_5ff1ca1eafc639::t_371905d5ba51ad 1-237
+app/models/proyecto.py
+  s_5ff1ca1eafc639::t_bf75f413879b25 6,11-12,47-52,63,65,68-70,73
+app/models/datos.py
+  s_5ff1ca1eafc639::t_bf75f413879b25 6-19,24-37,40-41,48-60,83
+app/api/usuario/views.py
+  s_5ff1ca1eafc639::t_26257739b3eff9 1-30
+app/api/institucion/serializers.py
+  s_5ff1ca1eafc639::t_deca0da40339aa 3,8
+app/catalogo/generator.py
+  s_5ff1ca1eafc639::t_97c77866e476f5 40,43,45
+app/admin.py
+  s_5ff1ca1eafc639::t_97c77866e476f5 4-5,8,85-86,91-96,163-180
+data-portal/assets/js/data-page/responsable-drawer.js
+  s_5ff1ca1eafc639::t_9ea77e54bbfe45 5-6,20,37-46,53,63,66-117,135,171-172,185
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "ff6ebf3daaf4b172ab33b5ceb68257769a1831a0",
+  "prompts": {},
+  "sessions": {
+    "s_5ff1ca1eafc639": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f4893-efb7-7ca1-8310-387629d0fb2f",
+        "model": "gpt-5.5"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    }
+  }
+}
