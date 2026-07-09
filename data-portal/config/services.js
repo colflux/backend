@@ -5,7 +5,9 @@
  * llaves privadas ni cadenas de conexion a bases de datos.
  */
 (function configureServices(window) {
-  const isLocal = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+  const isLocal =
+    window.location.protocol === "file:" ||
+    ["localhost", "127.0.0.1"].includes(window.location.hostname);
 
   window.COLFLUX_CONFIG = Object.freeze({
     apiBaseUrl: isLocal

@@ -166,6 +166,11 @@ def _muestra(series, n=3):
     return [str(v) for v in valores]
 
 
+def _valores_unicos(series, max_n=50):
+    unicos = series.dropna().unique()
+    return [str(v) for v in unicos[:max_n]]
+
+
 @csrf_exempt
 def upload_archivo(request, fuente_id):
     if request.method != "POST":
@@ -199,6 +204,7 @@ def upload_archivo(request, fuente_id):
                     "dtype": _infer_dtype(df[col]),
                     "nulls": int(df[col].isna().sum()),
                     "muestra": _muestra(df[col]),
+                    "valores_unicos": _valores_unicos(df[col]),
                 })
         else:
             import openpyxl
@@ -221,6 +227,7 @@ def upload_archivo(request, fuente_id):
                     "dtype": _infer_dtype(df[col]),
                     "nulls": int(df[col].isna().sum()),
                     "muestra": _muestra(df[col]),
+                    "valores_unicos": _valores_unicos(df[col]),
                 })
             wb.close()
 
@@ -242,14 +249,33 @@ def upload_archivo(request, fuente_id):
 
 
 def campos_destino(request):
-    CAMPOS_DESTINO = {
-        "Publicacion": ["titulo", "doi", "anio", "url", "resumen"],
-        "Sitio": ["nombre", "latitud", "longitud", "altitud"],
-        "Cobertura": ["nombre", "cobertura_ipcc", "cobertura_clc"],
-        "Parcela": ["nombre", "area_ha"],
-        "MonitoreoSuelo": ["fecha", "profundidad_cm"],
-    }
-    return JsonResponse({"modelos": CAMPOS_DESTINO}, json_dumps_params={"ensure_ascii": False})
+    from django.apps import apps as django_apps
+    modelos = {}
+    for grupo in GRUPOS_CATALOGO:
+        for nombre in grupo["entidades"]:
+            try:
+                modelo_cls = django_apps.get_model("app", nombre)
+            except LookupError:
+                continue
+            campos = []
+            for field in modelo_cls._meta.get_fields():
+                if field.is_relation and not hasattr(field, "column"):
+                    continue
+                if field.name in ("id", "created_at", "updated_at"):
+                    continue
+                tipo_raw = field.__class__.__name__
+                campos.append({
+                    "nombre": field.name,
+                    "verbose_name": str(getattr(field, "verbose_name", field.name)),
+                    "tipo": TIPO_MAP.get(tipo_raw, tipo_raw),
+                    "tipo_raw": tipo_raw,
+                    "requerido": not (getattr(field, "blank", True) or getattr(field, "null", True)),
+                    "choices": [{"valor": c[0], "etiqueta": c[1]} for c in (getattr(field, "choices", None) or [])],
+                    "es_fk": tipo_raw == "ForeignKey",
+                })
+            if campos:
+                modelos[nombre] = campos
+    return JsonResponse({"modelos": modelos}, json_dumps_params={"ensure_ascii": False})
 
 
 @csrf_exempt
@@ -261,7 +287,7 @@ def mapeo_carga(request, fuente_id, carga_id):
 
     if request.method == "GET":
         mapeos = list(
-            carga.mapeos.values("columna_origen", "modelo_destino", "campo_destino", "transformacion")
+            carga.mapeos.values("columna_origen", "modelo_destino", "campo_destino", "transformacion", "mapeo_valores")
         )
         return JsonResponse({"carga_id": carga.pk, "mapeos": mapeos}, json_dumps_params={"ensure_ascii": False})
 
@@ -288,6 +314,7 @@ def mapeo_carga(request, fuente_id, carga_id):
                         "modelo_destino": item.get("modelo_destino", ""),
                         "campo_destino": item.get("campo_destino", ""),
                         "transformacion": item.get("transformacion", "directo"),
+                        "mapeo_valores": item.get("mapeo_valores") or {},
                     },
                 )
                 guardados += 1

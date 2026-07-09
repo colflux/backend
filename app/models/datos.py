@@ -108,6 +108,10 @@ class MapeoColumna(TimestampedModel):
         "transformación", max_length=20,
         choices=TRANSFORMACION_CHOICES, default="directo",
     )
+    mapeo_valores   = models.JSONField(
+        "mapeo de valores", default=dict, blank=True,
+        help_text='Traduce valores de origen a choices del campo destino. Ej: {"Journal Article": "articulo_revista"}',
+    )
 
     class Meta:
         verbose_name = "mapeo de columna"

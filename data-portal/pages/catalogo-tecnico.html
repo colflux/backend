@@ -146,27 +146,25 @@
 <div id="app-footer"></div>
 
 <script src="../assets/js/layout.js"></script>
+<script src="../assets/data/catalogo.js"></script>
 <script>
   let state = { grupos: [], entidadActiva: null };
 
-  async function init() {
-    try {
-      const res = await fetch('../assets/data/catalogo.json');
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const data = await res.json();
-      state.grupos = data.grupos;
-      populateGrupoFilter();
-      renderSidebar();
-      const primera = state.grupos[0]?.entidades[0];
-      if (primera) selectEntidad(primera);
-    } catch(e) {
+  function init() {
+    if (!window.CATALOGO) {
       document.getElementById('mainPanel').innerHTML = `
         <div style="text-align:center;padding:60px 20px;color:var(--gray)">
           <div style="font-size:2rem;margin-bottom:12px;">⚠️</div>
           <h3>Catálogo no disponible</h3>
-          <p style="font-size:.85rem;margin-top:6px;">Ejecuta <code>python manage.py generate_catalogo</code> para generarlo.</p>
+          <p style="font-size:.85rem;margin-top:6px;">Levanta Django una vez para generar <code>catalogo.js</code>.</p>
         </div>`;
+      return;
     }
+    state.grupos = window.CATALOGO.grupos;
+    populateGrupoFilter();
+    renderSidebar();
+    const primera = state.grupos[0]?.entidades[0];
+    if (primera) selectEntidad(primera);
   }
 
   function populateGrupoFilter() {

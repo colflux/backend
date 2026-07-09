@@ -219,6 +219,31 @@
     footer a:hover { color: white; }
     .footer-links { display: flex; gap: 20px; }
 
+    /* ── Sub-panel de mapeo de valores ── */
+    .choices-panel {
+      margin-top: 10px; background: var(--blue-l); border: 1.5px solid #93c5fd;
+      border-radius: 10px; padding: 12px 14px;
+    }
+    .choices-panel-title {
+      font-size: .78rem; font-weight: 700; color: var(--blue); margin-bottom: 10px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .choices-row {
+      display: grid; grid-template-columns: 1fr 18px 1fr; align-items: center;
+      gap: 8px; margin-bottom: 6px;
+    }
+    .choices-row:last-child { margin-bottom: 0; }
+    .choices-valor-origen {
+      font-size: .8rem; font-family: 'JetBrains Mono', monospace;
+      color: #1e40af; background: white; border: 1px solid #93c5fd;
+      border-radius: 6px; padding: 4px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .choices-arrow { color: var(--blue); font-size: .85rem; text-align: center; }
+    .choices-row select {
+      border: 1.5px solid #93c5fd; border-radius: 8px; padding: 5px 10px;
+      font-size: .8rem; font-family: inherit; background: white; cursor: pointer;
+    }
+
     /* ── Calidad del dato ── */
     .calidad-resumen {
       display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
@@ -415,7 +440,8 @@
     columnas: [],
     sheets: [],
     totalFilas: 0,
-    modelosDestino: {}
+    modelosDestino: {},  // { ModelName: [ {nombre, verbose_name, tipo_raw, choices, ...} ] }
+    mapeoValores: {}     // { colIdx: { "valor_origen": "valor_destino" } }
   };
 
   // ── Utilidades ────────────────────────────────────────────────────────────
@@ -597,13 +623,16 @@
     const modeloKeys = Object.keys(state.modelosDestino);
 
     state.columnas.forEach((col, idx) => {
+      // Wrapper que incluye la fila + sub-panel de choices
+      const wrapper = document.createElement('div');
+      wrapper.style.borderBottom = '1px solid var(--border)';
+
       const row = document.createElement('div');
       row.className = 'mapeo-row';
+      row.style.borderBottom = 'none';
 
-      // Muestra: hasta 2 valores, separados por coma
       const muestra = (col.muestra || []).slice(0, 2).map(v => `"${v}"`).join(', ');
 
-      // Lado izquierdo: info de la columna
       const infoDiv = document.createElement('div');
       infoDiv.className = 'mapeo-col-info';
       infoDiv.innerHTML = `
@@ -615,12 +644,10 @@
         ${muestra ? `<div class="mapeo-sample">muestra: ${escapeHtml(muestra)}</div>` : ''}
       `;
 
-      // Flecha
       const arrowDiv = document.createElement('div');
       arrowDiv.className = 'mapeo-arrow';
       arrowDiv.textContent = '→';
 
-      // Lado derecho: selects de modelo y campo
       const destDiv = document.createElement('div');
       destDiv.className = 'mapeo-col-destino';
 
@@ -644,6 +671,81 @@
       selCampo.disabled = true;
       selCampo.innerHTML = '<option value="">— campo —</option>';
 
+      // Sub-panel de choices (se muestra/oculta dinámicamente)
+      const choicesContainer = document.createElement('div');
+      choicesContainer.dataset.idx = idx;
+      choicesContainer.classList.add('choices-container');
+      choicesContainer.style.display = 'none';
+      choicesContainer.style.padding = '0 20px 14px';
+
+      const actualizarChoicesPanel = () => {
+        const modelo = selModelo.value;
+        const campoNombre = selCampo.value;
+        choicesContainer.innerHTML = '';
+        choicesContainer.style.display = 'none';
+        delete state.mapeoValores[idx];
+
+        if (!modelo || !campoNombre) return;
+
+        const campos = state.modelosDestino[modelo] || [];
+        const campoMeta = campos.find(c => c.nombre === campoNombre);
+        if (!campoMeta || !campoMeta.choices || campoMeta.choices.length === 0) return;
+
+        const valoresUnicos = col.valores_unicos || [];
+        if (valoresUnicos.length === 0) return;
+
+        choicesContainer.style.display = 'block';
+        const panel = document.createElement('div');
+        panel.className = 'choices-panel';
+        panel.innerHTML = `
+          <div class="choices-panel-title">
+            🔁 Mapeo de valores — <span style="font-weight:400;">${escapeHtml(campoMeta.verbose_name || campoNombre)}</span>
+          </div>
+        `;
+
+        state.mapeoValores[idx] = {};
+
+        valoresUnicos.forEach(val => {
+          const fila = document.createElement('div');
+          fila.className = 'choices-row';
+
+          const spanOrigen = document.createElement('div');
+          spanOrigen.className = 'choices-valor-origen';
+          spanOrigen.title = val;
+          spanOrigen.textContent = val;
+
+          const spanArrow = document.createElement('div');
+          spanArrow.className = 'choices-arrow';
+          spanArrow.textContent = '→';
+
+          const selDestino = document.createElement('select');
+          const optIgnore = document.createElement('option');
+          optIgnore.value = ''; optIgnore.textContent = '— ignorar —';
+          selDestino.appendChild(optIgnore);
+
+          campoMeta.choices.forEach(ch => {
+            const opt = document.createElement('option');
+            opt.value = ch.valor; opt.textContent = ch.etiqueta;
+            selDestino.appendChild(opt);
+          });
+
+          selDestino.addEventListener('change', () => {
+            if (selDestino.value) {
+              state.mapeoValores[idx][val] = selDestino.value;
+            } else {
+              delete state.mapeoValores[idx][val];
+            }
+          });
+
+          fila.appendChild(spanOrigen);
+          fila.appendChild(spanArrow);
+          fila.appendChild(selDestino);
+          panel.appendChild(fila);
+        });
+
+        choicesContainer.appendChild(panel);
+      };
+
       selModelo.addEventListener('change', () => {
         const modelo = selModelo.value;
         selCampo.innerHTML = '';
@@ -655,11 +757,15 @@
           const campos = state.modelosDestino[modelo] || [];
           campos.forEach(c => {
             const opt = document.createElement('option');
-            opt.value = c; opt.textContent = c;
+            opt.value = c.nombre;
+            opt.textContent = c.verbose_name ? `${c.verbose_name} (${c.nombre})` : c.nombre;
             selCampo.appendChild(opt);
           });
         }
+        actualizarChoicesPanel();
       });
+
+      selCampo.addEventListener('change', actualizarChoicesPanel);
 
       destDiv.appendChild(selModelo);
       destDiv.appendChild(selCampo);
@@ -667,7 +773,10 @@
       row.appendChild(infoDiv);
       row.appendChild(arrowDiv);
       row.appendChild(destDiv);
-      list.appendChild(row);
+
+      wrapper.appendChild(row);
+      wrapper.appendChild(choicesContainer);
+      list.appendChild(wrapper);
     });
   }
 
@@ -688,17 +797,18 @@
     const btn = document.getElementById('btnGuardarMapeo');
 
     // Construir array de mapeos
-    const filas = document.querySelectorAll('#mapeoList .mapeo-row');
+    const wrappers = document.querySelectorAll('#mapeoList > div');
     const mapeos = [];
-    filas.forEach((row, idx) => {
+    wrappers.forEach((wrapper, idx) => {
       const col = state.columnas[idx];
-      const selModelo = row.querySelector('.sel-modelo');
-      const selCampo  = row.querySelector('.sel-campo');
+      const selModelo = wrapper.querySelector('.sel-modelo');
+      const selCampo  = wrapper.querySelector('.sel-campo');
       mapeos.push({
         columna_origen:  col.nombre,
         modelo_destino:  selModelo.value  || '',
         campo_destino:   selCampo.value   || '',
         transformacion:  'directo',
+        mapeo_valores:   state.mapeoValores[idx] || {},
       });
     });
 

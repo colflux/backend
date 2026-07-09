@@ -364,6 +364,7 @@
 </script>
 
 <script src="../assets/js/layout.js"></script>
+<script src="../assets/data/catalogo.js"></script>
 <script>
 (function () {
   const PALETTE = [
@@ -380,15 +381,13 @@
   let _rels = [];
   let _em = {};
 
-  async function buildERD() {
-    try {
-      const r = await fetch('../assets/data/catalogo.json');
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      render(await r.json());
-    } catch (e) {
+  function buildERD() {
+    if (window.CATALOGO) {
+      render(window.CATALOGO);
+    } else {
       document.getElementById('erd-loading').innerHTML =
         '<div style="font-size:1.5rem;margin-bottom:8px;">⚠️</div>' +
-        '<p style="color:var(--gray);font-size:.88rem;">No se pudo cargar catalogo.json</p>';
+        '<p style="color:var(--gray);font-size:.88rem;">No se pudo cargar catalogo.js — levanta Django una vez para generarlo</p>';
     }
   }
 
@@ -588,4 +587,5 @@
 })();
 </script>
 </body>
+
 </html>
