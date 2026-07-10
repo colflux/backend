@@ -1,0 +1,36 @@
+app/api/etl/views.py
+  s_5ff1ca1eafc639::t_6b58cade1b3613 364-365,403-404
+  s_5ff1ca1eafc639::t_ecc989aeac2fc7 3-4,9,38-59,61-77,79,82-83,107-108,112,115,125,127
+  s_5ff1ca1eafc639::t_cb68431750ff54 60
+  s_5ff1ca1eafc639::t_b0ba655fef5266 78,80
+  s_5ff1ca1eafc639::t_406e410a842094 81,94-98,100,105
+  s_5ff1ca1eafc639::t_67ed87f86d56df 143-144
+app/migrations/0011_cargaarchivo_archivo_blank.py
+  s_5ff1ca1eafc639::t_9a0153dac9c61e 1-15
+app/api/datos/serializers.py
+  s_5ff1ca1eafc639::t_58675b79722ec4 4
+app/migrations/0012_remove_cargaarchivo_archivo.py
+  s_5ff1ca1eafc639::t_31146d7b6f600f 1-14
+docs/pages/etl-upload.html
+  s_5ff1ca1eafc639::t_4e458581fc950a 102-112,356-358,483,485-488,518-524,526-533,621-622
+  s_5ff1ca1eafc639::t_79855f95a2bce7 314
+  s_5ff1ca1eafc639::t_5a716dace6851a 342,344-345,525,534,619-620,655
+  s_5ff1ca1eafc639::t_0dbcb935d071d6 364,616
+  s_5ff1ca1eafc639::t_6b77a5027c6a37 87-101,346-353,442-443,466-482,484,489-517,535-551,581,590-600,604,607-608,612-613,618
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "c637c6621acb89878df32f6a470252dbe4c0ec45",
+  "prompts": {},
+  "sessions": {
+    "s_5ff1ca1eafc639": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f4893-efb7-7ca1-8310-387629d0fb2f",
+        "model": "gpt-5.5"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    }
+  }
+}
