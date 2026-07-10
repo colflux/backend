@@ -87,7 +87,7 @@ class FuenteDatos(TimestampedModel):
     nombre = models.CharField("nombre", max_length=255)
     descripcion = models.TextField("descripción", blank=True)
     tipo = models.CharField("tipo", max_length=20, choices=TIPO_CHOICES, default="excel")
-    url = models.URLField("enlace al archivo", max_length=2048, blank=True)
+    url = models.CharField("enlace o ruta al archivo", max_length=2048, blank=True)
     estado = models.CharField("estado", max_length=20, choices=ESTADO_CHOICES, default="pendiente")
     fecha_recepcion = models.DateField("fecha de recepción", null=True, blank=True)
     notas = models.TextField("notas", blank=True)

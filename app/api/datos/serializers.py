@@ -13,7 +13,15 @@ class FuenteDatosSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
-    responsable = serializers.CharField(required=False, allow_blank=True, write_only=True)
+    responsable = serializers.CharField(read_only=True)
+    responsable_id = serializers.PrimaryKeyRelatedField(read_only=True, source="reportador")
+    responsable_id_write = serializers.PrimaryKeyRelatedField(
+        queryset=Usuario.objects.filter(roles__codigo="reportador").distinct(),
+        source="reportador",
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
     tipo_label = serializers.CharField(source="get_tipo_display", read_only=True)
     estado_label = serializers.CharField(source="get_estado_display", read_only=True)
     fecha_datos = serializers.DateField(source="fecha_recepcion", read_only=True)
@@ -31,6 +39,8 @@ class FuenteDatosSerializer(serializers.ModelSerializer):
             "estado",
             "estado_label",
             "responsable",
+            "responsable_id",
+            "responsable_id_write",
             "proyecto",
             "proyecto_id",
             "sitio",
@@ -44,23 +54,10 @@ class FuenteDatosSerializer(serializers.ModelSerializer):
         return None
 
     def create(self, validated_data):
-        self._set_reportador(validated_data)
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
-        self._set_reportador(validated_data)
         return super().update(instance, validated_data)
-
-    def _set_reportador(self, validated_data):
-        responsable = validated_data.pop("responsable", "").strip()
-        if responsable:
-            reportador, _ = Usuario.objects.get_or_create(nombre=responsable)
-            rol_reportador, _ = RolUsuario.objects.get_or_create(
-                codigo="reportador",
-                defaults={"nombre": "Reportador"},
-            )
-            reportador.roles.add(rol_reportador)
-            validated_data["reportador"] = reportador
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

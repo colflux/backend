@@ -3,6 +3,7 @@
 
   let context = null;
   let editingFuente = null;
+  let reportadores = [];
 
   function get(id) {
     return document.getElementById(id);
@@ -31,9 +32,9 @@
       <input type="text" id="fNombre" placeholder="Ej: SWAP Turbera La Cocha 2023">
     </div>
     <div class="field-group">
-      <label>Enlace al archivo</label>
-      <input type="url" id="fUrl" placeholder="https://docs.google.com/spreadsheets/…">
-      <span class="field-hint">Link a Excel, Google Sheets, Drive, SharePoint, etc.</span>
+      <label>Enlace o ruta al archivo</label>
+      <input type="text" id="fUrl" placeholder="https://docs.google.com/spreadsheets/… o ./data/test.xlsx">
+      <span class="field-hint">Acepta URL remota o ruta local para pruebas. Las rutas locales solo se guardan como referencia.</span>
     </div>
     <div class="field-group">
       <label>Descripción</label>
@@ -64,7 +65,9 @@
     </div>
     <div class="field-group">
       <label>Responsable</label>
-      <input type="text" id="fResponsable" placeholder="Nombre de quien gestiona este archivo">
+      <select id="fResponsable">
+        <option value="">— Sin responsable —</option>
+      </select>
     </div>
     <div id="formError" class="form-error" style="display:none;"></div>
   </div>
@@ -100,6 +103,40 @@
     if (activeProyecto) sel.value = activeProyecto;
   }
 
+  async function loadReportadores() {
+    const timeout = window.COLFLUX_CONFIG?.requestTimeoutMs || 8000;
+    const res = await fetch(`${context.getApiBase()}/api/responsables/`, {
+      signal: AbortSignal.timeout(timeout),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    reportadores = Array.isArray(data) ? data : data.results || [];
+    populateReportadorSelect();
+  }
+
+  function populateReportadorSelect() {
+    const sel = get('fResponsable');
+    if (!sel) return;
+    const current = sel.value;
+    sel.innerHTML = '';
+
+    const emptyOption = document.createElement('option');
+    emptyOption.value = '';
+    emptyOption.textContent = '— Sin responsable —';
+    sel.appendChild(emptyOption);
+
+    for (const usuario of reportadores) {
+      const option = document.createElement('option');
+      option.value = usuario.id;
+      option.textContent = usuario.institucion_nombre
+        ? `${usuario.nombre} — ${usuario.institucion_nombre}`
+        : usuario.nombre;
+      sel.appendChild(option);
+    }
+
+    sel.value = current;
+  }
+
   function resetForm() {
     editingFuente = null;
     ['fProyecto', 'fNombre', 'fUrl', 'fDescripcion', 'fResponsable'].forEach(id => {
@@ -129,16 +166,22 @@
     get('fDescripcion').value = fuente?.descripcion || '';
     get('fTipo').value = fuente?.tipo || 'excel';
     get('fEstado').value = fuente?.estado || 'pendiente';
-    get('fResponsable').value = fuente?.responsable || '';
+    get('fResponsable').value = fuente?.responsable_id || '';
   }
 
-  function openDrawer(fuente = null) {
+  async function openDrawer(fuente = null) {
     mountDrawer();
     editingFuente = fuente;
     populateProjectSelect();
     get('formError').style.display = 'none';
     get('fuenteDrawerTitle').textContent = fuente ? '📂 Editar fuente de datos' : '📂 Nueva fuente de datos';
     get('submitLabel').textContent = fuente ? 'Guardar cambios' : 'Guardar fuente';
+    try {
+      await loadReportadores();
+    } catch (e) {
+      get('formError').textContent = 'No fue posible cargar usuarios reportadores.';
+      get('formError').style.display = 'block';
+    }
     if (fuente) setFormValues(fuente);
     get('drawerOverlay').classList.add('open');
     get('drawer').classList.add('open');
@@ -175,7 +218,7 @@
       url: get('fUrl').value.trim(),
       tipo: get('fTipo').value,
       estado: get('fEstado').value,
-      responsable: get('fResponsable').value.trim(),
+      responsable_id_write: get('fResponsable').value || null,
       proyecto_id: get('fProyecto').value || null,
     };
 
