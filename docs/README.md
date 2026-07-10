@@ -20,7 +20,7 @@ backend Django.
 Por ejemplo, desde la raiz del repositorio:
 
 ```bash
-python -m http.server 8080 --directory data-portal
+python -m http.server 8080 --directory docs
 ```
 
 Luego abre `http://localhost:8080`. En localhost el portal consume

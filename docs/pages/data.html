@@ -146,6 +146,24 @@
     .card-proyecto { font-size: .75rem; color: var(--gray); font-family: 'JetBrains Mono', monospace; }
     .card-responsable { font-size: .75rem; color: var(--gray); }
 
+    /* ── Admin table ── */
+    .admin-section { margin-top: 28px; background: white; border: 1.5px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: 0 1px 6px rgba(0,0,0,.05); }
+    .admin-section-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .admin-section-header h2 { font-size: 1rem; font-weight: 800; margin-bottom: 2px; }
+    .admin-section-header p { font-size: .82rem; color: var(--gray); }
+    .admin-table-wrap { overflow-x: auto; }
+    .admin-table { width: 100%; border-collapse: collapse; min-width: 900px; font-size: .83rem; }
+    .admin-table th, .admin-table td { padding: 12px 14px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+    .admin-table th { background: var(--gray-l); color: #374151; font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; }
+    .admin-table tr:last-child td { border-bottom: none; }
+    .source-title { font-weight: 800; color: #1a2236; line-height: 1.3; }
+    .source-muted { color: var(--gray); font-size: .78rem; line-height: 1.4; }
+    .source-actions { display: flex; gap: 7px; flex-wrap: wrap; }
+    .btn-table-action { border: 1.5px solid var(--border); background: white; color: #374151; border-radius: 8px; padding: 7px 10px; font-size: .76rem; font-weight: 800; font-family: inherit; cursor: pointer; text-decoration: none; white-space: nowrap; }
+    .btn-table-action:hover { border-color: var(--green); color: var(--green-d); }
+    .btn-table-action.primary { background: var(--green-d); border-color: var(--green-d); color: white; }
+    .btn-table-action.danger:hover { border-color: var(--red); color: var(--red); }
+
     /* ── Empty / loading / error states ── */
     .state-box { text-align: center; padding: 64px 24px; }
     .state-box .icon { font-size: 3rem; margin-bottom: 12px; }
@@ -322,6 +340,34 @@
             <p>Conectando con el servidor Django.</p>
           </div>
         </div>
+
+        <section class="admin-section" id="fuentesTableSection">
+          <div class="admin-section-header">
+            <div>
+              <h2>Tabla de fuentes</h2>
+              <p>Consulta proyecto asociado y ejecuta acciones operativas por fuente.</p>
+            </div>
+            <span id="tableCount" class="source-muted">0 registros</span>
+          </div>
+          <div class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Fuente</th>
+                  <th>Tipo</th>
+                  <th>Estado</th>
+                  <th>Proyecto asociado</th>
+                  <th>Responsable</th>
+                  <th>Fecha</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="fuentesTableBody">
+                <tr><td colspan="7"><div class="state-box">Cargando fuentes…</div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
       </div>
 
     </div>
@@ -390,13 +436,27 @@
   }
 
   // ── Filters ────────────────────────────────────────────────────────────────
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    }[ch]));
+  }
+
   function filteredFuentes() {
     let items = allData.fuentes;
-    if (activeProyecto !== null) items = items.filter(f => f.proyecto?.id === activeProyecto);
+    if (activeProyecto === 'sin-proyecto') {
+      items = items.filter(f => !f.proyecto);
+    } else if (activeProyecto !== null) {
+      items = items.filter(f => f.proyecto?.id === activeProyecto);
+    }
     const q = document.getElementById('searchInput').value.toLowerCase();
     if (q) items = items.filter(f =>
-      f.nombre.toLowerCase().includes(q) ||
-      f.descripcion.toLowerCase().includes(q) ||
+      (f.nombre || '').toLowerCase().includes(q) ||
+      (f.descripcion || '').toLowerCase().includes(q) ||
       (f.responsable || '').toLowerCase().includes(q)
     );
     const tipo = document.getElementById('tipoFilter').value;
@@ -448,6 +508,15 @@
       items.push(`<p style="font-size:.82rem;color:var(--gray);padding:8px 4px;">Sin proyectos registrados.</p>`);
     }
 
+    const sinProyecto = allData.fuentes.filter(f => !f.proyecto).length;
+    items.push(`
+      <button class="proyecto-btn ${activeProyecto === 'sin-proyecto' ? 'active' : ''}" onclick="setProyecto('sin-proyecto')">
+        <span class="p-code">sin proyecto</span>
+        <span class="p-name">Fuentes sin proyecto</span>
+        <span class="p-count">${sinProyecto} fuente${sinProyecto !== 1 ? 's' : ''}</span>
+      </button>
+    `);
+
     list.innerHTML = items.join('');
   }
 
@@ -474,21 +543,21 @@
       }[f.tipo] || '#f1f5f9';
 
       const linkHtml = f.url
-        ? `<a class="card-link" href="${f.url}" target="_blank">Abrir archivo ↗</a>`
+        ? `<a class="card-link" href="${escapeHtml(f.url)}" target="_blank">Abrir archivo ↗</a>`
         : `<span class="card-link" style="color:var(--gray);cursor:default;">Sin enlace</span>`;
 
       const etlHtml = window.COLFLUX_DATA.etlActions.renderStartLink(f);
 
       const proyectoHtml = f.proyecto
-        ? `<span class="card-proyecto">${f.proyecto.codigo}</span>`
+        ? `<span class="card-proyecto">${escapeHtml(f.proyecto.codigo)}</span>`
         : '';
 
       const responsableHtml = f.responsable
-        ? `<span class="card-responsable">👤 ${f.responsable}</span>`
+        ? `<span class="card-responsable">👤 ${escapeHtml(f.responsable)}</span>`
         : '';
 
       const fechaHtml = f.fecha_datos
-        ? `<span class="card-responsable">📅 ${f.fecha_datos}</span>`
+        ? `<span class="card-responsable">📅 ${escapeHtml(f.fecha_datos)}</span>`
         : '';
 
       return `
@@ -496,14 +565,14 @@
           <div class="card-top">
             <div class="card-icon" style="background:${iconBg}">${icon}</div>
             <div class="card-body">
-              <div class="card-name">${f.nombre}</div>
-              <div class="card-desc">${f.descripcion || '<em style="color:var(--gray)">Sin descripción</em>'}</div>
-              ${f.notas ? `<div class="card-desc" style="margin-top:4px;color:#374151">📝 ${f.notas}</div>` : ''}
+              <div class="card-name">${escapeHtml(f.nombre)}</div>
+              <div class="card-desc">${f.descripcion ? escapeHtml(f.descripcion) : '<em style="color:var(--gray)">Sin descripción</em>'}</div>
+              ${f.notas ? `<div class="card-desc" style="margin-top:4px;color:#374151">📝 ${escapeHtml(f.notas)}</div>` : ''}
             </div>
           </div>
           <div class="card-meta">
-            <span class="badge badge-tipo-${f.tipo}">${f.tipo_label}</span>
-            <span class="badge badge-estado-${f.estado}">${f.estado_label}</span>
+            <span class="badge badge-tipo-${escapeHtml(f.tipo)}">${escapeHtml(f.tipo_label)}</span>
+            <span class="badge badge-estado-${escapeHtml(f.estado)}">${escapeHtml(f.estado_label)}</span>
             ${proyectoHtml}
             ${responsableHtml}
             ${fechaHtml}
@@ -512,6 +581,71 @@
           </div>
         </div>`;
     }).join('');
+  }
+
+  function renderFuentesTable(items) {
+    const body = document.getElementById('fuentesTableBody');
+    document.getElementById('tableCount').textContent = `${items.length} registro${items.length !== 1 ? 's' : ''}`;
+
+    if (items.length === 0) {
+      body.innerHTML = '<tr><td colspan="7"><div class="state-box">No hay fuentes para mostrar en la tabla.</div></td></tr>';
+      return;
+    }
+
+    body.innerHTML = items.map(f => {
+      const proyecto = f.proyecto
+        ? `${escapeHtml(f.proyecto.codigo)} — ${escapeHtml(f.proyecto.nombre)}`
+        : '<span class="source-muted">Sin proyecto</span>';
+      const fecha = f.fecha_datos ? escapeHtml(f.fecha_datos) : '<span class="source-muted">Sin fecha</span>';
+      const responsable = f.responsable ? escapeHtml(f.responsable) : '<span class="source-muted">Sin responsable</span>';
+      const startLink = window.COLFLUX_DATA.etlActions.canStartEtl(f)
+        ? `<a class="btn-table-action primary" href="etl-upload.html?fuente=${encodeURIComponent(f.id)}">Iniciar carga</a>`
+        : '<span class="source-muted">No aplica carga</span>';
+
+      return `
+        <tr>
+          <td>
+            <div class="source-title">${escapeHtml(f.nombre)}</div>
+            <div class="source-muted">ID ${escapeHtml(f.id)}</div>
+          </td>
+          <td><span class="badge badge-tipo-${escapeHtml(f.tipo)}">${escapeHtml(f.tipo_label)}</span></td>
+          <td><span class="badge badge-estado-${escapeHtml(f.estado)}">${escapeHtml(f.estado_label)}</span></td>
+          <td>${proyecto}</td>
+          <td>${responsable}</td>
+          <td>${fecha}</td>
+          <td>
+            <div class="source-actions">
+              ${startLink}
+              <button class="btn-table-action" onclick="editFuente(${Number(f.id)})">Editar</button>
+              <button class="btn-table-action danger" onclick="deleteFuente(${Number(f.id)})">Eliminar</button>
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  function editFuente(id) {
+    const fuente = allData.fuentes.find(f => Number(f.id) === Number(id));
+    if (!fuente) return;
+    openDrawer(fuente);
+  }
+
+  async function deleteFuente(id) {
+    const fuente = allData.fuentes.find(f => Number(f.id) === Number(id));
+    const nombre = fuente?.nombre || `ID ${id}`;
+    if (!confirm(`¿Eliminar la fuente "${nombre}"? Esta acción no se puede deshacer.`)) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/fuentes-datos-crud/${id}/`, {
+        method: 'DELETE',
+        signal: AbortSignal.timeout(window.COLFLUX_CONFIG.requestTimeoutMs),
+      });
+      if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status}`);
+      allData.fuentes = allData.fuentes.filter(f => Number(f.id) !== Number(id));
+      render();
+    } catch (e) {
+      alert('No fue posible eliminar la fuente desde la API.');
+    }
   }
 
   // ── Offline ────────────────────────────────────────────────────────────────
@@ -526,6 +660,8 @@
         <code style="display:block;background:var(--gray-l);padding:10px 16px;border-radius:8px;font-size:.82rem;margin:12px auto;max-width:320px">${API_BASE}</code>
         <a href="javascript:location.reload()">Reintentar →</a>
       </div>`;
+    document.getElementById('fuentesTableBody').innerHTML = '<tr><td colspan="7"><div class="state-box">API no disponible.</div></td></tr>';
+    document.getElementById('tableCount').textContent = '0 registros';
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -534,6 +670,7 @@
     renderStats(items);
     renderSidebar();
     renderCards(items);
+    renderFuentesTable(items);
 
     const label = activeProyecto
       ? allData.proyectos.find(p => p.id === activeProyecto)?.nombre || 'Proyecto'

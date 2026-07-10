@@ -97,4 +97,4 @@ MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
-CORS_ALLOW_ALL_ORIGINS = True  # el prototipo data-portal consume esta API desde otro origen
+CORS_ALLOW_ALL_ORIGINS = True  # el prototipo en docs consume esta API desde otro origen

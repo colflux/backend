@@ -8,7 +8,7 @@ from django.views.static import serve
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("", include("app.urls")),
-    path("data-portal/<path:path>", serve, {"document_root": settings.BASE_DIR / "data-portal"}),
+    path("docs/<path:path>", serve, {"document_root": settings.BASE_DIR / "docs"}),
 ]
 
 if settings.DEBUG:

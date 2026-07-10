@@ -2,6 +2,7 @@
   window.COLFLUX_DATA = window.COLFLUX_DATA || {};
 
   let context = null;
+  let editingFuente = null;
 
   function get(id) {
     return document.getElementById(id);
@@ -13,9 +14,9 @@
     const wrapper = document.createElement('div');
     wrapper.innerHTML = `
 <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
-<div class="drawer" id="drawer">
+  <div class="drawer" id="drawer">
   <div class="drawer-header">
-    <h3>📂 Nueva fuente de datos</h3>
+    <h3 id="fuenteDrawerTitle">📂 Nueva fuente de datos</h3>
     <button class="drawer-close" onclick="closeDrawer()">✕</button>
   </div>
   <div class="drawer-body">
@@ -100,12 +101,15 @@
   }
 
   function resetForm() {
+    editingFuente = null;
     ['fProyecto', 'fNombre', 'fUrl', 'fDescripcion', 'fResponsable'].forEach(id => {
       const el = get(id);
       if (el) el.value = '';
     });
     get('fTipo').value = 'excel';
     get('fEstado').value = 'pendiente';
+    get('fuenteDrawerTitle').textContent = '📂 Nueva fuente de datos';
+    get('submitLabel').textContent = 'Guardar fuente';
   }
 
   function errorMessage(data, fallback) {
@@ -118,10 +122,24 @@
     return fallback;
   }
 
-  function openDrawer() {
+  function setFormValues(fuente) {
+    get('fProyecto').value = fuente?.proyecto?.id || '';
+    get('fNombre').value = fuente?.nombre || '';
+    get('fUrl').value = fuente?.url || '';
+    get('fDescripcion').value = fuente?.descripcion || '';
+    get('fTipo').value = fuente?.tipo || 'excel';
+    get('fEstado').value = fuente?.estado || 'pendiente';
+    get('fResponsable').value = fuente?.responsable || '';
+  }
+
+  function openDrawer(fuente = null) {
     mountDrawer();
+    editingFuente = fuente;
     populateProjectSelect();
     get('formError').style.display = 'none';
+    get('fuenteDrawerTitle').textContent = fuente ? '📂 Editar fuente de datos' : '📂 Nueva fuente de datos';
+    get('submitLabel').textContent = fuente ? 'Guardar cambios' : 'Guardar fuente';
+    if (fuente) setFormValues(fuente);
     get('drawerOverlay').classList.add('open');
     get('drawer').classList.add('open');
     get('fNombre').focus();
@@ -162,15 +180,23 @@
     };
 
     try {
-      const res = await fetch(`${context.getApiBase()}/api/fuentes-datos/crear/`, {
-        method: 'POST',
+      const url = editingFuente
+        ? `${context.getApiBase()}/api/fuentes-datos-crud/${editingFuente.id}/`
+        : `${context.getApiBase()}/api/fuentes-datos-crud/`;
+      const res = await fetch(url, {
+        method: editingFuente ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(errorMessage(data, `Error ${res.status}`));
 
-      context.getData().fuentes.unshift(data);
+      if (editingFuente) {
+        const idx = context.getData().fuentes.findIndex(f => Number(f.id) === Number(editingFuente.id));
+        if (idx >= 0) context.getData().fuentes.splice(idx, 1, data);
+      } else {
+        context.getData().fuentes.unshift(data);
+      }
       closeDrawer();
       context.onRender();
     } catch (e) {

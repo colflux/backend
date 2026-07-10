@@ -2,7 +2,7 @@
 
 ## Contexto
 
-El data-portal tiene `data.html`: una página que lista fuentes de datos (`FuenteDatos`) por
+El portal en `docs/` tiene `data.html`: una página que lista fuentes de datos (`FuenteDatos`) por
 proyecto y permite registrar nuevas con estado `pendiente`. El backend Django expone esas fuentes
 en `/api/fuentes-datos/`.
 
@@ -136,7 +136,7 @@ agregar `mapeo_valores` al payload por columna:
 **Archivos a tocar**:
 - `app/models/datos.py` — agregar `mapeo_valores` a `MapeoColumna`
 - `app/views.py` — actualizar `mapeo_carga` para leer/escribir `mapeo_valores`
-- `data-portal/pages/etl-upload.html` — agregar sub-panel al paso 2
+- `docs/pages/etl-upload.html` — agregar sub-panel al paso 2
 
 ---
 
@@ -201,7 +201,7 @@ path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/importar/", views.i
 **Archivos a tocar**:
 - `app/views.py` — nueva función `importar_carga`
 - `app/urls.py` — agregar URL
-- `data-portal/pages/etl-upload.html` — reemplazar `alert` del paso 4 con pantalla de resultado
+- `docs/pages/etl-upload.html` — reemplazar `alert` del paso 4 con pantalla de resultado
 
 **UI del resultado (paso 4)**:
 ```
@@ -247,7 +247,7 @@ Response: archivo CSV (Content-Disposition: attachment)
 - `app/models/datos.py` — agregar `ids_importados` a `CargaArchivo`
 - `app/views.py` — nueva función `exportar_carga`
 - `app/urls.py` — agregar URL
-- `data-portal/pages/etl-upload.html` — botón "Descargar CSV" en pantalla de resultado
+- `docs/pages/etl-upload.html` — botón "Descargar CSV" en pantalla de resultado
 
 ---
 

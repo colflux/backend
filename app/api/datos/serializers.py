@@ -44,6 +44,14 @@ class FuenteDatosSerializer(serializers.ModelSerializer):
         return None
 
     def create(self, validated_data):
+        self._set_reportador(validated_data)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        self._set_reportador(validated_data)
+        return super().update(instance, validated_data)
+
+    def _set_reportador(self, validated_data):
         responsable = validated_data.pop("responsable", "").strip()
         if responsable:
             reportador, _ = Usuario.objects.get_or_create(nombre=responsable)
@@ -53,7 +61,6 @@ class FuenteDatosSerializer(serializers.ModelSerializer):
             )
             reportador.roles.add(rol_reportador)
             validated_data["reportador"] = reportador
-        return super().create(validated_data)
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

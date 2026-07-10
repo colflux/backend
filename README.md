@@ -9,7 +9,7 @@ Prototipo Django para modelar, administrar y visualizar datos de gases de efecto
 - Admin de Django para mantener catalogos.
 - Visualizador preliminar con agregaciones por ano, sector y gas.
 - Docker Compose con PostgreSQL.
-- Portal estatico de prototipos en `data-portal/`, conectado a la API Django.
+- Portal estatico de prototipos en `docs/`, conectado a la API Django.
 - Plantilla de mapeo para columnas de Excel en `data/excel_mapping_template.csv`.
 
 ## Ejecutar con Docker
@@ -78,17 +78,17 @@ Con Django ejecutandose en el puerto 8000, inicia otro servidor desde la raiz
 del repositorio:
 
 ```bash
-python -m http.server 8080 --directory data-portal
+python -m http.server 8080 --directory docs
 ```
 
 Abre http://localhost:8080. La configuracion publica de servicios se encuentra
-en `data-portal/config/services.js`; no guardes credenciales en esa carpeta.
+en `docs/config/services.js`; no guardes credenciales en esa carpeta.
 
 ## Actualizar catálogo y modelo entidad-relación
 
-Las páginas estáticas `data-portal/pages/db.html` y
-`data-portal/pages/catalogo-tecnico.html` no consultan una API para dibujar el
-modelo. Ambas leen los assets generados en `data-portal/assets/data/`.
+Las páginas estáticas `docs/pages/db.html` y
+`docs/pages/catalogo-tecnico.html` no consultan una API para dibujar el
+modelo. Ambas leen los assets generados en `docs/assets/data/`.
 
 Cada vez que cambies modelos Django en `app/models/`, actualiza esos assets con:
 
@@ -98,8 +98,8 @@ python manage.py generate_catalogo
 
 Ese comando regenera:
 
-- `data-portal/assets/data/catalogo.json`
-- `data-portal/assets/data/catalogo.js`
+- `docs/assets/data/catalogo.json`
+- `docs/assets/data/catalogo.js`
 
 Después de correrlo, revisa y versiona esos archivos junto con el cambio del
 modelo para que el portal estático quede sincronizado con el repositorio.
