@@ -1,0 +1,33 @@
+app/management/commands/generate_catalogo.py
+  s_5ff1ca1eafc639::t_2ca2b42a0edf0b 8,11
+colflux/urls.py
+  s_5ff1ca1eafc639::t_2ca2b42a0edf0b 11
+README.md
+  s_5ff1ca1eafc639::t_2ca2b42a0edf0b 12,81,85,89-91,101-102
+docs/README.md
+  s_5ff1ca1eafc639::t_2ca2b42a0edf0b 1-33
+docs/.nojekyll
+  s_5ff1ca1eafc639::t_6d1061683c3987 1
+specs/etl-pipeline.md
+  s_5ff1ca1eafc639::t_2ca2b42a0edf0b 5,139,204,250
+app/api/datos/serializers.py
+  s_5ff1ca1eafc639::t_b90311db315a03 47-54
+colflux/settings.py
+  s_5ff1ca1eafc639::t_2ca2b42a0edf0b 100
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "f4a892a1d31434a8c55e7a11c1a0aa04594cecc4",
+  "prompts": {},
+  "sessions": {
+    "s_5ff1ca1eafc639": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f4893-efb7-7ca1-8310-387629d0fb2f",
+        "model": "gpt-5.5"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    }
+  }
+}
