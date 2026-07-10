@@ -1,9 +1,12 @@
 import json
 import math
+from pathlib import Path
+from urllib.parse import urlparse
 
 import pandas as pd
 
 from django.apps import apps
+from django.conf import settings
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
@@ -32,6 +35,52 @@ def _valores_unicos(series, max_n=50):
     return [str(v) for v in unicos[:max_n]]
 
 
+def _columnas_desde_dataframe(df):
+    columnas = []
+    for col in df.columns:
+        columnas.append({
+            "nombre": col,
+            "dtype": _infer_dtype(df[col]),
+            "nulls": int(df[col].isna().sum()),
+            "muestra": _muestra(df[col]),
+            "valores_unicos": _valores_unicos(df[col]),
+        })
+    return columnas
+
+
+def _resolver_ruta_fuente(fuente):
+    raw_path = (fuente.url or "").strip()
+    if not raw_path:
+        raise ValueError("La fuente no tiene enlace o ruta de archivo registrada.")
+
+    parsed = urlparse(raw_path)
+    if parsed.scheme in ("http", "https"):
+        raise ValueError(
+            "La carga automática desde URLs remotas no está habilitada. "
+            "Registra una ruta local accesible por el backend en la fuente de datos."
+        )
+    if parsed.scheme == "file":
+        raw_path = parsed.path
+    elif parsed.scheme:
+        raise ValueError("El enlace de la fuente usa un esquema no soportado.")
+
+    path = Path(raw_path).expanduser()
+    if not path.is_absolute():
+        path = Path(settings.BASE_DIR) / path
+    path = path.resolve()
+
+    if not path.is_file():
+        raise FileNotFoundError("No se encontró el archivo registrado en la fuente.")
+
+    return path
+
+
+def _crear_carga_desde_fuente(fuente):
+    source_path = _resolver_ruta_fuente(fuente)
+    carga = CargaArchivo.objects.create(fuente=fuente)
+    return carga, source_path, source_path.name.lower()
+
+
 @csrf_exempt
 def upload_archivo(request, fuente_id):
     if request.method != "POST":
@@ -42,34 +91,28 @@ def upload_archivo(request, fuente_id):
     except FuenteDatos.DoesNotExist:
         return JsonResponse({"error": "Fuente de datos no encontrada"}, status=404)
 
-    archivo = request.FILES.get("archivo")
-    if not archivo:
-        return JsonResponse({"error": "No se recibió ningún archivo"}, status=400)
+    if request.FILES.get("archivo"):
+        return JsonResponse(
+            {"error": "La fuente de datos maneja un único archivo. Edita la fuente para cambiarlo."},
+            status=400,
+        )
 
-    nombre = archivo.name.lower()
+    nombre = (fuente.url or "").lower()
     if not (nombre.endswith(".xlsx") or nombre.endswith(".xls") or nombre.endswith(".csv")):
         return JsonResponse({"error": "Formato no permitido. Solo .xlsx, .xls o .csv"}, status=400)
 
     try:
-        carga = CargaArchivo.objects.create(fuente=fuente, archivo=archivo)
+        carga, path_archivo, nombre_archivo = _crear_carga_desde_fuente(fuente)
 
-        if nombre.endswith(".csv"):
-            df = pd.read_csv(carga.archivo.path)
+        if nombre_archivo.endswith(".csv"):
+            df = pd.read_csv(path_archivo)
             sheets = []
             hoja_activa = ""
             total_filas = len(df)
-            columnas = []
-            for col in df.columns:
-                columnas.append({
-                    "nombre": col,
-                    "dtype": _infer_dtype(df[col]),
-                    "nulls": int(df[col].isna().sum()),
-                    "muestra": _muestra(df[col]),
-                    "valores_unicos": _valores_unicos(df[col]),
-                })
+            columnas = _columnas_desde_dataframe(df)
         else:
             import openpyxl
-            wb = openpyxl.load_workbook(carga.archivo.path, read_only=True, data_only=True)
+            wb = openpyxl.load_workbook(path_archivo, read_only=True, data_only=True)
             sheets = wb.sheetnames
 
             hoja_activa = sheets[0]
@@ -79,17 +122,9 @@ def upload_archivo(request, fuente_id):
                     hoja_activa = sheet_name
                     break
 
-            df = pd.read_excel(carga.archivo.path, sheet_name=hoja_activa)
+            df = pd.read_excel(path_archivo, sheet_name=hoja_activa)
             total_filas = len(df)
-            columnas = []
-            for col in df.columns:
-                columnas.append({
-                    "nombre": col,
-                    "dtype": _infer_dtype(df[col]),
-                    "nulls": int(df[col].isna().sum()),
-                    "muestra": _muestra(df[col]),
-                    "valores_unicos": _valores_unicos(df[col]),
-                })
+            columnas = _columnas_desde_dataframe(df)
             wb.close()
 
         carga.hoja_activa = hoja_activa
@@ -105,6 +140,8 @@ def upload_archivo(request, fuente_id):
             "columnas": columnas,
         }, json_dumps_params={"ensure_ascii": False})
 
+    except (ValueError, FileNotFoundError) as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
     except Exception as exc:
         return JsonResponse({"error": str(exc)}, status=500)
 
@@ -324,8 +361,8 @@ def validar_carga(request, fuente_id, carga_id):
         return JsonResponse({"error": "Carga no encontrada"}, status=404)
 
     try:
-        path = carga.archivo.path
-        nombre = path.lower()
+        path = _resolver_ruta_fuente(carga.fuente)
+        nombre = str(path).lower()
         if nombre.endswith(".csv"):
             df = pd.read_csv(path)
         else:
@@ -363,5 +400,7 @@ def validar_carga(request, fuente_id, carga_id):
             "columnas": resultados,
         }, json_dumps_params={"ensure_ascii": False})
 
+    except (ValueError, FileNotFoundError) as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
     except Exception as exc:
         return JsonResponse({"error": str(exc)}, status=500)

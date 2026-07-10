@@ -84,31 +84,32 @@
     .step-section h2 { font-size: 1.1rem; font-weight: 800; margin-bottom: 6px; }
     .step-section .step-desc { font-size: .88rem; color: var(--gray); margin-bottom: 24px; }
 
-    /* ── Drop zone ── */
-    .dropzone {
-      border: 2px dashed var(--border); border-radius: 14px;
-      background: white; padding: 48px 24px; text-align: center;
-      cursor: pointer; transition: border-color .2s, background .2s;
-      position: relative;
+    /* ── Fuente de datos ── */
+    .source-picker {
+      background: white; border: 1.5px solid var(--border); border-radius: 12px;
+      padding: 16px; margin-bottom: 18px;
     }
-    .dropzone:hover, .dropzone.drag-over {
-      border-color: var(--green); background: var(--green-l);
+    .source-picker label {
+      display: block; font-size: .82rem; font-weight: 800; color: #374151; margin-bottom: 8px;
     }
-    .dropzone-icon { font-size: 2.8rem; margin-bottom: 12px; line-height: 1; }
-    .dropzone-text { font-size: .92rem; font-weight: 600; color: #374151; margin-bottom: 6px; }
-    .dropzone-hint { font-size: .8rem; color: var(--gray); }
-    .dropzone input[type="file"] {
-      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    .source-picker select {
+      width: 100%; border: 1.5px solid var(--border); border-radius: 8px;
+      padding: 10px 12px; font-size: .9rem; font-family: inherit; background: white;
     }
-    .file-selected {
-      display: none; margin-top: 16px;
-      background: var(--green-l); border: 1.5px solid var(--green);
-      border-radius: 10px; padding: 12px 16px;
-      display: none; align-items: center; gap: 10px;
-      font-size: .88rem; font-weight: 600; color: var(--green-d);
+    .source-picker select:focus { outline: 2px solid rgba(24,115,93,.18); border-color: var(--green); }
+    .source-picker-hint { font-size: .78rem; color: var(--gray); margin-top: 8px; }
+    .source-picker-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .registered-source {
+      display: none; background: white; border: 1.5px solid var(--green);
+      border-radius: 12px; padding: 16px; margin-bottom: 18px;
     }
-    .file-selected.visible { display: flex; }
-    .file-selected-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .registered-source.visible { display: block; }
+    .registered-source-title { font-size: .85rem; font-weight: 800; color: var(--green-d); margin-bottom: 6px; }
+    .registered-source-path {
+      font-family: 'JetBrains Mono', monospace; font-size: .78rem; color: #374151;
+      background: var(--green-l); border-radius: 8px; padding: 8px 10px;
+      overflow-wrap: anywhere;
+    }
 
     /* ── Actions ── */
     .step-actions { margin-top: 24px; display: flex; align-items: center; gap: 12px; }
@@ -310,7 +311,7 @@
     <div class="stepper">
       <div class="step active" id="step1">
         <div class="step-circle">1</div>
-        <span class="step-label">Subir archivo</span>
+        <span class="step-label">Analizar fuente</span>
       </div>
       <div class="step-connector"></div>
       <div class="step" id="step2">
@@ -338,27 +339,29 @@
 <div class="main">
   <div class="container">
 
-    <!-- Step 1: Subir archivo -->
+    <!-- Step 1: Analizar fuente -->
     <div class="step-section" id="sectionStep1">
-      <h2>Paso 1 — Subir archivo</h2>
-      <p class="step-desc">Selecciona o arrastra el archivo Excel (.xlsx / .xls) o CSV que deseas cargar a la base de datos.</p>
+      <h2>Paso 1 — Analizar fuente</h2>
+      <p class="step-desc">Selecciona la fuente de datos para analizar el archivo registrado en ella.</p>
 
-      <div class="dropzone" id="dropzone">
-        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
-        <div class="dropzone-icon">📂</div>
-        <div class="dropzone-text">Arrastra aquí tu archivo o haz clic para seleccionar</div>
-        <div class="dropzone-hint">Formatos aceptados: .xlsx, .xls, .csv</div>
+      <div class="source-picker">
+        <label for="fuenteSelect">Fuente de datos</label>
+        <select id="fuenteSelect">
+          <option value="">Cargando fuentes…</option>
+        </select>
+        <div class="source-picker-hint" id="fuenteSelectHint">Puedes abrir esta pantalla desde una fuente o escogerla aquí.</div>
+        <div class="source-picker-meta" id="fuenteSelectMeta"></div>
       </div>
 
-      <div class="file-selected" id="fileSelected">
-        <span>📄</span>
-        <span class="file-selected-name" id="fileSelectedName"></span>
+      <div class="registered-source" id="registeredSource">
+        <div class="registered-source-title">Archivo registrado en la fuente</div>
+        <div class="registered-source-path" id="registeredSourcePath"></div>
       </div>
 
       <div id="step1Error"></div>
 
       <div class="step-actions">
-        <button class="btn-primary" id="btnAnalizar">Analizar archivo →</button>
+        <button class="btn-primary" id="btnAnalizar">Analizar archivo registrado →</button>
         <a class="btn-secondary" href="data.html">← Volver</a>
       </div>
     </div>
@@ -436,6 +439,8 @@
   // ── Estado global ─────────────────────────────────────────────────────────
   let state = {
     fuenteId: null,
+    fuentes: [],
+    fuenteActual: null,
     cargaId: null,
     columnas: [],
     sheets: [],
@@ -456,6 +461,92 @@
     const el = document.getElementById(containerId);
     if (!msg) { el.innerHTML = ''; return; }
     el.innerHTML = `<div class="error-box" style="margin-top:16px;">${msg}</div>`;
+  }
+
+  function setSelectedFuente(fuenteId, updateUrl = true) {
+    state.fuenteId = fuenteId ? String(fuenteId) : null;
+    state.fuenteActual = state.fuentes.find(f => String(f.id) === String(state.fuenteId)) || null;
+
+    const select = document.getElementById('fuenteSelect');
+    if (select && select.value !== (state.fuenteId || '')) {
+      select.value = state.fuenteId || '';
+    }
+
+    if (updateUrl) {
+      const url = new URL(window.location.href);
+      if (state.fuenteId) url.searchParams.set('fuente', state.fuenteId);
+      else url.searchParams.delete('fuente');
+      window.history.replaceState({}, '', url);
+    }
+
+    renderFuenteContext();
+    renderSourceInputMode();
+    showError('step1Error', '');
+  }
+
+  function hasRegisteredSource() {
+    return Boolean(state.fuenteActual?.url && String(state.fuenteActual.url).trim());
+  }
+
+  function renderFuenteContext() {
+    const heroMeta = document.getElementById('heroMeta');
+    const meta = document.getElementById('fuenteSelectMeta');
+    const hint = document.getElementById('fuenteSelectHint');
+    const fuente = state.fuenteActual;
+
+    if (!fuente) {
+      heroMeta.innerHTML = `<span style="color:rgba(255,255,255,.7);font-size:.9rem;">Selecciona una fuente de datos para iniciar la carga.</span>`;
+      if (meta) meta.innerHTML = '';
+      if (hint) hint.textContent = 'Puedes abrir esta pantalla desde una fuente o escogerla aquí.';
+      return;
+    }
+
+    heroMeta.innerHTML = `
+      <span class="hero-fuente-nombre">${escapeHtml(fuente.nombre)}</span>
+      <span class="badge badge-tipo-${escapeHtml(fuente.tipo)}">${escapeHtml(fuente.tipo_label || fuente.tipo)}</span>
+      <span class="badge badge-estado-${escapeHtml(fuente.estado)}">${escapeHtml(fuente.estado_label || fuente.estado)}</span>
+    `;
+    if (meta) {
+      const proyecto = fuente.proyecto?.nombre || 'Sin proyecto';
+      const responsable = fuente.responsable || 'Sin responsable';
+      meta.innerHTML = `
+        <span class="badge badge-tipo-otro">${escapeHtml(proyecto)}</span>
+        <span class="badge badge-tipo-otro">${escapeHtml(responsable)}</span>
+      `;
+    }
+    if (hint) hint.textContent = 'La carga quedará asociada a esta fuente.';
+  }
+
+  function renderSourceInputMode() {
+    const registeredSource = document.getElementById('registeredSource');
+    const registeredSourcePath = document.getElementById('registeredSourcePath');
+    const btnAnalizar = document.getElementById('btnAnalizar');
+
+    if (hasRegisteredSource()) {
+      registeredSource.classList.add('visible');
+      registeredSourcePath.textContent = state.fuenteActual.url;
+      btnAnalizar.textContent = 'Analizar archivo registrado →';
+      return;
+    }
+
+    registeredSource.classList.remove('visible');
+    registeredSourcePath.textContent = '';
+    btnAnalizar.textContent = 'Analizar archivo registrado →';
+  }
+
+  function renderFuenteSelect() {
+    const select = document.getElementById('fuenteSelect');
+    select.innerHTML = '<option value="">— Selecciona una fuente —</option>';
+
+    state.fuentes.forEach(fuente => {
+      const opt = document.createElement('option');
+      opt.value = fuente.id;
+      const proyecto = fuente.proyecto?.codigo || fuente.proyecto?.nombre || 'sin proyecto';
+      opt.textContent = `${fuente.nombre} · ${fuente.tipo_label || fuente.tipo} · ${proyecto}`;
+      select.appendChild(opt);
+    });
+
+    select.value = state.fuenteId || '';
   }
 
   // ── Stepper ───────────────────────────────────────────────────────────────
@@ -487,13 +578,8 @@
   // ── Hero: cargar nombre de la fuente ─────────────────────────────────────
   async function initPage() {
     const params = new URLSearchParams(window.location.search);
-    state.fuenteId = params.get('fuente');
+    const requestedFuenteId = params.get('fuente');
     const heroMeta = document.getElementById('heroMeta');
-
-    if (!state.fuenteId) {
-      heroMeta.innerHTML = `<span style="color:rgba(255,255,255,.7);font-size:.9rem;">No se especificó ninguna fuente de datos.</span>`;
-      return;
-    }
 
     try {
       const res = await fetch(`${API_BASE}/api/fuentes-datos/`, {
@@ -501,51 +587,39 @@
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      const fuente = (data.fuentes || []).find(f => String(f.id) === String(state.fuenteId));
+      state.fuentes = data.fuentes || [];
+      renderFuenteSelect();
 
-      if (!fuente) {
-        heroMeta.innerHTML = `<span style="color:rgba(255,255,255,.7);font-size:.9rem;">Fuente con id <strong>${state.fuenteId}</strong> no encontrada.</span>`;
+      if (requestedFuenteId) {
+        const fuente = state.fuentes.find(f => String(f.id) === String(requestedFuenteId));
+        if (!fuente) {
+          heroMeta.innerHTML = `<span style="color:rgba(255,255,255,.7);font-size:.9rem;">Fuente con id <strong>${escapeHtml(requestedFuenteId)}</strong> no encontrada.</span>`;
+          document.getElementById('fuenteSelectHint').textContent = 'Escoge otra fuente disponible para continuar.';
+          return;
+        }
+        setSelectedFuente(requestedFuenteId, false);
         return;
       }
 
-      heroMeta.innerHTML = `
-        <span class="hero-fuente-nombre">${fuente.nombre}</span>
-        <span class="badge badge-tipo-${fuente.tipo}">${fuente.tipo_label}</span>
-        <span class="badge badge-estado-${fuente.estado}">${fuente.estado_label}</span>
-      `;
+      setSelectedFuente('', false);
     } catch (e) {
       heroMeta.innerHTML = `<span style="color:rgba(255,255,255,.7);font-size:.9rem;">No se pudo conectar con la API.</span>`;
+      document.getElementById('fuenteSelect').innerHTML = '<option value="">API no disponible</option>';
+      document.getElementById('fuenteSelectHint').textContent = 'Revisa que el backend local esté activo.';
     }
   }
 
-  // ── Drag & drop (paso 1) ──────────────────────────────────────────────────
-  const dropzone = document.getElementById('dropzone');
-  const fileInput = document.getElementById('fileInput');
-
-  dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
-  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
-  dropzone.addEventListener('drop', e => {
-    e.preventDefault();
-    dropzone.classList.remove('drag-over');
-    const file = e.dataTransfer?.files?.[0];
-    if (file) setFile(file);
+  document.getElementById('fuenteSelect').addEventListener('change', event => {
+    setSelectedFuente(event.target.value);
   });
 
-  fileInput.addEventListener('change', () => {
-    if (fileInput.files?.[0]) setFile(fileInput.files[0]);
-  });
-
-  function setFile(file) {
-    document.getElementById('fileSelectedName').textContent = file.name;
-    document.getElementById('fileSelected').classList.add('visible');
-    showError('step1Error', '');
-  }
-
-  // ── Paso 1 → upload ───────────────────────────────────────────────────────
+  // ── Paso 1 → analizar archivo registrado ─────────────────────────────────
   document.getElementById('btnAnalizar').addEventListener('click', async () => {
-    const file = fileInput.files?.[0];
-    if (!file) { showError('step1Error', 'Selecciona un archivo antes de continuar.'); return; }
-    if (!state.fuenteId) { showError('step1Error', 'No hay fuente de datos en la URL (?fuente=id).'); return; }
+    if (!state.fuenteId) { showError('step1Error', 'Selecciona la fuente de datos que vas a cargar.'); return; }
+    if (!hasRegisteredSource()) {
+      showError('step1Error', 'Esta fuente no tiene un archivo registrado. Edita la fuente y agrega la ruta/enlace del archivo.');
+      return;
+    }
 
     const btn = document.getElementById('btnAnalizar');
     btn.disabled = true;
@@ -553,12 +627,8 @@
     showError('step1Error', '');
 
     try {
-      const formData = new FormData();
-      formData.append('archivo', file);
-
       const res = await fetch(`${API_BASE}/api/fuentes-datos/${state.fuenteId}/upload/`, {
         method: 'POST',
-        body: formData,
         signal: AbortSignal.timeout(window.COLFLUX_CONFIG.requestTimeoutMs),
       });
 
@@ -582,7 +652,7 @@
       showError('step1Error', `Error al analizar el archivo: ${e.message}`);
     } finally {
       btn.disabled = false;
-      btn.innerHTML = 'Analizar archivo →';
+      btn.innerHTML = 'Analizar archivo registrado →';
     }
   });
 

@@ -113,7 +113,6 @@ class CargaArchivo(TimestampedModel):
         FuenteDatos, on_delete=models.CASCADE,
         related_name="cargas", verbose_name="fuente de datos",
     )
-    archivo = models.FileField("archivo", upload_to="cargas/%Y/%m/")
     hoja_activa = models.CharField("hoja activa", max_length=255, blank=True)
     estado = models.CharField("estado", max_length=20, choices=ESTADO_CHOICES, default="subido")
     columnas_raw = models.JSONField("columnas inspeccionadas", default=list)

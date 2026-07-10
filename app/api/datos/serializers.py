@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from app.api.proyecto.serializers import ProyectoResumenSerializer
-from app.models import FuenteDatos, Proyecto, RolUsuario, Usuario
+from app.models import FuenteDatos, Proyecto, Usuario
 
 
 class FuenteDatosSerializer(serializers.ModelSerializer):
