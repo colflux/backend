@@ -1,0 +1,44 @@
+docs/assets/js/data-page/data-state.js
+  s_5ff1ca1eafc639::t_7cbde100e34282 1-125
+app/models/datos.py
+  s_5ff1ca1eafc639::t_b08efe77636711 90
+docs/pages/data.html
+  s_5ff1ca1eafc639::t_61c6301bf49339 279
+  s_5ff1ca1eafc639::t_aee365b8eb8267 165
+  s_5ff1ca1eafc639::t_9f63b948053768 306-311,313,315-317,319-332,334-339,341-345,347-349,351-399
+  s_5ff1ca1eafc639::t_ac9717d92831cb 160-161
+  s_5ff1ca1eafc639::t_6e4932888a250c 94,166-176,251
+  s_5ff1ca1eafc639::t_88e38282bc7342 412-415
+docs/assets/js/data-page/fuente-drawer.js
+  s_5ff1ca1eafc639::t_e5231342f5c2fc 6,35-37,68-70,106-137,172,179-184
+  s_5ff1ca1eafc639::t_3a17f5466c2e2a 169,221
+docs/assets/js/data-page/README.md
+  s_5ff1ca1eafc639::t_615f69a1c62431 9,11-14
+app/migrations/0010_fuentedatos_url_charfield.py
+  s_5ff1ca1eafc639::t_b08efe77636711 1-20
+docs/assets/js/data-page/proyectos-section.js
+  s_5ff1ca1eafc639::t_7cbde100e34282 1-79
+docs/assets/js/data-page/fuentes-section.js
+  s_5ff1ca1eafc639::t_7cbde100e34282 1-79
+docs/assets/js/data-page/data-main.js
+  s_5ff1ca1eafc639::t_7cbde100e34282 1-40
+app/api/datos/serializers.py
+  s_5ff1ca1eafc639::t_4fef01d60d9626 17-18,43
+  s_5ff1ca1eafc639::t_b08efe77636711 16,19-24,42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "0eb43cf2c304165ecaace654662e4d4353fb3055",
+  "prompts": {},
+  "sessions": {
+    "s_5ff1ca1eafc639": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f4893-efb7-7ca1-8310-387629d0fb2f",
+        "model": "gpt-5.5"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    }
+  }
+}
