@@ -9,4 +9,5 @@ postgres_data/
 data-portal/assets/data/catalogo.json
 data-portal/assets/data/catalogo.js
 data/
+!data/dump.sql
 media/

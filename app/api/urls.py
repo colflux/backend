@@ -1,7 +1,8 @@
 from django.urls import include, path
+from django.views.generic import RedirectView
 from rest_framework.routers import DefaultRouter
 
-from app.api.dashboard.views import DashboardView
+from app.api.dashboard.views import DashboardView, DataModelView, VisualizerView, chart_data
 from app.api.datos.views import FuenteDatosViewSet, fuentes_datos_api
 from app.api.etl.views import campos_destino, mapeo_carga, upload_archivo, validar_carga
 from app.api.institucion.views import InstitucionViewSet
@@ -19,6 +20,11 @@ router.register("api/instituciones", InstitucionViewSet, basename="instituciones
 
 urlpatterns = [
     path("", DashboardView.as_view(), name="dashboard"),
+    path("emisiones/", RedirectView.as_view(url="/docs/pages/data.html", permanent=False), name="emission-list"),
+    path("emisiones/crear/", RedirectView.as_view(url="/docs/pages/etl-upload.html", permanent=False), name="emission-create"),
+    path("visualizador/", VisualizerView.as_view(), name="visualizer"),
+    path("modelo-datos/", DataModelView.as_view(), name="data-model"),
+    path("chart-data/", chart_data, name="chart-data"),
     path("api/fuentes-datos/", fuentes_datos_api, name="fuentes-datos-api"),
     path("api/fuentes-datos/crear/", FuenteDatosViewSet.as_view({"post": "create"}), name="fuentes-datos-crear"),
     path("api/fuentes-datos/<int:fuente_id>/upload/", upload_archivo, name="fuentes-datos-upload"),

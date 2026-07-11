@@ -3,38 +3,38 @@
 {% block content %}
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
   <div>
-    <h1 class="h3 mb-1">Inventario de gases de efecto invernadero</h1>
-    <p class="text-secondary mb-0">Modelo operacional para catalogar fuentes, gases, sectores, regiones y emisiones en CO2e.</p>
+    <h1 class="h3 mb-1">Portal de datos ColFlux</h1>
+    <p class="text-secondary mb-0">Modelo operacional para catalogar proyectos, sitios, fuentes de datos y cargas.</p>
   </div>
-  <a class="btn btn-primary" href="{% url 'emission-create' %}">Nuevo registro</a>
+  <a class="btn btn-primary" href="/docs/pages/etl-upload.html">Nueva carga</a>
 </div>
 
 <div class="row g-3 mb-4">
-  <div class="col-md-3"><div class="metric"><span>Total CO2e</span><strong>{{ total_co2e|floatformat:0 }}</strong><small>toneladas</small></div></div>
-  <div class="col-md-3"><div class="metric"><span>Registros</span><strong>{{ record_count }}</strong><small>observaciones</small></div></div>
-  <div class="col-md-3"><div class="metric"><span>Sectores</span><strong>{{ sector_count }}</strong><small>categorias IPCC</small></div></div>
-  <div class="col-md-3"><div class="metric"><span>Gases</span><strong>{{ gas_count }}</strong><small>factores PCG</small></div></div>
+  <div class="col-md-3"><div class="metric"><span>Proyectos</span><strong>{{ proyecto_count }}</strong><small>registrados</small></div></div>
+  <div class="col-md-3"><div class="metric"><span>Sitios</span><strong>{{ sitio_count }}</strong><small>de monitoreo</small></div></div>
+  <div class="col-md-3"><div class="metric"><span>Fuentes</span><strong>{{ fuente_count }}</strong><small>de datos</small></div></div>
+  <div class="col-md-3"><div class="metric"><span>Cargas</span><strong>{{ carga_count }}</strong><small>procesadas</small></div></div>
 </div>
 
 <div class="panel p-3">
   <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2 class="h5 mb-0">Registros recientes</h2>
-    <a href="{% url 'emission-list' %}">Ver todos</a>
+    <h2 class="h5 mb-0">Fuentes recientes</h2>
+    <a href="{{ docs_data_url }}">Ver todas</a>
   </div>
   <div class="table-responsive">
     <table class="table table-sm align-middle mb-0">
-      <thead><tr><th>Ano</th><th>Region</th><th>Sector</th><th>Gas</th><th class="text-end">t CO2e</th></tr></thead>
+      <thead><tr><th>Nombre</th><th>Proyecto</th><th>Reportador</th><th>Tipo</th><th>Estado</th></tr></thead>
       <tbody>
-        {% for record in latest_records %}
+        {% for fuente in latest_sources %}
         <tr>
-          <td>{{ record.year }}</td>
-          <td>{{ record.region }}</td>
-          <td>{{ record.sector }}</td>
-          <td>{{ record.gas }}</td>
-          <td class="text-end">{{ record.co2e_tonnes|floatformat:2 }}</td>
+          <td>{{ fuente.nombre }}</td>
+          <td>{{ fuente.proyecto|default:"-" }}</td>
+          <td>{{ fuente.reportador|default:"-" }}</td>
+          <td>{{ fuente.get_tipo_display }}</td>
+          <td>{{ fuente.get_estado_display }}</td>
         </tr>
         {% empty %}
-        <tr><td colspan="5" class="text-secondary">Carga datos de ejemplo con <code>python manage.py seed_ghg_data</code>.</td></tr>
+        <tr><td colspan="5" class="text-secondary">Aun no hay fuentes de datos registradas.</td></tr>
         {% endfor %}
       </tbody>
     </table>

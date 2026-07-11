@@ -72,6 +72,28 @@ el deploy para cargar datos iniciales de demostracion. El comando evita duplicar
 los registros existentes. Si ya no quieres cargar datos demo en cada deploy,
 elimina esa variable o cambiala a `0`.
 
+## Persistir y mover datos entre máquinas
+
+El dump de la base de datos se guarda en `data/dump.sql` y se versiona en git.
+
+**Guardar el estado actual y subirlo:**
+
+```bash
+make db-dump
+git add data/dump.sql
+git commit -m "chore: update db dump"
+git push
+```
+
+**Restaurar en otra máquina:**
+
+```bash
+git pull
+make db-restore
+```
+
+`make db-restore` baja los volúmenes existentes, levanta Postgres limpio y carga el dump automáticamente.
+
 ## Ejecutar el portal de datos
 
 Con Django ejecutandose en el puerto 8000, inicia otro servidor desde la raiz
