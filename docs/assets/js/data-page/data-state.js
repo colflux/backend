@@ -49,7 +49,6 @@
       (f.nombre || '').toLowerCase().includes(q) ||
       (f.descripcion || '').toLowerCase().includes(q) ||
       (f.responsable || '').toLowerCase().includes(q) ||
-      (f.proyecto?.codigo || '').toLowerCase().includes(q) ||
       (f.proyecto?.nombre || '').toLowerCase().includes(q)
     );
 
@@ -66,7 +65,6 @@
     const q = get('projectSearchInput').value.trim().toLowerCase();
     if (!q) return state.data.proyectos;
     return state.data.proyectos.filter(p =>
-      (p.codigo || '').toLowerCase().includes(q) ||
       (p.nombre || '').toLowerCase().includes(q)
     );
   }

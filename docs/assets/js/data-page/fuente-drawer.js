@@ -95,7 +95,7 @@
     for (const p of context.getData().proyectos) {
       const option = document.createElement('option');
       option.value = p.id;
-      option.textContent = `${p.codigo} — ${p.nombre}`;
+      option.textContent = p.nombre;
       sel.appendChild(option);
     }
 

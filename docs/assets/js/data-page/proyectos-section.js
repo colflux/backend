@@ -14,7 +14,7 @@
     for (const p of state.data.proyectos) {
       const option = document.createElement('option');
       option.value = p.id;
-      option.textContent = `${p.codigo} — ${p.nombre}`;
+      option.textContent = p.nombre;
       select.appendChild(option);
     }
 
@@ -47,8 +47,7 @@
       return `
         <tr>
           <td>
-            <div class="source-title">${escapeHtml(p.codigo)}</div>
-            <div class="source-muted">${escapeHtml(p.nombre)}</div>
+            <div class="source-title">${escapeHtml(p.nombre)}</div>
           </td>
           <td><strong>${fuentes.length}</strong> fuente${fuentes.length !== 1 ? 's' : ''}</td>
           <td>

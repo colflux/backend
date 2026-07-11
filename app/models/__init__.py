@@ -6,7 +6,7 @@ from .cobertura import Cobertura, Disturbio, Vegetacion
 
 from .sitio import MonitoreoParcela, Parcela, Sitio, Transecto
 
-from .proyecto import Institucion, Proyecto, ProyectoInstitucion
+from .proyecto import Institucion, Proyecto, ProyectoInstitucion, ProyectoUsuario
 
 from .flujo_camaras import FlujoCamaras
 
@@ -38,6 +38,7 @@ __all__ = [
     "Institucion",
     "Proyecto",
     "ProyectoInstitucion",
+    "ProyectoUsuario",
     # Flujo Cámaras
     "FlujoCamaras",
     # Torre EC

@@ -19,23 +19,6 @@
     <button class="drawer-close" onclick="closeProyectoDrawer()">✕</button>
   </div>
   <div class="drawer-body">
-    <div class="field-row">
-      <div class="field-group">
-        <label>Código <span>*</span></label>
-        <input type="text" id="pCodigo" placeholder="Ej: COLFLUX-01">
-      </div>
-      <div class="field-group">
-        <label>Escala espacial</label>
-        <select id="pEscala">
-          <option value="">— Seleccionar —</option>
-          <option value="Bioma">Bioma</option>
-          <option value="Regional">Regional</option>
-          <option value="Ecosistema">Ecosistema</option>
-          <option value="Sitio">Sitio</option>
-          <option value="Parcela">Parcela</option>
-        </select>
-      </div>
-    </div>
     <div class="field-group">
       <label>Nombre <span>*</span></label>
       <input type="text" id="pNombre" placeholder="Nombre completo del proyecto">
@@ -77,10 +60,9 @@
   }
 
   function resetForm() {
-    ['pCodigo', 'pNombre', 'pCoordinador', 'pCorreo', 'pObjetivo', 'pFechaInicio', 'pFechaFin'].forEach(id => {
+    ['pNombre', 'pCoordinador', 'pCorreo', 'pObjetivo', 'pFechaInicio', 'pFechaFin'].forEach(id => {
       get(id).value = '';
     });
-    get('pEscala').value = '';
   }
 
   function errorMessage(data, fallback) {
@@ -98,7 +80,7 @@
     get('pFormError').style.display = 'none';
     get('proyectoDrawerOverlay').classList.add('open');
     get('proyectoDrawer').classList.add('open');
-    get('pCodigo').focus();
+    get('pNombre').focus();
   }
 
   function closeProyectoDrawer() {
@@ -109,16 +91,9 @@
   }
 
   async function submitProyecto() {
-    const codigo = get('pCodigo').value.trim();
     const nombre = get('pNombre').value.trim();
     const errEl = get('pFormError');
 
-    if (!codigo) {
-      errEl.textContent = 'El código es obligatorio.';
-      errEl.style.display = 'block';
-      get('pCodigo').focus();
-      return;
-    }
     if (!nombre) {
       errEl.textContent = 'El nombre es obligatorio.';
       errEl.style.display = 'block';
@@ -137,11 +112,9 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          codigo,
           nombre,
           coordinador: get('pCoordinador').value.trim(),
           correo_coordinador: get('pCorreo').value.trim(),
-          escala_espacial: get('pEscala').value,
           objetivo_general: get('pObjetivo').value.trim(),
           fecha_inicio: get('pFechaInicio').value || null,
           fecha_fin: get('pFechaFin').value || null,
@@ -150,7 +123,7 @@
       const data = await res.json();
       if (!res.ok) throw new Error(errorMessage(data, `Error ${res.status}`));
 
-      context.getData().proyectos.push({ id: data.id, codigo: data.codigo, nombre: data.nombre });
+      context.getData().proyectos.push({ id: data.id, nombre: data.nombre });
       closeProyectoDrawer();
       context.onRender();
     } catch (e) {

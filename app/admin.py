@@ -5,7 +5,7 @@ from .models import (
     FuenteDatos, Institucion, RolUsuario, Usuario, UsuarioRol,
     ConfiguracionSensorGas, Departamento, Disturbio, Equipo,
     FlujoCamaras, MonitoreoParcela, MonitoreoSuelo, Municipio,
-    Parcela, Proyecto, ProyectoInstitucion, Publicacion, PublicacionAutor,
+    Parcela, Proyecto, ProyectoInstitucion, ProyectoUsuario, Publicacion, PublicacionAutor,
     PublicacionSitio, Region, ResultadoPublicacion, Sitio,
     SistemaReferencia, TorreEc, TorreFuenteEnergia, Transecto, Vegetacion,
 )
@@ -96,10 +96,16 @@ class ProyectoInstitucionAdmin(admin.ModelAdmin):
 
 @admin.register(Proyecto)
 class ProyectoAdmin(admin.ModelAdmin):
-    list_display = ("codigo", "nombre", "coordinador", "escala_espacial", "fecha_inicio", "fecha_fin")
+    list_display = ("nombre", "coordinador", "escala_espacial", "fecha_inicio", "fecha_fin")
     list_filter = ("escala_espacial",)
-    search_fields = ("codigo", "nombre", "coordinador")
+    search_fields = ("nombre", "coordinador")
     raw_id_fields = ("sitio_principal",)
+
+
+@admin.register(ProyectoUsuario)
+class ProyectoUsuarioAdmin(admin.ModelAdmin):
+    list_display = ("proyecto", "usuario", "rol")
+    raw_id_fields = ("proyecto", "usuario", "rol")
 
 
 @admin.register(FlujoCamaras)

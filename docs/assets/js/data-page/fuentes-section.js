@@ -18,7 +18,7 @@
 
     body.innerHTML = items.map(f => {
       const proyecto = f.proyecto
-        ? `${escapeHtml(f.proyecto.codigo)} — ${escapeHtml(f.proyecto.nombre)}`
+        ? escapeHtml(f.proyecto.nombre)
         : '<span class="source-muted">Sin proyecto</span>';
       const fecha = f.fecha_datos ? escapeHtml(f.fecha_datos) : '<span class="source-muted">Sin fecha</span>';
       const responsable = f.responsable ? escapeHtml(f.responsable) : '<span class="source-muted">Sin responsable</span>';

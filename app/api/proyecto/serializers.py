@@ -6,7 +6,7 @@ from app.models import Proyecto
 class ProyectoResumenSerializer(serializers.ModelSerializer):
     class Meta:
         model = Proyecto
-        fields = ["id", "codigo", "nombre"]
+        fields = ["id", "nombre"]
 
 
 class ProyectoSerializer(serializers.ModelSerializer):
@@ -14,7 +14,6 @@ class ProyectoSerializer(serializers.ModelSerializer):
         model = Proyecto
         fields = [
             "id",
-            "codigo",
             "nombre",
             "coordinador",
             "correo_coordinador",

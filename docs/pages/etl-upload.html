@@ -541,7 +541,7 @@
     state.fuentes.forEach(fuente => {
       const opt = document.createElement('option');
       opt.value = fuente.id;
-      const proyecto = fuente.proyecto?.codigo || fuente.proyecto?.nombre || 'sin proyecto';
+      const proyecto = fuente.proyecto?.nombre || 'sin proyecto';
       opt.textContent = `${fuente.nombre} · ${fuente.tipo_label || fuente.tipo} · ${proyecto}`;
       select.appendChild(opt);
     });

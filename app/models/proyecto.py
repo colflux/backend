@@ -25,7 +25,6 @@ class Proyecto(TimestampedModel):
         ("Parcela", "Parcela"),
     ]
 
-    codigo = models.CharField("código", max_length=80, unique=True)
     nombre = models.CharField("nombre", max_length=255)
     fecha_inicio = models.DateField("fecha de inicio", null=True, blank=True)
     fecha_fin = models.DateField("fecha de fin", null=True, blank=True)
@@ -57,7 +56,7 @@ class Proyecto(TimestampedModel):
         ordering = ["nombre"]
 
     def __str__(self):
-        return f"{self.codigo} — {self.nombre}"
+        return self.nombre
 
 
 class ProyectoInstitucion(models.Model):
@@ -71,3 +70,17 @@ class ProyectoInstitucion(models.Model):
 
     def __str__(self):
         return f"{self.proyecto} — {self.institucion}"
+
+
+class ProyectoUsuario(models.Model):
+    proyecto = models.ForeignKey(Proyecto, on_delete=models.CASCADE, related_name="usuarios_rol")
+    usuario = models.ForeignKey("app.Usuario", on_delete=models.CASCADE, related_name="proyectos_rol")
+    rol = models.ForeignKey("app.RolUsuario", on_delete=models.CASCADE, related_name="proyectos_usuario")
+
+    class Meta:
+        verbose_name = "proyecto usuario"
+        verbose_name_plural = "proyectos usuarios"
+        unique_together = [("proyecto", "usuario", "rol")]
+
+    def __str__(self):
+        return f"{self.proyecto} — {self.usuario} ({self.rol})"
