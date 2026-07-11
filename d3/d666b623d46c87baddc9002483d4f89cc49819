@@ -1,0 +1,40 @@
+app/templates/app/base.html
+  s_4b1199eceee452::t_93f05719b15244 29-30
+app/api/dashboard/views.py
+  s_4b1199eceee452::t_93f05719b15244 1-4,7,17-40,45-67,69-84
+  s_4b1199eceee452::t_ab7117bb5d8459 41-44
+app/api/urls.py
+  s_4b1199eceee452::t_93f05719b15244 2,5,23-27
+app/templates/app/dashboard.html
+  s_4b1199eceee452::t_93f05719b15244 6-7,9,13-16,21-22,26,28,30-34,37
+Makefile
+  s_3b52ae675b6083::t_b4b13c4ef8d03d 1-13
+.gitignore
+  s_3b52ae675b6083::t_2ffa79a34d9752 12
+README.md
+  s_3b52ae675b6083::t_5acec8df527326 75-96
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "d3d666b623d46c87baddc9002483d4f89cc49819",
+  "prompts": {},
+  "sessions": {
+    "s_3b52ae675b6083": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1441b185-106e-4d08-a128-fa63d4d075e6",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    },
+    "s_4b1199eceee452": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f4dce-a8c5-77b1-ac65-286fff24f3bf",
+        "model": "gpt-5.5"
+      },
+      "human_author": "vivianabautistaxyz <lviviana13@gmail.com>"
+    }
+  }
+}
