@@ -1,5 +1,7 @@
+import csv
 import json
 import math
+import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -48,6 +50,100 @@ def _columnas_desde_dataframe(df):
     return columnas
 
 
+_EXTENSIONES_VALIDAS = (".xlsx", ".xls", ".csv")
+
+_EXT_POR_CONTENT_TYPE = {
+    "text/csv": ".csv",
+    "application/csv": ".csv",
+    "application/vnd.ms-excel": ".xls",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+}
+
+
+def _descargar_archivo_remoto(fuente, url):
+    cache_dir = Path(settings.MEDIA_ROOT) / "fuentes_datos_cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "colflux-etl/1.0"})
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            content_type = resp.headers.get_content_type()
+            data = resp.read()
+    except Exception as exc:
+        raise ValueError(f"No se pudo descargar el archivo remoto: {exc}") from exc
+
+    ext = Path(urlparse(url).path).suffix.lower()
+    if ext not in _EXTENSIONES_VALIDAS:
+        ext = _EXT_POR_CONTENT_TYPE.get(content_type, "")
+    if ext not in _EXTENSIONES_VALIDAS:
+        raise ValueError(
+            "No se pudo determinar el formato del archivo remoto (.xlsx, .xls o .csv)."
+        )
+
+    destino = cache_dir / f"fuente_{fuente.pk}{ext}"
+    destino.write_bytes(data)
+    return destino
+
+
+def _guardar_archivo_subido(fuente, archivo):
+    nombre = archivo.name.lower()
+    if not nombre.endswith(_EXTENSIONES_VALIDAS):
+        raise ValueError("Formato no permitido. Solo .xlsx, .xls o .csv")
+
+    destino_dir = Path(settings.MEDIA_ROOT) / "fuentes_datos"
+    destino_dir.mkdir(parents=True, exist_ok=True)
+    destino = destino_dir / f"fuente_{fuente.pk}{Path(nombre).suffix}"
+
+    with open(destino, "wb") as f:
+        for chunk in archivo.chunks():
+            f.write(chunk)
+
+    fuente.url = str(destino.relative_to(settings.BASE_DIR))
+    fuente.save(update_fields=["url"])
+    return destino
+
+
+def _detectar_separador(muestra):
+    lineas = [l for l in muestra.splitlines()[:20] if l.strip()]
+    if not lineas:
+        return ","
+
+    mejor_sep, mejor_puntaje = ",", -1
+    for sep in (",", ";", "\t", "|"):
+        conteos = [len(next(csv.reader([l], delimiter=sep))) - 1 for l in lineas]
+        if min(conteos) == 0:
+            continue
+        # Preferimos el separador que produce más columnas de forma consistente
+        consistentes = sum(1 for c in conteos if c == conteos[0])
+        puntaje = conteos[0] * consistentes
+        if puntaje > mejor_puntaje:
+            mejor_sep, mejor_puntaje = sep, puntaje
+    return mejor_sep
+
+
+def _leer_csv(path, **kwargs):
+    for encoding in ("utf-8-sig", "cp1252", "latin-1"):
+        try:
+            with open(path, encoding=encoding, newline="") as f:
+                muestra = f.read(64 * 1024)
+        except UnicodeDecodeError:
+            continue
+
+        sep = _detectar_separador(muestra)
+        try:
+            return pd.read_csv(path, encoding=encoding, sep=sep, **kwargs)
+        except UnicodeDecodeError:
+            continue
+        except pd.errors.ParserError as exc:
+            raise ValueError(
+                "El archivo CSV tiene filas con distinta cantidad de columnas "
+                f"(separador detectado: '{sep}'). Revisa que no tenga filas de "
+                "título antes del encabezado ni celdas con el separador sin "
+                f"comillas. Detalle: {exc}"
+            ) from exc
+    raise ValueError("No se pudo determinar la codificación del archivo CSV.")
+
+
 def _resolver_ruta_fuente(fuente):
     raw_path = (fuente.url or "").strip()
     if not raw_path:
@@ -55,10 +151,7 @@ def _resolver_ruta_fuente(fuente):
 
     parsed = urlparse(raw_path)
     if parsed.scheme in ("http", "https"):
-        raise ValueError(
-            "La carga automática desde URLs remotas no está habilitada. "
-            "Registra una ruta local accesible por el backend en la fuente de datos."
-        )
+        return _descargar_archivo_remoto(fuente, raw_path)
     if parsed.scheme == "file":
         raw_path = parsed.path
     elif parsed.scheme:
@@ -75,10 +168,26 @@ def _resolver_ruta_fuente(fuente):
     return path
 
 
-def _crear_carga_desde_fuente(fuente):
-    source_path = _resolver_ruta_fuente(fuente)
-    carga = CargaArchivo.objects.create(fuente=fuente)
-    return carga, source_path, source_path.name.lower()
+@csrf_exempt
+def archivo_fuente(request, fuente_id):
+    if request.method != "POST":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+
+    try:
+        fuente = FuenteDatos.objects.get(pk=fuente_id)
+    except FuenteDatos.DoesNotExist:
+        return JsonResponse({"error": "Fuente de datos no encontrada"}, status=404)
+
+    archivo_subido = request.FILES.get("archivo")
+    if not archivo_subido:
+        return JsonResponse({"error": "No se recibió ningún archivo"}, status=400)
+
+    try:
+        _guardar_archivo_subido(fuente, archivo_subido)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    return JsonResponse({"url": fuente.url})
 
 
 @csrf_exempt
@@ -91,21 +200,22 @@ def upload_archivo(request, fuente_id):
     except FuenteDatos.DoesNotExist:
         return JsonResponse({"error": "Fuente de datos no encontrada"}, status=404)
 
-    if request.FILES.get("archivo"):
-        return JsonResponse(
-            {"error": "La fuente de datos maneja un único archivo. Edita la fuente para cambiarlo."},
-            status=400,
-        )
-
-    nombre = (fuente.url or "").lower()
-    if not (nombre.endswith(".xlsx") or nombre.endswith(".xls") or nombre.endswith(".csv")):
-        return JsonResponse({"error": "Formato no permitido. Solo .xlsx, .xls o .csv"}, status=400)
+    archivo_subido = request.FILES.get("archivo")
 
     try:
-        carga, path_archivo, nombre_archivo = _crear_carga_desde_fuente(fuente)
+        if archivo_subido:
+            path_archivo = _guardar_archivo_subido(fuente, archivo_subido)
+        else:
+            path_archivo = _resolver_ruta_fuente(fuente)
+
+        nombre_archivo = path_archivo.name.lower()
+        if not nombre_archivo.endswith(_EXTENSIONES_VALIDAS):
+            return JsonResponse({"error": "Formato no permitido. Solo .xlsx, .xls o .csv"}, status=400)
+
+        carga = CargaArchivo.objects.create(fuente=fuente)
 
         if nombre_archivo.endswith(".csv"):
-            df = pd.read_csv(path_archivo)
+            df = _leer_csv(path_archivo)
             sheets = []
             hoja_activa = ""
             total_filas = len(df)
@@ -148,7 +258,8 @@ def upload_archivo(request, fuente_id):
 
 def campos_destino(request):
     modelos = {}
-    for grupo in GRUPOS_CATALOGO:
+    grupos = {}
+    for orden, grupo in enumerate(GRUPOS_CATALOGO):
         for nombre in grupo["entidades"]:
             try:
                 modelo_cls = apps.get_model("app", nombre)
@@ -163,7 +274,12 @@ def campos_destino(request):
                 campos.append(campo_to_catalogo(field))
             if campos:
                 modelos[nombre] = campos
-    return JsonResponse({"modelos": modelos}, json_dumps_params={"ensure_ascii": False})
+                grupos[nombre] = {
+                    "nombre": grupo["nombre"],
+                    "icono": grupo["icono"],
+                    "orden": orden,
+                }
+    return JsonResponse({"modelos": modelos, "grupos": grupos}, json_dumps_params={"ensure_ascii": False})
 
 
 @csrf_exempt
@@ -364,7 +480,7 @@ def validar_carga(request, fuente_id, carga_id):
         path = _resolver_ruta_fuente(carga.fuente)
         nombre = str(path).lower()
         if nombre.endswith(".csv"):
-            df = pd.read_csv(path)
+            df = _leer_csv(path)
         else:
             df = pd.read_excel(path, sheet_name=carga.hoja_activa)
 

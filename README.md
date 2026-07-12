@@ -103,3 +103,8 @@ Ese comando regenera:
 
 Después de correrlo, revisa y versiona esos archivos junto con el cambio del
 modelo para que el portal estático quede sincronizado con el repositorio.
+
+
+## Desarrollo 
+
+docker compose restart web

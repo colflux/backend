@@ -181,6 +181,18 @@
       font-size: .88rem; font-weight: 700; color: #374151; background: var(--gray-l);
     }
     .mapeo-list { max-height: 520px; overflow-y: auto; }
+    .mapeo-group + .mapeo-group { border-top: 1px solid var(--border); }
+    .mapeo-group-header {
+      padding: 9px 20px; font-size: .74rem; font-weight: 800; text-transform: uppercase;
+      letter-spacing: .04em; color: var(--green-d); background: var(--green-l);
+      border-bottom: 1px solid var(--border); position: sticky; top: 0;
+    }
+    .mapeo-group-header.sin-mapear { color: var(--gray); background: var(--gray-l); }
+    .mapeo-group-header .mapeo-group-grupo { font-weight: 600; opacity: .75; text-transform: none; letter-spacing: 0; }
+    .mapeo-sugerido {
+      font-size: .68rem; font-weight: 700; padding: 2px 8px; border-radius: 20px;
+      background: var(--amber-l); color: #92400e;
+    }
     .mapeo-row {
       display: grid;
       grid-template-columns: 1fr 20px 1fr;
@@ -358,10 +370,16 @@
         <div class="registered-source-path" id="registeredSourcePath"></div>
       </div>
 
+      <div class="source-picker">
+        <label for="archivoInput">O sube el archivo directamente</label>
+        <input type="file" id="archivoInput" accept=".xlsx,.xls,.csv">
+        <div class="source-picker-hint">Si seleccionas un archivo aquí, se usará en lugar de la ruta/enlace registrado y quedará guardado como el archivo de la fuente.</div>
+      </div>
+
       <div id="step1Error"></div>
 
       <div class="step-actions">
-        <button class="btn-primary" id="btnAnalizar">Analizar archivo registrado →</button>
+        <button class="btn-primary" id="btnAnalizar">Analizar archivo →</button>
         <a class="btn-secondary" href="data.html">← Volver</a>
       </div>
     </div>
@@ -369,7 +387,7 @@
     <!-- Step 2: Mapeo de columnas (oculto hasta avanzar) -->
     <div id="sectionStep2" style="display:none; max-width: 820px;">
       <h2>Paso 2 — Mapeo de columnas</h2>
-      <p class="step-desc">Asocia cada columna del archivo con el campo correspondiente en la base de datos, o márcala como ignorar.</p>
+      <p class="step-desc">Asocia cada columna del archivo con el campo correspondiente en la base de datos, o márcala como ignorar. Las columnas con nombre similar a un campo del modelo llegan con un mapeo <strong>✨ sugerido</strong> que puedes ajustar.</p>
 
       <!-- Selector de hoja -->
       <div class="mapeo-sheet-bar" id="sheetBar">
@@ -446,8 +464,26 @@
     sheets: [],
     totalFilas: 0,
     modelosDestino: {},  // { ModelName: [ {nombre, verbose_name, tipo_raw, choices, ...} ] }
-    mapeoValores: {}     // { colIdx: { "valor_origen": "valor_destino" } }
+    gruposModelo: {},    // { ModelName: { nombre, icono, orden } }
+    mapeoValores: {},    // { colIdx: { "valor_origen": "valor_destino" } }
+    mapeoSeleccion: {}   // { colIdx: { modelo, campo, sugerido? } }
   };
+
+  // Misma paleta y orden que el diagrama del modelo de datos (db.html)
+  const GRUPO_PALETTE = [
+    '#475569','#16a34a','#d97706','#db2777',
+    '#7c3aed','#2563eb','#ea580c','#0891b2','#dc2626'
+  ];
+
+  function grupoDeModelo(modelo) {
+    return state.gruposModelo[modelo] || null;
+  }
+
+  function colorDeModelo(modelo) {
+    const grupo = grupoDeModelo(modelo);
+    if (!grupo) return 'var(--green-d)';
+    return GRUPO_PALETTE[grupo.orden % GRUPO_PALETTE.length];
+  }
 
   // ── Utilidades ────────────────────────────────────────────────────────────
   function showToast(msg, duration = 3000) {
@@ -478,6 +514,9 @@
       else url.searchParams.delete('fuente');
       window.history.replaceState({}, '', url);
     }
+
+    const archivoInput = document.getElementById('archivoInput');
+    if (archivoInput) archivoInput.value = '';
 
     renderFuenteContext();
     renderSourceInputMode();
@@ -520,18 +559,15 @@
   function renderSourceInputMode() {
     const registeredSource = document.getElementById('registeredSource');
     const registeredSourcePath = document.getElementById('registeredSourcePath');
-    const btnAnalizar = document.getElementById('btnAnalizar');
 
     if (hasRegisteredSource()) {
       registeredSource.classList.add('visible');
       registeredSourcePath.textContent = state.fuenteActual.url;
-      btnAnalizar.textContent = 'Analizar archivo registrado →';
       return;
     }
 
     registeredSource.classList.remove('visible');
     registeredSourcePath.textContent = '';
-    btnAnalizar.textContent = 'Analizar archivo registrado →';
   }
 
   function renderFuenteSelect() {
@@ -616,8 +652,12 @@
   // ── Paso 1 → analizar archivo registrado ─────────────────────────────────
   document.getElementById('btnAnalizar').addEventListener('click', async () => {
     if (!state.fuenteId) { showError('step1Error', 'Selecciona la fuente de datos que vas a cargar.'); return; }
-    if (!hasRegisteredSource()) {
-      showError('step1Error', 'Esta fuente no tiene un archivo registrado. Edita la fuente y agrega la ruta/enlace del archivo.');
+
+    const archivoInput = document.getElementById('archivoInput');
+    const archivo = archivoInput.files[0];
+
+    if (!archivo && !hasRegisteredSource()) {
+      showError('step1Error', 'Selecciona un archivo para subir, o edita la fuente y agrega la ruta/enlace del archivo.');
       return;
     }
 
@@ -627,8 +667,15 @@
     showError('step1Error', '');
 
     try {
+      let body;
+      if (archivo) {
+        body = new FormData();
+        body.append('archivo', archivo);
+      }
+
       const res = await fetch(`${API_BASE}/api/fuentes-datos/${state.fuenteId}/upload/`, {
         method: 'POST',
+        body,
         signal: AbortSignal.timeout(window.COLFLUX_CONFIG.requestTimeoutMs),
       });
 
@@ -642,9 +689,12 @@
       state.columnas  = data.columnas  || [];
       state.sheets    = data.sheets    || [];
       state.totalFilas = data.total_filas ?? 0;
+      state.mapeoValores = {};
+      state.mapeoSeleccion = {};
 
       // Cargar campos destino antes de mostrar paso 2
       await cargarCamposDestino();
+      aplicarSugerencias();
       renderPaso2();
       showSection(2);
 
@@ -652,7 +702,7 @@
       showError('step1Error', `Error al analizar el archivo: ${e.message}`);
     } finally {
       btn.disabled = false;
-      btn.innerHTML = 'Analizar archivo registrado →';
+      btn.innerHTML = 'Analizar archivo →';
     }
   });
 
@@ -664,6 +714,49 @@
     if (!res.ok) throw new Error(`campos-destino HTTP ${res.status}`);
     const data = await res.json();
     state.modelosDestino = data.modelos || {};
+    state.gruposModelo = data.grupos || {};
+  }
+
+  // ── Sugerencia de mapeo por similitud de nombre ──────────────────────────
+  function normalizarNombre(s) {
+    return String(s || '')
+      .toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+  }
+
+  function sugerirMapeo(nombreColumna) {
+    const n = normalizarNombre(nombreColumna);
+    if (n.length < 3) return null;
+
+    let mejor = null;
+    Object.entries(state.modelosDestino).forEach(([modelo, campos]) => {
+      campos.forEach(campo => {
+        let score = 0;
+        [normalizarNombre(campo.nombre), normalizarNombre(campo.verbose_name)].forEach(cand => {
+          if (!cand) return;
+          if (cand === n) score = Math.max(score, 2);
+          else if (cand.length >= 4 && n.length >= 4 && (cand.includes(n) || n.includes(cand))) {
+            score = Math.max(score, 1);
+          }
+        });
+        if (score > 0 && (!mejor || score > mejor.score)) {
+          mejor = { modelo, campo: campo.nombre, score };
+        }
+      });
+    });
+    return mejor;
+  }
+
+  function aplicarSugerencias() {
+    state.columnas.forEach((col, idx) => {
+      if (state.mapeoSeleccion[idx]) return;
+      const sugerencia = sugerirMapeo(col.nombre);
+      if (sugerencia) {
+        state.mapeoSeleccion[idx] = { modelo: sugerencia.modelo, campo: sugerencia.campo, sugerido: true };
+      }
+    });
   }
 
   // ── Renderizar Paso 2 ─────────────────────────────────────────────────────
@@ -690,164 +783,251 @@
   function renderMapeoRows() {
     const list = document.getElementById('mapeoList');
     list.innerHTML = '';
-    const modeloKeys = Object.keys(state.modelosDestino);
 
+    // Agrupar índices de columna por entidad seleccionada ('' = sin mapear)
+    const grupos = new Map();
     state.columnas.forEach((col, idx) => {
-      // Wrapper que incluye la fila + sub-panel de choices
-      const wrapper = document.createElement('div');
-      wrapper.style.borderBottom = '1px solid var(--border)';
+      const modelo = state.mapeoSeleccion[idx]?.modelo || '';
+      if (!grupos.has(modelo)) grupos.set(modelo, []);
+      grupos.get(modelo).push(idx);
+    });
 
-      const row = document.createElement('div');
-      row.className = 'mapeo-row';
-      row.style.borderBottom = 'none';
+    const modelosOrdenados = [...grupos.keys()].sort((a, b) => {
+      if (a === '') return 1;   // "Sin mapear" siempre al final
+      if (b === '') return -1;
+      const ordenA = grupoDeModelo(a)?.orden ?? 99;
+      const ordenB = grupoDeModelo(b)?.orden ?? 99;
+      if (ordenA !== ordenB) return ordenA - ordenB;
+      return a.localeCompare(b);
+    });
 
-      const muestra = (col.muestra || []).slice(0, 2).map(v => `"${v}"`).join(', ');
+    modelosOrdenados.forEach(modelo => {
+      const idxs = grupos.get(modelo);
 
-      const infoDiv = document.createElement('div');
-      infoDiv.className = 'mapeo-col-info';
-      infoDiv.innerHTML = `
-        <div class="mapeo-col-name">
-          ${escapeHtml(col.nombre)}
-          <span class="mapeo-dtype">${escapeHtml(col.dtype || 'string')}</span>
-          <span class="mapeo-nulls">${col.nulls ?? 0} nulos</span>
-        </div>
-        ${muestra ? `<div class="mapeo-sample">muestra: ${escapeHtml(muestra)}</div>` : ''}
-      `;
+      const groupEl = document.createElement('div');
+      groupEl.className = 'mapeo-group';
 
-      const arrowDiv = document.createElement('div');
-      arrowDiv.className = 'mapeo-arrow';
-      arrowDiv.textContent = '→';
+      const header = document.createElement('div');
+      header.className = 'mapeo-group-header' + (modelo ? '' : ' sin-mapear');
+      const n = idxs.length;
+      const sufijo = `${n} columna${n > 1 ? 's' : ''}`;
+      if (modelo) {
+        const grupoInfo = grupoDeModelo(modelo);
+        let grupoLabel = '';
+        if (grupoInfo) {
+          const color = colorDeModelo(modelo);
+          header.style.color = color;
+          header.style.background = `${color}14`;
+          header.style.borderLeft = `4px solid ${color}`;
+          grupoLabel = `<span class="mapeo-group-grupo">${escapeHtml(grupoInfo.icono)} ${escapeHtml(grupoInfo.nombre)} · </span>`;
+        }
+        header.innerHTML = `${grupoLabel}${escapeHtml(modelo)} · ${sufijo}`;
+      } else {
+        header.textContent = `Sin mapear · ${sufijo}`;
+      }
+      groupEl.appendChild(header);
 
-      const destDiv = document.createElement('div');
-      destDiv.className = 'mapeo-col-destino';
+      idxs.forEach(idx => groupEl.appendChild(renderMapeoRow(idx)));
 
-      const selModelo = document.createElement('select');
-      selModelo.dataset.idx = idx;
-      selModelo.classList.add('sel-modelo');
+      list.appendChild(groupEl);
+    });
+  }
 
-      const optIgnorar = document.createElement('option');
-      optIgnorar.value = ''; optIgnorar.textContent = '— ignorar —';
-      selModelo.appendChild(optIgnorar);
+  function renderMapeoRow(idx) {
+    const col = state.columnas[idx];
+    const modeloKeys = Object.keys(state.modelosDestino);
+    const seleccion = state.mapeoSeleccion[idx] || {};
 
-      modeloKeys.forEach(m => {
+    // Wrapper que incluye la fila + sub-panel de choices
+    const wrapper = document.createElement('div');
+    wrapper.style.borderBottom = '1px solid var(--border)';
+
+    const row = document.createElement('div');
+    row.className = 'mapeo-row';
+    row.style.borderBottom = 'none';
+
+    const muestra = (col.muestra || []).slice(0, 2).map(v => `"${v}"`).join(', ');
+
+    const infoDiv = document.createElement('div');
+    infoDiv.className = 'mapeo-col-info';
+    infoDiv.innerHTML = `
+      <div class="mapeo-col-name">
+        ${escapeHtml(col.nombre)}
+        <span class="mapeo-dtype">${escapeHtml(col.dtype || 'string')}</span>
+        <span class="mapeo-nulls">${col.nulls ?? 0} nulos</span>
+        ${seleccion.sugerido ? '<span class="mapeo-sugerido">✨ sugerido</span>' : ''}
+      </div>
+      ${muestra ? `<div class="mapeo-sample">muestra: ${escapeHtml(muestra)}</div>` : ''}
+    `;
+
+    const arrowDiv = document.createElement('div');
+    arrowDiv.className = 'mapeo-arrow';
+    arrowDiv.textContent = '→';
+
+    const destDiv = document.createElement('div');
+    destDiv.className = 'mapeo-col-destino';
+
+    const selModelo = document.createElement('select');
+    selModelo.dataset.idx = idx;
+    selModelo.classList.add('sel-modelo');
+
+    const optIgnorar = document.createElement('option');
+    optIgnorar.value = ''; optIgnorar.textContent = '— ignorar —';
+    selModelo.appendChild(optIgnorar);
+
+    // Agrupar entidades por categoría del modelo de datos
+    const modelosPorGrupo = new Map();
+    modeloKeys.forEach(m => {
+      const grupoInfo = grupoDeModelo(m);
+      const etiqueta = grupoInfo ? `${grupoInfo.icono} ${grupoInfo.nombre}` : 'Otros';
+      if (!modelosPorGrupo.has(etiqueta)) modelosPorGrupo.set(etiqueta, []);
+      modelosPorGrupo.get(etiqueta).push(m);
+    });
+    modelosPorGrupo.forEach((modelos, etiqueta) => {
+      const og = document.createElement('optgroup');
+      og.label = etiqueta;
+      modelos.forEach(m => {
         const opt = document.createElement('option');
         opt.value = m; opt.textContent = m;
-        selModelo.appendChild(opt);
+        og.appendChild(opt);
       });
+      selModelo.appendChild(og);
+    });
+    selModelo.value = seleccion.modelo || '';
 
-      const selCampo = document.createElement('select');
-      selCampo.dataset.idx = idx;
-      selCampo.classList.add('sel-campo');
-      selCampo.disabled = true;
-      selCampo.innerHTML = '<option value="">— campo —</option>';
+    const selCampo = document.createElement('select');
+    selCampo.dataset.idx = idx;
+    selCampo.classList.add('sel-campo');
+    selCampo.innerHTML = '<option value="">— campo —</option>';
 
-      // Sub-panel de choices (se muestra/oculta dinámicamente)
-      const choicesContainer = document.createElement('div');
-      choicesContainer.dataset.idx = idx;
-      choicesContainer.classList.add('choices-container');
+    const poblarCampos = () => {
+      const modelo = selModelo.value;
+      selCampo.innerHTML = '';
+      if (!modelo) {
+        selCampo.disabled = true;
+        selCampo.innerHTML = '<option value="">— campo —</option>';
+        return;
+      }
+      selCampo.disabled = false;
+      const optCampo = document.createElement('option');
+      optCampo.value = ''; optCampo.textContent = '— campo —';
+      selCampo.appendChild(optCampo);
+      const campos = state.modelosDestino[modelo] || [];
+      campos.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.nombre;
+        opt.textContent = c.verbose_name ? `${c.verbose_name} (${c.nombre})` : c.nombre;
+        selCampo.appendChild(opt);
+      });
+      selCampo.value = seleccion.campo || '';
+    };
+    poblarCampos();
+
+    // Sub-panel de choices (se muestra/oculta dinámicamente)
+    const choicesContainer = document.createElement('div');
+    choicesContainer.dataset.idx = idx;
+    choicesContainer.classList.add('choices-container');
+    choicesContainer.style.display = 'none';
+    choicesContainer.style.padding = '0 20px 14px';
+
+    const actualizarChoicesPanel = () => {
+      const modelo = selModelo.value;
+      const campoNombre = selCampo.value;
+      choicesContainer.innerHTML = '';
       choicesContainer.style.display = 'none';
-      choicesContainer.style.padding = '0 20px 14px';
 
-      const actualizarChoicesPanel = () => {
-        const modelo = selModelo.value;
-        const campoNombre = selCampo.value;
-        choicesContainer.innerHTML = '';
-        choicesContainer.style.display = 'none';
-        delete state.mapeoValores[idx];
+      if (!modelo || !campoNombre) { delete state.mapeoValores[idx]; return; }
 
-        if (!modelo || !campoNombre) return;
+      const campos = state.modelosDestino[modelo] || [];
+      const campoMeta = campos.find(c => c.nombre === campoNombre);
+      if (!campoMeta || !campoMeta.choices || campoMeta.choices.length === 0) { delete state.mapeoValores[idx]; return; }
 
-        const campos = state.modelosDestino[modelo] || [];
-        const campoMeta = campos.find(c => c.nombre === campoNombre);
-        if (!campoMeta || !campoMeta.choices || campoMeta.choices.length === 0) return;
+      const valoresUnicos = col.valores_unicos || [];
+      if (valoresUnicos.length === 0) { delete state.mapeoValores[idx]; return; }
 
-        const valoresUnicos = col.valores_unicos || [];
-        if (valoresUnicos.length === 0) return;
+      choicesContainer.style.display = 'block';
+      const panel = document.createElement('div');
+      panel.className = 'choices-panel';
+      panel.innerHTML = `
+        <div class="choices-panel-title">
+          🔁 Mapeo de valores — <span style="font-weight:400;">${escapeHtml(campoMeta.verbose_name || campoNombre)}</span>
+        </div>
+      `;
 
-        choicesContainer.style.display = 'block';
-        const panel = document.createElement('div');
-        panel.className = 'choices-panel';
-        panel.innerHTML = `
-          <div class="choices-panel-title">
-            🔁 Mapeo de valores — <span style="font-weight:400;">${escapeHtml(campoMeta.verbose_name || campoNombre)}</span>
-          </div>
-        `;
+      // Conserva selecciones previas (p. ej. al re-renderizar por un cambio en otra fila)
+      const mapeoPrevio = state.mapeoValores[idx] || {};
+      const mapeoNuevo = {};
 
-        state.mapeoValores[idx] = {};
+      valoresUnicos.forEach(val => {
+        const fila = document.createElement('div');
+        fila.className = 'choices-row';
 
-        valoresUnicos.forEach(val => {
-          const fila = document.createElement('div');
-          fila.className = 'choices-row';
+        const spanOrigen = document.createElement('div');
+        spanOrigen.className = 'choices-valor-origen';
+        spanOrigen.title = val;
+        spanOrigen.textContent = val;
 
-          const spanOrigen = document.createElement('div');
-          spanOrigen.className = 'choices-valor-origen';
-          spanOrigen.title = val;
-          spanOrigen.textContent = val;
+        const spanArrow = document.createElement('div');
+        spanArrow.className = 'choices-arrow';
+        spanArrow.textContent = '→';
 
-          const spanArrow = document.createElement('div');
-          spanArrow.className = 'choices-arrow';
-          spanArrow.textContent = '→';
+        const selDestino = document.createElement('select');
+        const optIgnore = document.createElement('option');
+        optIgnore.value = ''; optIgnore.textContent = '— ignorar —';
+        selDestino.appendChild(optIgnore);
 
-          const selDestino = document.createElement('select');
-          const optIgnore = document.createElement('option');
-          optIgnore.value = ''; optIgnore.textContent = '— ignorar —';
-          selDestino.appendChild(optIgnore);
-
-          campoMeta.choices.forEach(ch => {
-            const opt = document.createElement('option');
-            opt.value = ch.valor; opt.textContent = ch.etiqueta;
-            selDestino.appendChild(opt);
-          });
-
-          selDestino.addEventListener('change', () => {
-            if (selDestino.value) {
-              state.mapeoValores[idx][val] = selDestino.value;
-            } else {
-              delete state.mapeoValores[idx][val];
-            }
-          });
-
-          fila.appendChild(spanOrigen);
-          fila.appendChild(spanArrow);
-          fila.appendChild(selDestino);
-          panel.appendChild(fila);
+        campoMeta.choices.forEach(ch => {
+          const opt = document.createElement('option');
+          opt.value = ch.valor; opt.textContent = ch.etiqueta;
+          selDestino.appendChild(opt);
         });
 
-        choicesContainer.appendChild(panel);
-      };
-
-      selModelo.addEventListener('change', () => {
-        const modelo = selModelo.value;
-        selCampo.innerHTML = '';
-        if (!modelo) {
-          selCampo.disabled = true;
-          selCampo.innerHTML = '<option value="">— campo —</option>';
-        } else {
-          selCampo.disabled = false;
-          const campos = state.modelosDestino[modelo] || [];
-          campos.forEach(c => {
-            const opt = document.createElement('option');
-            opt.value = c.nombre;
-            opt.textContent = c.verbose_name ? `${c.verbose_name} (${c.nombre})` : c.nombre;
-            selCampo.appendChild(opt);
-          });
+        const valorPrevio = mapeoPrevio[val];
+        if (valorPrevio && campoMeta.choices.some(ch => ch.valor === valorPrevio)) {
+          selDestino.value = valorPrevio;
+          mapeoNuevo[val] = valorPrevio;
         }
-        actualizarChoicesPanel();
+
+        selDestino.addEventListener('change', () => {
+          if (selDestino.value) {
+            state.mapeoValores[idx][val] = selDestino.value;
+          } else {
+            delete state.mapeoValores[idx][val];
+          }
+        });
+
+        fila.appendChild(spanOrigen);
+        fila.appendChild(spanArrow);
+        fila.appendChild(selDestino);
+        panel.appendChild(fila);
       });
 
-      selCampo.addEventListener('change', actualizarChoicesPanel);
+      state.mapeoValores[idx] = mapeoNuevo;
+      choicesContainer.appendChild(panel);
+    };
+    actualizarChoicesPanel();
 
-      destDiv.appendChild(selModelo);
-      destDiv.appendChild(selCampo);
-
-      row.appendChild(infoDiv);
-      row.appendChild(arrowDiv);
-      row.appendChild(destDiv);
-
-      wrapper.appendChild(row);
-      wrapper.appendChild(choicesContainer);
-      list.appendChild(wrapper);
+    selModelo.addEventListener('change', () => {
+      state.mapeoSeleccion[idx] = { modelo: selModelo.value, campo: '' };
+      renderMapeoRows();
     });
+
+    selCampo.addEventListener('change', () => {
+      state.mapeoSeleccion[idx] = { modelo: selModelo.value, campo: selCampo.value };
+      infoDiv.querySelector('.mapeo-sugerido')?.remove();
+      actualizarChoicesPanel();
+    });
+
+    destDiv.appendChild(selModelo);
+    destDiv.appendChild(selCampo);
+
+    row.appendChild(infoDiv);
+    row.appendChild(arrowDiv);
+    row.appendChild(destDiv);
+
+    wrapper.appendChild(row);
+    wrapper.appendChild(choicesContainer);
+    return wrapper;
   }
 
   function escapeHtml(str) {
@@ -866,20 +1046,16 @@
     showError('step2Error', '');
     const btn = document.getElementById('btnGuardarMapeo');
 
-    // Construir array de mapeos
-    const wrappers = document.querySelectorAll('#mapeoList > div');
-    const mapeos = [];
-    wrappers.forEach((wrapper, idx) => {
-      const col = state.columnas[idx];
-      const selModelo = wrapper.querySelector('.sel-modelo');
-      const selCampo  = wrapper.querySelector('.sel-campo');
-      mapeos.push({
+    // Construir array de mapeos a partir del estado (independiente del agrupamiento visual)
+    const mapeos = state.columnas.map((col, idx) => {
+      const seleccion = state.mapeoSeleccion[idx] || {};
+      return {
         columna_origen:  col.nombre,
-        modelo_destino:  selModelo.value  || '',
-        campo_destino:   selCampo.value   || '',
+        modelo_destino:  seleccion.modelo || '',
+        campo_destino:   seleccion.campo  || '',
         transformacion:  'directo',
         mapeo_valores:   state.mapeoValores[idx] || {},
-      });
+      };
     });
 
     btn.disabled = true;

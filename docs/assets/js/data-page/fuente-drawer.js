@@ -34,7 +34,12 @@
     <div class="field-group">
       <label>Enlace o ruta al archivo</label>
       <input type="text" id="fUrl" placeholder="https://docs.google.com/spreadsheets/… o ./data/test.xlsx">
-      <span class="field-hint">Acepta URL remota o ruta local para pruebas. Las rutas locales solo se guardan como referencia.</span>
+      <span class="field-hint">Acepta una URL http(s) descargable o una ruta de archivo accesible por el backend.</span>
+    </div>
+    <div class="field-group">
+      <label>O sube el archivo directamente</label>
+      <input type="file" id="fArchivo" accept=".xlsx,.xls,.csv">
+      <span class="field-hint">Si seleccionas un archivo aquí, reemplaza el enlace/ruta anterior de la fuente.</span>
     </div>
     <div class="field-group">
       <label>Descripción</label>
@@ -139,7 +144,7 @@
 
   function resetForm() {
     editingFuente = null;
-    ['fProyecto', 'fNombre', 'fUrl', 'fDescripcion', 'fResponsable'].forEach(id => {
+    ['fProyecto', 'fNombre', 'fUrl', 'fArchivo', 'fDescripcion', 'fResponsable'].forEach(id => {
       const el = get(id);
       if (el) el.value = '';
     });
@@ -231,8 +236,21 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const data = await res.json();
+      let data = await res.json();
       if (!res.ok) throw new Error(errorMessage(data, `Error ${res.status}`));
+
+      const archivo = get('fArchivo').files[0];
+      if (archivo) {
+        const fd = new FormData();
+        fd.append('archivo', archivo);
+        const archivoRes = await fetch(`${context.getApiBase()}/api/fuentes-datos/${data.id}/archivo/`, {
+          method: 'POST',
+          body: fd,
+        });
+        const archivoData = await archivoRes.json();
+        if (!archivoRes.ok) throw new Error(errorMessage(archivoData, `Error ${archivoRes.status}`));
+        data = { ...data, url: archivoData.url };
+      }
 
       if (editingFuente) {
         const idx = context.getData().fuentes.findIndex(f => Number(f.id) === Number(editingFuente.id));
