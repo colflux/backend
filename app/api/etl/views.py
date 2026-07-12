@@ -242,12 +242,50 @@ def upload_archivo(request, fuente_id):
         carga.total_filas = total_filas
         carga.save(update_fields=["hoja_activa", "columnas_raw", "total_filas"])
 
+        # Recuperar el avance de mapeo de la última carga de esta fuente,
+        # copiándolo a la carga nueva (solo columnas que siguen existiendo).
+        mapeos_previos = []
+        carga_previa = (
+            CargaArchivo.objects.filter(fuente=fuente, mapeos__isnull=False)
+            .exclude(pk=carga.pk)
+            .order_by("-created_at")
+            .first()
+        )
+        if carga_previa:
+            nombres_actuales = {c["nombre"] for c in columnas}
+            copias = [
+                m for m in carga_previa.mapeos.all()
+                if m.columna_origen in nombres_actuales
+            ]
+            MapeoColumna.objects.bulk_create([
+                MapeoColumna(
+                    carga=carga,
+                    columna_origen=m.columna_origen,
+                    modelo_destino=m.modelo_destino,
+                    campo_destino=m.campo_destino,
+                    transformacion=m.transformacion,
+                    mapeo_valores=m.mapeo_valores,
+                )
+                for m in copias
+            ])
+            mapeos_previos = [
+                {
+                    "columna_origen": m.columna_origen,
+                    "modelo_destino": m.modelo_destino,
+                    "campo_destino": m.campo_destino,
+                    "transformacion": m.transformacion,
+                    "mapeo_valores": m.mapeo_valores,
+                }
+                for m in copias
+            ]
+
         return JsonResponse({
             "carga_id": carga.pk,
             "sheets": sheets,
             "hoja_activa": hoja_activa,
             "total_filas": total_filas,
             "columnas": columnas,
+            "mapeos": mapeos_previos,
         }, json_dumps_params={"ensure_ascii": False})
 
     except (ValueError, FileNotFoundError) as exc:
@@ -305,6 +343,9 @@ def mapeo_carga(request, fuente_id, carga_id):
         if not isinstance(items, list):
             return JsonResponse({"error": "Se esperaba un array en 'mapeos'"}, status=400)
 
+        # parcial=True: guardado incremental de columnas sueltas; no cambia el estado
+        parcial = bool(body.get("parcial"))
+
         try:
             guardados = 0
             for item in items:
@@ -323,8 +364,9 @@ def mapeo_carga(request, fuente_id, carga_id):
                 )
                 guardados += 1
 
-            carga.estado = "mapeado"
-            carga.save(update_fields=["estado"])
+            if not parcial:
+                carga.estado = "mapeado"
+                carga.save(update_fields=["estado"])
 
             return JsonResponse({"ok": True, "guardados": guardados})
         except Exception as exc:

@@ -4,6 +4,8 @@ from .base import TimestampedModel
 
 
 class Institucion(TimestampedModel):
+    """Institución participante en los proyectos (universidad, centro de investigación, entidad pública, …)."""
+
     nombre = models.CharField("nombre", max_length=255)
     correo = models.EmailField("correo electrónico", blank=True)
 
@@ -17,6 +19,8 @@ class Institucion(TimestampedModel):
 
 
 class Proyecto(TimestampedModel):
+    """Proyecto de investigación o monitoreo: objetivos, escala espacial, diseño de muestreo, instituciones y usuarios asociados."""
+
     ESCALA_CHOICES = [
         ("Bioma", "Bioma"),
         ("Regional", "Regional"),
@@ -60,6 +64,8 @@ class Proyecto(TimestampedModel):
 
 
 class ProyectoInstitucion(models.Model):
+    """Relación entre un proyecto y una institución participante."""
+
     proyecto = models.ForeignKey(Proyecto, on_delete=models.CASCADE)
     institucion = models.ForeignKey(Institucion, on_delete=models.CASCADE)
 
@@ -73,6 +79,8 @@ class ProyectoInstitucion(models.Model):
 
 
 class ProyectoUsuario(models.Model):
+    """Relación entre un proyecto y un usuario con el rol que desempeña en él."""
+
     proyecto = models.ForeignKey(Proyecto, on_delete=models.CASCADE, related_name="usuarios_rol")
     usuario = models.ForeignKey("app.Usuario", on_delete=models.CASCADE, related_name="proyectos_rol")
     rol = models.ForeignKey("app.RolUsuario", on_delete=models.CASCADE, related_name="proyectos_usuario")

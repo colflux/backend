@@ -5,6 +5,8 @@ from .sitio import Sitio
 
 
 class CaracterizacionMuestreoSuelo(TimestampedModel):
+    """Caracterización de un muestreo de suelo en un sitio: tipo de suelo, profundidad e intervalos del perfil."""
+
     TIPO_SUELO_CHOICES = [
         ("Mineral", "Mineral"),
         ("Organico", "Orgánico"),
@@ -26,6 +28,8 @@ class CaracterizacionMuestreoSuelo(TimestampedModel):
 
 
 class MonitoreoSuelo(TimestampedModel):
+    """Tipo de monitoreo aplicado a una caracterización de suelo (COS, densidad aparente, datación, …) y su protocolo."""
+
     TIPO_CHOICES = [
         ("Macrofosiles", "Macrofósiles"),
         ("Datacion", "Datación"),

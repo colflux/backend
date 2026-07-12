@@ -55,6 +55,7 @@
     .catalogo-header { margin-bottom:20px; }
     .catalogo-header h2 { font-size:1.3rem; font-weight:800; }
     .catalogo-header p { font-size:.85rem; color:var(--gray); margin-top:4px; }
+    .catalogo-descripcion { font-size:.88rem; color:#374151; margin-top:10px; background:var(--green-l); border-left:3px solid var(--green); border-radius:0 8px 8px 0; padding:10px 14px; }
 
     /* ── Tabla de campos ── */
     .campo-table { width:100%; border-collapse:collapse; background:white; border:1.5px solid var(--border); border-radius:12px; overflow:hidden; }
@@ -249,6 +250,7 @@
       <div class="catalogo-header">
         <h2>${entidad.verbose_name || entidad.nombre}</h2>
         <p>${entidad.verbose_name_plural} · ${camposFiltrados.length} campo${camposFiltrados.length !== 1 ? 's' : ''}${query ? ' (filtrados)' : ''}</p>
+        ${entidad.descripcion ? `<div class="catalogo-descripcion">${entidad.descripcion}</div>` : ''}
       </div>
       ${camposFiltrados.length === 0
         ? '<p style="color:var(--gray);padding:40px 0;text-align:center;">Ningún campo coincide con la búsqueda</p>'

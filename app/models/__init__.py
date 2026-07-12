@@ -4,15 +4,18 @@ from .geo import Departamento, Municipio, Region, SistemaReferencia
 
 from .cobertura import Cobertura, Disturbio, Vegetacion
 
-from .sitio import MonitoreoParcela, Parcela, Sitio, Transecto
+from .sitio import (
+    MonitoreoParcela, Parcela, Sitio, Transecto,
+    UnidadExperimental, UnidadMuestreo, UnidadMuestreoTipo,
+)
 
 from .proyecto import Institucion, Proyecto, ProyectoInstitucion, ProyectoUsuario
-
-from .flujo_camaras import FlujoCamaras
 
 from .torre import ConfiguracionSensorGas, Equipo, TorreEc, TorreFuenteEnergia
 
 from .suelo import CaracterizacionMuestreoSuelo, MonitoreoSuelo
+
+from .co2 import Anillo, Camara, MuestraAmbiental, MuestraCO2, SubmuestraCO2, UnidadMedida
 
 from .publicacion import Autor, Publicacion, PublicacionAutor, PublicacionSitio, PublicacionType, ResultadoPublicacion
 
@@ -34,13 +37,14 @@ __all__ = [
     "Parcela",
     "Sitio",
     "Transecto",
+    "UnidadMuestreoTipo",
+    "UnidadMuestreo",
+    "UnidadExperimental",
     # Proyecto
     "Institucion",
     "Proyecto",
     "ProyectoInstitucion",
     "ProyectoUsuario",
-    # Flujo Cámaras
-    "FlujoCamaras",
     # Torre EC
     "ConfiguracionSensorGas",
     "Equipo",
@@ -49,6 +53,13 @@ __all__ = [
     # Suelo
     "CaracterizacionMuestreoSuelo",
     "MonitoreoSuelo",
+    # Muestras CO₂
+    "UnidadMedida",
+    "Camara",
+    "Anillo",
+    "MuestraAmbiental",
+    "MuestraCO2",
+    "SubmuestraCO2",
     # Gestión de datos
     "Usuario",
     "RolUsuario",

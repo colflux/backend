@@ -5,6 +5,8 @@ from .sitio import Sitio
 
 
 class ConfiguracionSensorGas(TimestampedModel):
+    """Configuración del sensor de un gas (CO₂, CH₄, N₂O) en una torre EC: tubería y separaciones respecto al anemómetro."""
+
     GAS_CHOICES = [
         ("CO2", "CO₂"),
         ("CH4", "CH₄"),
@@ -29,6 +31,8 @@ class ConfiguracionSensorGas(TimestampedModel):
 
 
 class Equipo(TimestampedModel):
+    """Equipo instalado en una torre EC (anemómetro, analizadores de gas, adquisición, …) con modelo y serial."""
+
     TIPO_CHOICES = [
         ("Anemometro", "Anemómetro"),
         ("Analizador_CO2", "Analizador CO₂"),
@@ -55,6 +59,8 @@ class Equipo(TimestampedModel):
 
 
 class TorreEc(TimestampedModel):
+    """Torre de covarianza de remolinos (eddy covariance) instalada en un sitio: alturas, frecuencia de adquisición y sensores."""
+
     sitio = models.ForeignKey(Sitio, on_delete=models.PROTECT, related_name="torres_ec")
     fecha_instalacion = models.DateField("fecha de instalación", null=True, blank=True)
     utc = models.CharField("UTC offset", max_length=10, blank=True)

@@ -4,17 +4,21 @@ from .base import TimestampedModel
 
 
 class Region(TimestampedModel):
+    """Región natural de Colombia (Andes, Orinoquía, Amazonas, Caribe, Pacífico, Insular)."""
+
     ANDES = "Andes"
     ORINOQUIA = "Orinoquia"
     AMAZONAS = "Amazonas"
     CARIBE = "Caribe"
     PACIFICO = "Pacifico"
+    INSULAR = "Insular"
     REGION_NATURAL_CHOICES = [
         (ANDES, "Andes"),
         (ORINOQUIA, "Orinoquía"),
         (AMAZONAS, "Amazonas"),
         (CARIBE, "Caribe"),
         (PACIFICO, "Pacífico"),
+        (INSULAR, "Insular"),
     ]
 
     nombre = models.CharField(max_length=24, choices=REGION_NATURAL_CHOICES, unique=True)
@@ -29,6 +33,8 @@ class Region(TimestampedModel):
 
 
 class Departamento(TimestampedModel):
+    """Departamento de Colombia, asociado a su región natural."""
+
     DEPARTAMENTO_CHOICES = [
         ("Amazonas", "Amazonas"), ("Antioquia", "Antioquia"), ("Arauca", "Arauca"),
         ("Atlantico", "Atlántico"), ("Bolivar", "Bolívar"), ("Boyaca", "Boyacá"),
@@ -45,6 +51,9 @@ class Departamento(TimestampedModel):
     ]
 
     nombre = models.CharField(max_length=40, choices=DEPARTAMENTO_CHOICES, unique=True)
+    codigo_dane = models.CharField(
+        "código DANE", max_length=2, unique=True, null=True, blank=True
+    )
     region = models.ForeignKey(Region, on_delete=models.PROTECT, related_name="departamentos")
 
     class Meta:
@@ -57,7 +66,12 @@ class Departamento(TimestampedModel):
 
 
 class Municipio(TimestampedModel):
+    """Municipio de Colombia, perteneciente a un departamento."""
+
     nombre = models.CharField(max_length=160)
+    codigo_dane = models.CharField(
+        "código DANE", max_length=5, unique=True, null=True, blank=True
+    )
     departamento = models.ForeignKey(Departamento, on_delete=models.PROTECT, related_name="municipios")
 
     class Meta:
@@ -71,6 +85,8 @@ class Municipio(TimestampedModel):
 
 
 class SistemaReferencia(TimestampedModel):
+    """Sistema de referencia de coordenadas usado para georreferenciar sitios (WGS84, MAGNA-SIRGAS, …)."""
+
     EPSG_4326 = "EPSG_4326"
     EPSG_4686 = "EPSG_4686"
     EPSG_4674 = "EPSG_4674"

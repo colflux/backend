@@ -4,10 +4,11 @@ from .models import (
     Autor, CaracterizacionMuestreoSuelo, Cobertura,
     FuenteDatos, Institucion, RolUsuario, Usuario, UsuarioRol,
     ConfiguracionSensorGas, Departamento, Disturbio, Equipo,
-    FlujoCamaras, MonitoreoParcela, MonitoreoSuelo, Municipio,
+    MonitoreoParcela, MonitoreoSuelo, Municipio,
     Parcela, Proyecto, ProyectoInstitucion, ProyectoUsuario, Publicacion, PublicacionAutor,
     PublicacionSitio, Region, ResultadoPublicacion, Sitio,
-    SistemaReferencia, TorreEc, TorreFuenteEnergia, Transecto, Vegetacion,
+    SistemaReferencia, TorreEc, TorreFuenteEnergia, Transecto,
+    UnidadExperimental, UnidadMuestreo, UnidadMuestreoTipo, Vegetacion,
 )
 
 
@@ -61,25 +62,45 @@ class SitioAdmin(admin.ModelAdmin):
     raw_id_fields = ("municipio", "disturbio", "vegetacion", "cobertura", "sistema_referencia")
 
 
+@admin.register(UnidadMuestreoTipo)
+class UnidadMuestreoTipoAdmin(admin.ModelAdmin):
+    list_display = ("nombre",)
+    search_fields = ("nombre",)
+
+
+@admin.register(UnidadExperimental)
+class UnidadExperimentalAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "tratamiento")
+    search_fields = ("nombre", "tratamiento")
+
+
+@admin.register(UnidadMuestreo)
+class UnidadMuestreoAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "tipo", "unidad_experimental")
+    list_filter = ("tipo",)
+    search_fields = ("nombre",)
+    raw_id_fields = ("unidad_experimental",)
+
+
 @admin.register(Parcela)
 class ParcelaAdmin(admin.ModelAdmin):
-    list_display = ("pk", "sitio", "unidad_muestreo", "area", "estatus", "fecha_instalacion")
-    list_filter = ("estatus", "unidad_muestreo")
-    raw_id_fields = ("sitio",)
+    list_display = ("pk", "nombre", "unidad_muestreo", "medida_largo", "medida_ancho")
+    search_fields = ("nombre",)
+    raw_id_fields = ("unidad_muestreo",)
 
 
 @admin.register(Transecto)
 class TransectoAdmin(admin.ModelAdmin):
-    list_display = ("nombre", "sitio", "parcela")
+    list_display = ("nombre", "unidad_muestreo", "longitud", "separacion_muestreo")
     search_fields = ("nombre",)
-    raw_id_fields = ("sitio", "parcela")
+    raw_id_fields = ("unidad_muestreo",)
 
 
 @admin.register(MonitoreoParcela)
 class MonitoreoParcelaAdmin(admin.ModelAdmin):
-    list_display = ("parcela", "tipo_monitoreo", "activo", "protocolo")
+    list_display = ("unidad_muestreo", "tipo_monitoreo", "activo", "protocolo")
     list_filter = ("tipo_monitoreo", "activo")
-    raw_id_fields = ("parcela",)
+    raw_id_fields = ("unidad_muestreo",)
 
 
 @admin.register(Institucion)
@@ -106,13 +127,6 @@ class ProyectoAdmin(admin.ModelAdmin):
 class ProyectoUsuarioAdmin(admin.ModelAdmin):
     list_display = ("proyecto", "usuario", "rol")
     raw_id_fields = ("proyecto", "usuario", "rol")
-
-
-@admin.register(FlujoCamaras)
-class FlujoCamarasAdmin(admin.ModelAdmin):
-    list_display = ("pk", "sitio", "microtopografia", "diametro_anillo", "created_at")
-    list_filter = ("microtopografia",)
-    raw_id_fields = ("sitio",)
 
 
 @admin.register(TorreEc)

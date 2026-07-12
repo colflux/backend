@@ -54,12 +54,14 @@ Enum propiedad_tierra {
   privada // Terreno de propiedad privada o comunitaria no estatal.
 }
 
+// Detalle de una unidad de muestreo cuando su tipo es 'transecto'.
 Table transecto {
   id int [pk]
+  unidad_muestreo_id int [ref: - unidad_muestreo.id] // 1–1
   nombre varchar
+  longitud decimal
+  separacion_muestreo decimal
   descripcion varchar
-  sitio int [ref: > sitio.id]
-  parcela int [ref: > parcela.id]
 }
 
 Table sitio [headercolor: #f1c40f] {
@@ -103,16 +105,37 @@ Enum unidad_de_muestreo {
   Conglomerado // Conjunto de subparcelas.
 }
 
+// Catálogo de tipos de unidad de muestreo (parcela, transecto, conglomerado, plot).
+Table unidad_muestreo_tipo [headercolor: #f1c40f] {
+  id int [pk]
+  nombre varchar
+}
+
+// Unidad a la que se asigna/representa un tratamiento independiente.
+// Agrupa una o varias unidades de muestreo (transecto → puntos/plots, o varias parcelas).
+Table unidad_experimental [headercolor: #f1c40f] {
+  id int [pk]
+  nombre varchar
+  tratamiento varchar
+  descripcion text
+}
+
+// Lugar/objeto desde el cual se toma la muestra; su tipo sale del catálogo.
+Table unidad_muestreo [headercolor: #f1c40f] {
+  id int [pk]
+  nombre varchar
+  tipo_id int [ref: > unidad_muestreo_tipo.id]
+  unidad_experimental_id int [ref: > unidad_experimental.id] // 1 experimental → N muestreo
+}
+
+// Detalle de una unidad de muestreo cuando su tipo es 'parcela' (dimensiones).
 Table parcela [headercolor: #2ecc71] {
   id int [pk]
-  sitio_id int
-
-  unidad_muestreo unidad_de_muestreo
-  area decimal
-
-  estatus estatus_parcela
-
-  fecha_instalacion int
+  unidad_muestreo_id int [ref: - unidad_muestreo.id] // 1–1
+  nombre varchar
+  medida_largo decimal
+  medida_ancho decimal
+  descripcion text
 }
 
 Enum tipo_monitoreo {
@@ -131,7 +154,7 @@ Enum protocolo_biomasa_aerea {
 
 Table monitoreo_parcela {
   id int [pk]
-  parcela_id int
+  unidad_muestreo_id int
 
   tipo_monitoreo tipo_monitoreo
 
@@ -139,7 +162,7 @@ Table monitoreo_parcela {
   protocolo protocolo_biomasa_aerea
 }
 
-Ref: monitoreo_parcela.parcela_id > parcela.id
+Ref: monitoreo_parcela.unidad_muestreo_id > unidad_muestreo.id
 
 
 Enum sistema_referencia {
@@ -368,33 +391,6 @@ Enum microtopografia {
   Lawns // Lugares planos.
 }
 
-Table flujo_camaras [headercolor: #9b59b6] {
-  id int [pk]
-
-  camara_id int
-
-  microtopografia microtopografia
-
-  diametro_anillo decimal
-  tratamiento varchar
-
-  pozo_nivel_freatico varchar
-
-  cobertura_vegetal_primaria tipo_vegetacion
-  porcentaje_cob_veg_pri decimal
-
-  cobertura_vegetal_secundaria tipo_vegetacion
-  porcentaje_cob_veg_sec decimal
-
-  cobertura_vegetal_terciaria tipo_vegetacion
-  porcentaje_cob_veg_ter decimal
-
-  distancia_drenaje decimal
-  distancia_fuego decimal
-  distancia_pastoreo decimal
-  distancia_cultivo decimal
-  sitio_id int [ref: > sitio.id]
-}
 
 Enum fuente_poder {
   generador_metanol // Generador alimentado con metanol.
@@ -645,5 +641,88 @@ Table fuente_datos [headercolor: #e67e22] {
   notas text
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Muestras de flujo de CO₂ (cámaras cerradas)
+//
+// Jerarquía de muestreo:
+//   unidad experimental (lleva el tratamiento)
+//     └─ unidad de muestreo (nombre + tipo: parcela/transecto/conglomerado/plot)
+//          └─ anillo            → objeto FIJO instalado en la unidad de muestreo
+//               └─ muestra_co2   → evento de medición (cámara conectada al anillo)
+//                    └─ submuestra_co2 → las ~4 tomas; aquí vive el valor del flujo
+//
+// La parcela se deriva del anillo (fijo). La cámara/sensor es equipo MÓVIL:
+// una parcela puede tener varios equipos, por eso la cámara no cuelga de la parcela.
+// ═══════════════════════════════════════════════════════════════════════════
+
+Enum tipo_unidad_muestreo {
+  parcela
+  transecto
+  conglomerado
+  plot
+}
+
+Enum condicion_luz {
+  dia            // Medición tomada de día.
+  noche          // Medición tomada de noche.
+  noche_simulada // Noche simulada cubriendo la cámara con una cobija.
+}
+
+Enum momento_toma {
+  inicio // Lectura al inicio del cierre de la cámara (pendiente por validar).
+  final  // Lectura al final del cierre de la cámara (pendiente por validar).
+}
+
+Table unidad_medida [headercolor: #9b59b6] {
+  id int [pk, increment]
+  codigo varchar     // co2_flux_micromol_m2_s
+  descripcion varchar
+  magnitud varchar   // flujo | concentracion | temperatura | ...
+}
+
+Table camara [headercolor: #9b59b6] {
+  id int [pk, increment]
+  codigo varchar                 // 738, 64
+  equipo_id int [ref: > equipo.id] // picarro (Analizador CO₂)
+}
+
+Table anillo [headercolor: #9b59b6] {
+  id int [pk, increment]
+  unidad_muestreo_id int [ref: > unidad_muestreo.id] // fijo en la unidad de muestreo
+  diametro decimal
+  volumen decimal
+}
+
+Table muestra_ambiental [headercolor: #9b59b6] {
+  id int [pk, increment]
+  fecha date
+  hora time
+  soil_temp decimal
+  air_temp decimal
+  atm_press decimal
+  relat_humid decimal
+  dew_point decimal
+  microtopo microtopografia
+}
+
+Table muestra_co2 [headercolor: #9b59b6] {
+  id int [pk, increment]
+  anillo_id int [ref: > anillo.id]   // da la parcela (camino fijo)
+  camara_id int [ref: > camara.id]   // sensor/picarro usado (camino móvil)
+  fecha date
+  muestra_ambiental_id int [ref: > muestra_ambiental.id]
+}
+
+Table submuestra_co2 [headercolor: #9b59b6] {
+  id int [pk, increment]
+  muestra_co2_id int [ref: > muestra_co2.id]
+  n_toma int                     // 1..N, variable por dataset (normalmente 4)
+  hora time                      // tiempo de la toma
+  momento momento_toma           // inicio | final (por validar)
+  condicion_luz condicion_luz    // dia | noche | noche_simulada
+  valor decimal                  // valor del flujo
+  unidad_medida_id int [ref: > unidad_medida.id]
+}
 
 

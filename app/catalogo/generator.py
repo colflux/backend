@@ -17,7 +17,7 @@ GRUPOS_CATALOGO = [
     {
         "nombre": "Sitio y Parcelas",
         "icono": "📍",
-        "entidades": ["Sitio", "Parcela", "Transecto"],
+        "entidades": ["Sitio", "UnidadMuestreoTipo", "UnidadMuestreo", "UnidadExperimental", "Parcela", "Transecto"],
     },
     {
         "nombre": "Cobertura y Vegetación",
@@ -32,7 +32,12 @@ GRUPOS_CATALOGO = [
     {
         "nombre": "Torre EC y Flujos",
         "icono": "📡",
-        "entidades": ["TorreEc", "Equipo", "ConfiguracionSensorGas", "FlujoCamaras"],
+        "entidades": ["TorreEc", "Equipo", "ConfiguracionSensorGas"],
+    },
+    {
+        "nombre": "Muestras CO₂",
+        "icono": "🫧",
+        "entidades": ["UnidadMedida", "Camara", "Anillo", "MuestraAmbiental", "MuestraCO2", "SubmuestraCO2"],
     },
     {
         "nombre": "Proyecto",
@@ -48,6 +53,8 @@ GRUPOS_CATALOGO = [
 
 ENTIDADES_SEMILLA = {
     "PublicacionType",
+    "Region",
+    "Departamento",
 }
 
 TIPO_MAP = {
@@ -69,11 +76,20 @@ TIPO_MAP = {
 
 def semilla_rows(modelo_cls):
     concrete_fields = [
-        field.attname
+        field
         for field in modelo_cls._meta.get_fields()
-        if hasattr(field, "column")
+        if hasattr(field, "column") and field.name not in ("created_at", "updated_at")
     ]
-    return list(modelo_cls.objects.values(*concrete_fields))
+    fk_names = [f.name for f in concrete_fields if f.is_relation]
+
+    rows = []
+    for obj in modelo_cls.objects.select_related(*fk_names):
+        row = {}
+        for field in concrete_fields:
+            valor = getattr(obj, field.name)
+            row[field.name] = str(valor) if field.is_relation and valor is not None else valor
+        rows.append(row)
+    return rows
 
 
 def campo_to_catalogo(field):
@@ -96,6 +112,14 @@ def campo_to_catalogo(field):
     }
 
 
+def descripcion_modelo(modelo_cls):
+    doc = (modelo_cls.__doc__ or "").strip()
+    # Django genera "Modelo(id, campo, ...)" cuando no hay docstring propio
+    if not doc or doc.startswith(modelo_cls.__name__ + "("):
+        return ""
+    return " ".join(doc.split())
+
+
 def modelo_to_catalogo(nombre_modelo):
     modelo_cls = apps.get_model("app", nombre_modelo)
     campos = []
@@ -111,6 +135,7 @@ def modelo_to_catalogo(nombre_modelo):
         "nombre": nombre_modelo,
         "verbose_name": str(modelo_cls._meta.verbose_name),
         "verbose_name_plural": str(modelo_cls._meta.verbose_name_plural),
+        "descripcion": descripcion_modelo(modelo_cls),
         "total_campos": len(campos),
         "campos": campos,
     }
@@ -147,11 +172,11 @@ def escribir_catalogo_assets(output_dir):
     js_out = output_dir / "catalogo.js"
 
     json_out.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2),
+        json.dumps(data, ensure_ascii=False, indent=2, default=str),
         encoding="utf-8",
     )
     js_out.write_text(
-        "window.CATALOGO = " + json.dumps(data, ensure_ascii=False) + ";",
+        "window.CATALOGO = " + json.dumps(data, ensure_ascii=False, default=str) + ";",
         encoding="utf-8",
     )
 

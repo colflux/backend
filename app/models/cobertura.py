@@ -4,6 +4,8 @@ from .base import TimestampedModel
 
 
 class Cobertura(TimestampedModel):
+    """Clasificación de cobertura del suelo de un sitio según CLC, IGBP y clima Köppen."""
+
     KOEPPEN_CHOICES = [
         ("Selva_tropical_lluviosa", "Selva tropical lluviosa"),
         ("Monzon_tropical", "Monzón tropical"),
@@ -59,6 +61,8 @@ class Cobertura(TimestampedModel):
 
 
 class Vegetacion(TimestampedModel):
+    """Caracterización de la vegetación de un sitio: tipo, especies dominantes, altura del dosel y estado sucesional."""
+
     TIPO_CHOICES = [
         ("Pasto_Graminea", "Pasto / Gramínea"),
         ("Graminea_C3", "Gramínea C3"),
@@ -97,6 +101,8 @@ class Vegetacion(TimestampedModel):
 
 
 class Disturbio(TimestampedModel):
+    """Evento de disturbio que afecta un sitio (fuego, sequía, pastoreo, …), con fechas y estado actual del ecosistema."""
+
     TIPO_CHOICES = [
         ("Agricultura", "Agricultura"),
         ("Sequia", "Sequía"),

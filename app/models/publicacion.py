@@ -5,6 +5,8 @@ from .sitio import Sitio
 
 
 class PublicacionType(models.Model):
+    """Catálogo de tipos de referencia bibliográfica (artículo, tesis, informe, …)."""
+
     nombre = models.CharField("nombre", max_length=80, unique=True)
     descripcion = models.TextField("descripción", blank=True)
 
@@ -18,6 +20,8 @@ class PublicacionType(models.Model):
 
 
 class Publicacion(TimestampedModel):
+    """Referencia bibliográfica (artículo, informe, etc.) asociada a sitios y autores, con metadatos como DOI, revista y resumen."""
+
     bibliography_type = models.ForeignKey(
         PublicacionType,
         verbose_name="tipo de referencia",
@@ -56,6 +60,8 @@ class Publicacion(TimestampedModel):
 
 
 class Autor(TimestampedModel):
+    """Autor de una o varias publicaciones registradas en el sistema."""
+
     nombre = models.CharField("nombre", max_length=255)
 
     class Meta:

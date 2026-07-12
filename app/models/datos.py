@@ -4,6 +4,8 @@ from .base import TimestampedModel
 
 
 class RolUsuario(TimestampedModel):
+    """Catálogo de roles que puede tener un usuario (coordinador, investigador, técnico, …)."""
+
     codigo = models.CharField("código", max_length=80, unique=True)
     nombre = models.CharField("nombre", max_length=120)
 
@@ -17,6 +19,8 @@ class RolUsuario(TimestampedModel):
 
 
 class Usuario(TimestampedModel):
+    """Persona vinculada a la red: datos de contacto, institución y roles que desempeña."""
+
     nombre = models.CharField("nombre", max_length=255)
     cargo = models.CharField("cargo", max_length=255, blank=True)
     correo_institucional = models.EmailField("correo institucional", blank=True)
@@ -46,6 +50,8 @@ class Usuario(TimestampedModel):
 
 
 class UsuarioRol(models.Model):
+    """Relación entre un usuario y uno de sus roles."""
+
     usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE)
     rol = models.ForeignKey(RolUsuario, on_delete=models.CASCADE)
 
@@ -59,6 +65,8 @@ class UsuarioRol(models.Model):
 
 
 class FuenteDatos(TimestampedModel):
+    """Fuente de datos reportada a un proyecto (archivo Excel/CSV, shapefile, API, …) y su estado de procesamiento."""
+
     TIPO_CHOICES = [
         ("excel", "Excel (.xlsx / .xls)"),
         ("csv", "CSV"),
@@ -102,6 +110,8 @@ class FuenteDatos(TimestampedModel):
 
 
 class CargaArchivo(TimestampedModel):
+    """Proceso ETL de carga de un archivo de una fuente de datos: inspección de columnas, mapeo, validación e importación."""
+
     ESTADO_CHOICES = [
         ("subido", "Archivo subido"),
         ("mapeado", "Mapeo definido"),
@@ -128,6 +138,8 @@ class CargaArchivo(TimestampedModel):
 
 
 class MapeoColumna(TimestampedModel):
+    """Mapeo de una columna del archivo cargado hacia un campo del modelo destino, con su transformación."""
+
     TRANSFORMACION_CHOICES = [
         ("directo", "Directo"),
         ("lookup", "Lookup / FK"),
