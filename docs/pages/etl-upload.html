@@ -387,7 +387,7 @@
     <!-- Step 2: Mapeo de columnas (oculto hasta avanzar) -->
     <div id="sectionStep2" style="display:none; max-width: 820px;">
       <h2>Paso 2 — Mapeo de columnas</h2>
-      <p class="step-desc">Asocia cada columna del archivo con el campo correspondiente en la base de datos, o márcala como ignorar. Las columnas con nombre similar a un campo del modelo llegan con un mapeo <strong>✨ sugerido</strong> que puedes ajustar. En los campos de tipo catálogo, los valores del archivo también llegan con su opción <strong>✨ sugerida</strong> por similitud.</p>
+      <p class="step-desc">Asocia cada columna del archivo con el campo correspondiente en la base de datos, o márcala como ignorar. Las columnas con nombre similar a un campo del modelo llegan con un mapeo <strong>✨ sugerido</strong> que puedes ajustar. En los campos de tipo catálogo, los valores del archivo también llegan con su opción <strong>✨ sugerida</strong> por similitud. Si un campo no viene en la fuente pero conoces su valor, usa <strong>➕ Agregar atributo</strong> dentro del grupo de la entidad para añadirlo como <strong>✏️ atributo manual</strong> con un valor fijo para todas las filas.</p>
 
       <!-- Selector de hoja -->
       <div class="mapeo-sheet-bar" id="sheetBar">
@@ -470,7 +470,8 @@
     modelosDestino: {},  // { ModelName: [ {nombre, verbose_name, tipo_raw, choices, ...} ] }
     gruposModelo: {},    // { ModelName: { nombre, icono, orden } }
     mapeoValores: {},    // { colIdx: { "valor_origen": "valor_destino" } }
-    mapeoSeleccion: {}   // { colIdx: { modelo, campo, sugerido? } }
+    mapeoSeleccion: {},  // { colIdx: { modelo, campo, sugerido? } }
+    atributosManuales: [] // [ { modelo, campo, valor } ] — campos sin columna en la fuente, con valor fijo
   };
 
   // Misma paleta y orden que el diagrama del modelo de datos (db.html)
@@ -695,6 +696,7 @@
       state.totalFilas = data.total_filas ?? 0;
       state.mapeoValores = {};
       state.mapeoSeleccion = {};
+      state.atributosManuales = [];
       document.getElementById('avanceGuardadoInfo').textContent = '';
 
       // Cargar campos destino antes de mostrar paso 2
@@ -781,11 +783,31 @@
   // Precarga el avance guardado en BD (mapeos copiados de la última carga de la fuente)
   function aplicarMapeosGuardados(mapeos) {
     if (!mapeos.length) return;
-    const porNombre = new Map(mapeos.map(m => [m.columna_origen, m]));
-    let recuperadas = 0;
+
+    // Los atributos manuales (valor constante) no corresponden a columnas del archivo
+    const constantes = mapeos.filter(m => m.transformacion === 'constante');
+    constantes.forEach(m => {
+      state.atributosManuales.push({
+        modelo: m.modelo_destino || '',
+        campo: m.campo_destino || '',
+        valor: m.valor_constante || '',
+      });
+    });
+
+    const porNombre = new Map(
+      mapeos.filter(m => m.transformacion !== 'constante').map(m => [m.columna_origen, m])
+    );
+    let recuperadas = constantes.length;
     state.columnas.forEach((col, idx) => {
       const m = porNombre.get(col.nombre);
-      if (!m || !m.modelo_destino) return;
+      if (!m) return;
+      // Las ignoradas explícitamente también se recuperan (no se vuelven a sugerir)
+      if (m.transformacion === 'ignorar') {
+        state.mapeoSeleccion[idx] = { modelo: '', campo: '' };
+        recuperadas++;
+        return;
+      }
+      if (!m.modelo_destino) return;
       state.mapeoSeleccion[idx] = { modelo: m.modelo_destino, campo: m.campo_destino || '' };
       if (m.mapeo_valores && Object.keys(m.mapeo_valores).length) {
         state.mapeoValores[idx] = { ...m.mapeo_valores };
@@ -832,21 +854,37 @@
     const list = document.getElementById('mapeoList');
     list.innerHTML = '';
 
-    // Agrupar índices de columna por entidad seleccionada ('' = sin mapear)
+    // Agrupar índices de columna por entidad seleccionada
+    // ('' = sin decidir, IGNORADAS = "— ignorar —" explícito)
+    const IGNORADAS = ' ignoradas';
     const grupos = new Map();
     state.columnas.forEach((col, idx) => {
-      const modelo = state.mapeoSeleccion[idx]?.modelo || '';
+      const seleccion = state.mapeoSeleccion[idx];
+      const modelo = seleccion?.modelo || (seleccion ? IGNORADAS : '');
       if (!grupos.has(modelo)) grupos.set(modelo, []);
       grupos.get(modelo).push(idx);
     });
 
+    // Una entidad con solo atributos manuales también forma su grupo
+    state.atributosManuales.forEach(attr => {
+      if (attr.modelo && !grupos.has(attr.modelo)) grupos.set(attr.modelo, []);
+    });
+
+    // Todas las entidades del catálogo aparecen siempre, aunque no tengan
+    // ninguna columna mapeada, para poder agregarles un atributo manual.
+    Object.keys(state.modelosDestino).forEach(modelo => {
+      if (!grupos.has(modelo)) grupos.set(modelo, []);
+    });
+
     const modelosOrdenados = [...grupos.keys()].sort((a, b) => {
-      if (a === '') return 1;   // "Sin mapear" siempre al final
-      if (b === '') return -1;
-      const ordenA = grupoDeModelo(a)?.orden ?? 99;
-      const ordenB = grupoDeModelo(b)?.orden ?? 99;
-      if (ordenA !== ordenB) return ordenA - ordenB;
-      return a.localeCompare(b);
+      // "Sin mapear" al final, "Ignoradas" justo antes;
+      // el resto en el mismo orden en que aparecen en el catálogo de datos
+      const peso = m => (m === '' ? 2 : m === IGNORADAS ? 1 : 0);
+      if (peso(a) !== peso(b)) return peso(a) - peso(b);
+      if (peso(a) > 0) return 0;
+      const ordenA = grupoDeModelo(a)?.orden_modelo ?? 999;
+      const ordenB = grupoDeModelo(b)?.orden_modelo ?? 999;
+      return ordenA - ordenB;
     });
 
     modelosOrdenados.forEach(modelo => {
@@ -856,10 +894,17 @@
       groupEl.className = 'mapeo-group';
 
       const header = document.createElement('div');
-      header.className = 'mapeo-group-header' + (modelo ? '' : ' sin-mapear');
+      const esSinDestino = modelo === '' || modelo === IGNORADAS;
+      header.className = 'mapeo-group-header' + (esSinDestino ? ' sin-mapear' : '');
       const n = idxs.length;
-      const sufijo = `${n} columna${n > 1 ? 's' : ''}`;
-      if (modelo) {
+      const nManuales = esSinDestino ? 0 : state.atributosManuales.filter(a => a.modelo === modelo).length;
+      const partes = [];
+      if (n) partes.push(`${n} columna${n > 1 ? 's' : ''}`);
+      if (nManuales) partes.push(`${nManuales} manual${nManuales > 1 ? 'es' : ''}`);
+      const sufijo = partes.join(' + ') || 'sin columnas';
+      if (modelo === IGNORADAS) {
+        header.textContent = `🚫 Ignoradas · ${sufijo}`;
+      } else if (modelo) {
         const grupoInfo = grupoDeModelo(modelo);
         let grupoLabel = '';
         if (grupoInfo) {
@@ -877,8 +922,110 @@
 
       idxs.forEach(idx => groupEl.appendChild(renderMapeoRow(idx)));
 
+      // Atributos manuales de esta entidad + botón para agregar otro
+      if (!esSinDestino) {
+        state.atributosManuales.forEach((attr, i) => {
+          if (attr.modelo === modelo) groupEl.appendChild(renderAtributoManualRow(i));
+        });
+
+        const footer = document.createElement('div');
+        footer.style.padding = '8px 20px';
+        const btnAdd = document.createElement('button');
+        btnAdd.type = 'button';
+        btnAdd.textContent = '➕ Agregar atributo';
+        btnAdd.title = `Agrega un campo de ${modelo} que no viene en la fuente y asígnale un valor fijo para todas las filas`;
+        btnAdd.style.cssText = 'border:1.5px dashed var(--border);background:white;color:var(--gray);border-radius:8px;padding:5px 12px;font-size:.78rem;font-weight:600;font-family:inherit;cursor:pointer;';
+        btnAdd.addEventListener('click', () => {
+          state.atributosManuales.push({ modelo, campo: '', valor: '' });
+          renderMapeoRows();
+        });
+        footer.appendChild(btnAdd);
+        groupEl.appendChild(footer);
+      }
+
       list.appendChild(groupEl);
     });
+  }
+
+  function renderAtributoManualRow(i) {
+    const attr = state.atributosManuales[i];
+    const row = document.createElement('div');
+    row.className = 'mapeo-row';
+
+    // Izquierda: valor fijo (input o select según choices del campo destino)
+    const infoDiv = document.createElement('div');
+    infoDiv.className = 'mapeo-col-info';
+    const label = document.createElement('div');
+    label.className = 'mapeo-col-name';
+    label.innerHTML = `<span class="mapeo-sugerido" style="background:var(--purple-l);color:var(--purple);">✏️ manual</span> valor fijo para todas las filas`;
+    infoDiv.appendChild(label);
+
+    const campoMeta = (state.modelosDestino[attr.modelo] || []).find(c => c.nombre === attr.campo);
+    let valorInput;
+    if (campoMeta && campoMeta.choices && campoMeta.choices.length) {
+      valorInput = document.createElement('select');
+      const optVacio = document.createElement('option');
+      optVacio.value = ''; optVacio.textContent = '— valor —';
+      valorInput.appendChild(optVacio);
+      campoMeta.choices.forEach(ch => {
+        const opt = document.createElement('option');
+        opt.value = ch.valor; opt.textContent = ch.etiqueta;
+        valorInput.appendChild(opt);
+      });
+      valorInput.value = attr.valor || '';
+      valorInput.addEventListener('change', () => { attr.valor = valorInput.value; });
+      valorInput.style.cssText = 'margin-top:6px;width:100%;border:1.5px solid var(--border);border-radius:8px;padding:7px 12px;font-size:.82rem;font-family:inherit;background:white;';
+    } else {
+      valorInput = document.createElement('input');
+      valorInput.type = 'text';
+      valorInput.placeholder = 'valor…';
+      valorInput.value = attr.valor || '';
+      valorInput.addEventListener('input', () => { attr.valor = valorInput.value; });
+      valorInput.style.cssText = 'margin-top:6px;width:100%;border:1.5px solid var(--border);border-radius:8px;padding:7px 12px;font-size:.82rem;font-family:inherit;';
+    }
+    infoDiv.appendChild(valorInput);
+
+    const arrowDiv = document.createElement('div');
+    arrowDiv.className = 'mapeo-arrow';
+    arrowDiv.textContent = '→';
+
+    // Derecha: campo destino (la entidad ya la define el grupo) y quitar
+    const destDiv = document.createElement('div');
+    destDiv.className = 'mapeo-col-destino';
+
+    const selCampo = document.createElement('select');
+    selCampo.innerHTML = '<option value="">— campo —</option>';
+    (state.modelosDestino[attr.modelo] || []).forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.nombre;
+      opt.textContent = c.verbose_name ? `${c.verbose_name} (${c.nombre})` : c.nombre;
+      selCampo.appendChild(opt);
+    });
+    selCampo.value = attr.campo || '';
+
+    selCampo.addEventListener('change', () => {
+      attr.campo = selCampo.value;
+      attr.valor = '';
+      renderMapeoRows();
+    });
+
+    const btnQuitar = document.createElement('button');
+    btnQuitar.type = 'button';
+    btnQuitar.textContent = '✕';
+    btnQuitar.title = 'Quitar atributo';
+    btnQuitar.style.cssText = 'border:1.5px solid var(--border);background:white;color:var(--gray);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:.82rem;flex-shrink:0;';
+    btnQuitar.addEventListener('click', () => {
+      state.atributosManuales.splice(i, 1);
+      renderMapeoRows();
+    });
+
+    destDiv.appendChild(selCampo);
+    destDiv.appendChild(btnQuitar);
+
+    row.appendChild(infoDiv);
+    row.appendChild(arrowDiv);
+    row.appendChild(destDiv);
+    return row;
   }
 
   function renderMapeoRow(idx) {
@@ -1106,19 +1253,33 @@
   // ── Paso 2 → guardar mapeo ────────────────────────────────────────────────
   // Construir array de mapeos a partir del estado (independiente del agrupamiento visual)
   function construirMapeos() {
-    return state.columnas.map((col, idx) => {
+    const manuales = state.atributosManuales
+      .filter(a => a.modelo && a.campo)
+      .map(a => ({
+        columna_origen:  `[manual] ${a.modelo}.${a.campo}`,
+        modelo_destino:  a.modelo,
+        campo_destino:   a.campo,
+        transformacion:  'constante',
+        valor_constante: a.valor ?? '',
+        mapeo_valores:   {},
+      }));
+
+    return manuales.concat(state.columnas.map((col, idx) => {
       const seleccion = state.mapeoSeleccion[idx] || {};
+      // Con selección pero sin modelo = "— ignorar —" elegido explícitamente;
+      // se persiste como transformación 'ignorar' para no perder ese seguimiento.
+      const ignorada = !!state.mapeoSeleccion[idx] && !seleccion.modelo;
       return {
         columna_origen:  col.nombre,
         modelo_destino:  seleccion.modelo || '',
         campo_destino:   seleccion.campo  || '',
-        transformacion:  'directo',
+        transformacion:  ignorada ? 'ignorar' : 'directo',
         // Se descartan los '' (ignorar explícito): solo persisten mapeos reales
         mapeo_valores:   Object.fromEntries(
           Object.entries(state.mapeoValores[idx] || {}).filter(([, v]) => v !== '')
         ),
       };
-    });
+    }));
   }
 
   async function enviarMapeos(parcial) {
@@ -1147,9 +1308,14 @@
     btn.innerHTML = '<span class="spinner"></span> Guardando…';
 
     try {
-      const mapeadas = Object.values(state.mapeoSeleccion).filter(s => s.modelo).length;
+      const selecciones = Object.values(state.mapeoSeleccion);
+      const mapeadas = selecciones.filter(s => s.modelo).length;
+      const ignoradas = selecciones.length - mapeadas;
       await enviarMapeos(true);
-      showToast(`Avance guardado ✓ (${mapeadas} de ${state.columnas.length} columnas mapeadas)`);
+      showToast(
+        `Avance guardado ✓ (${mapeadas} de ${state.columnas.length} columnas mapeadas` +
+        (ignoradas ? `, ${ignoradas} ignorada${ignoradas > 1 ? 's' : ''})` : ')')
+      );
       document.getElementById('avanceGuardadoInfo').textContent =
         `Avance guardado — ${new Date().toLocaleTimeString()}`;
     } catch (e) {

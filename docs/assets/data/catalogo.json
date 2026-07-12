@@ -832,7 +832,7 @@
       ]
     },
     {
-      "nombre": "Sitio y Parcelas",
+      "nombre": "Sitio y Unidad Experimental",
       "icono": "📍",
       "entidades": [
         {
@@ -1192,7 +1192,7 @@
           "verbose_name": "unidad experimental",
           "verbose_name_plural": "unidades experimentales",
           "descripcion": "Unidad a la que se asigna/representa un tratamiento independiente. Agrupa una o varias unidades de muestreo (p. ej. un transecto dividido en puntos/plots, o varias parcelas).",
-          "total_campos": 3,
+          "total_campos": 2,
           "campos": [
             {
               "nombre": "nombre",
@@ -1200,17 +1200,6 @@
               "tipo": "Texto",
               "tipo_raw": "CharField",
               "requerido": true,
-              "max_length": 255,
-              "choices": [],
-              "es_fk": false,
-              "modelo_fk": null
-            },
-            {
-              "nombre": "tratamiento",
-              "verbose_name": "tratamiento",
-              "tipo": "Texto",
-              "tipo_raw": "CharField",
-              "requerido": false,
               "max_length": 255,
               "choices": [],
               "es_fk": false,
@@ -3461,7 +3450,7 @@
           "verbose_name": "mapeo de columna",
           "verbose_name_plural": "mapeos de columnas",
           "descripcion": "Mapeo de una columna del archivo cargado hacia un campo del modelo destino, con su transformación.",
-          "total_campos": 6,
+          "total_campos": 7,
           "campos": [
             {
               "nombre": "carga",
@@ -3532,6 +3521,10 @@
                   "etiqueta": "Parsear fecha"
                 },
                 {
+                  "valor": "constante",
+                  "etiqueta": "Valor constante"
+                },
+                {
                   "valor": "ignorar",
                   "etiqueta": "Ignorar"
                 }
@@ -3546,6 +3539,17 @@
               "tipo_raw": "JSONField",
               "requerido": false,
               "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "valor_constante",
+              "verbose_name": "valor constante",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 500,
               "choices": [],
               "es_fk": false,
               "modelo_fk": null

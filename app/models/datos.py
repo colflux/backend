@@ -145,6 +145,7 @@ class MapeoColumna(TimestampedModel):
         ("lookup", "Lookup / FK"),
         ("split", "Split"),
         ("fecha", "Parsear fecha"),
+        ("constante", "Valor constante"),
         ("ignorar", "Ignorar"),
     ]
 
@@ -162,6 +163,10 @@ class MapeoColumna(TimestampedModel):
     mapeo_valores   = models.JSONField(
         "mapeo de valores", default=dict, blank=True,
         help_text='Traduce valores de origen a choices del campo destino. Ej: {"Journal Article": "articulo_revista"}',
+    )
+    valor_constante = models.CharField(
+        "valor constante", max_length=500, blank=True, default="",
+        help_text="Valor fijo para todas las filas cuando la transformación es 'constante' (atributo sin columna en la fuente).",
     )
 
     class Meta:

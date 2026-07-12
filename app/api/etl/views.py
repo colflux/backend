@@ -253,9 +253,11 @@ def upload_archivo(request, fuente_id):
         )
         if carga_previa:
             nombres_actuales = {c["nombre"] for c in columnas}
+            # Los atributos manuales (constantes) no dependen de las columnas del
+            # archivo, así que siempre se conservan.
             copias = [
                 m for m in carga_previa.mapeos.all()
-                if m.columna_origen in nombres_actuales
+                if m.columna_origen in nombres_actuales or m.transformacion == "constante"
             ]
             MapeoColumna.objects.bulk_create([
                 MapeoColumna(
@@ -265,6 +267,7 @@ def upload_archivo(request, fuente_id):
                     campo_destino=m.campo_destino,
                     transformacion=m.transformacion,
                     mapeo_valores=m.mapeo_valores,
+                    valor_constante=m.valor_constante,
                 )
                 for m in copias
             ])
@@ -275,6 +278,7 @@ def upload_archivo(request, fuente_id):
                     "campo_destino": m.campo_destino,
                     "transformacion": m.transformacion,
                     "mapeo_valores": m.mapeo_valores,
+                    "valor_constante": m.valor_constante,
                 }
                 for m in copias
             ]
@@ -297,6 +301,7 @@ def upload_archivo(request, fuente_id):
 def campos_destino(request):
     modelos = {}
     grupos = {}
+    orden_modelo = 0
     for orden, grupo in enumerate(GRUPOS_CATALOGO):
         for nombre in grupo["entidades"]:
             try:
@@ -316,7 +321,9 @@ def campos_destino(request):
                     "nombre": grupo["nombre"],
                     "icono": grupo["icono"],
                     "orden": orden,
+                    "orden_modelo": orden_modelo,
                 }
+                orden_modelo += 1
     return JsonResponse({"modelos": modelos, "grupos": grupos}, json_dumps_params={"ensure_ascii": False})
 
 
@@ -329,7 +336,10 @@ def mapeo_carga(request, fuente_id, carga_id):
 
     if request.method == "GET":
         mapeos = list(
-            carga.mapeos.values("columna_origen", "modelo_destino", "campo_destino", "transformacion", "mapeo_valores")
+            carga.mapeos.values(
+                "columna_origen", "modelo_destino", "campo_destino",
+                "transformacion", "mapeo_valores", "valor_constante",
+            )
         )
         return JsonResponse({"carga_id": carga.pk, "mapeos": mapeos}, json_dumps_params={"ensure_ascii": False})
 
@@ -348,6 +358,7 @@ def mapeo_carga(request, fuente_id, carga_id):
 
         try:
             guardados = 0
+            enviados = set()
             for item in items:
                 columna_origen = (item.get("columna_origen") or "").strip()
                 if not columna_origen:
@@ -360,9 +371,16 @@ def mapeo_carga(request, fuente_id, carga_id):
                         "campo_destino": item.get("campo_destino", ""),
                         "transformacion": item.get("transformacion", "directo"),
                         "mapeo_valores": item.get("mapeo_valores") or {},
+                        "valor_constante": item.get("valor_constante", ""),
                     },
                 )
+                enviados.add(columna_origen)
                 guardados += 1
+
+            # El frontend siempre envía el estado completo (columnas + atributos
+            # manuales): lo que ya no venga se elimina (p. ej. un atributo manual
+            # que se quitó o se re-apuntó a otro campo).
+            carga.mapeos.exclude(columna_origen__in=enviados).delete()
 
             if not parcial:
                 carga.estado = "mapeado"
@@ -508,6 +526,56 @@ def _validar_columna(df, columna_origen, modelo_destino, campo_destino):
     }
 
 
+def _validar_constante(mapeo, total_filas):
+    """Valida el valor fijo de un atributo manual contra el campo destino (una sola vez, aplica a todas las filas)."""
+    try:
+        modelo_cls = apps.get_model("app", mapeo.modelo_destino)
+        field = modelo_cls._meta.get_field(mapeo.campo_destino)
+    except Exception:
+        return {"advertencia": "modelo_o_campo_no_encontrado"}
+
+    val = mapeo.valor_constante
+    errores = []
+    campo_requerido = not getattr(field, "blank", True) and not getattr(field, "null", True)
+    max_length = getattr(field, "max_length", None)
+    choices = getattr(field, "choices", None)
+    tipo_campo = type(field).__name__
+
+    if _es_vacio(val):
+        if campo_requerido:
+            errores.append({"fila": None, "valor": None, "tipo": "nulo_obligatorio", "mensaje": "Campo requerido vacío"})
+    else:
+        if tipo_campo in ("FloatField", "DecimalField"):
+            try:
+                float(val)
+            except (ValueError, TypeError):
+                errores.append({"fila": None, "valor": val, "tipo": "tipo_invalido", "mensaje": "No se puede convertir a número"})
+        elif tipo_campo in ("IntegerField", "PositiveIntegerField", "PositiveSmallIntegerField",
+                            "SmallIntegerField", "BigIntegerField"):
+            try:
+                int(float(val))
+            except (ValueError, TypeError):
+                errores.append({"fila": None, "valor": val, "tipo": "tipo_invalido", "mensaje": "No se puede convertir a entero"})
+        elif tipo_campo in ("DateField", "DateTimeField"):
+            try:
+                pd.to_datetime(val)
+            except Exception:
+                errores.append({"fila": None, "valor": val, "tipo": "tipo_invalido", "mensaje": "No se puede interpretar como fecha"})
+        if not errores and max_length is not None and len(str(val)) > max_length:
+            errores.append({"fila": None, "valor": val, "tipo": "longitud_excedida", "mensaje": f"Longitud {len(str(val))} supera el máximo de {max_length}"})
+        if not errores and choices is not None and str(val) not in {str(c[0]) for c in choices}:
+            errores.append({"fila": None, "valor": val, "tipo": "fuera_de_vocabulario", "mensaje": f"Valor no permitido. Opciones: {sorted(str(c[0]) for c in choices)}"})
+
+    return {
+        "columna": mapeo.columna_origen,
+        "modelo_destino": mapeo.modelo_destino,
+        "campo_destino": mapeo.campo_destino,
+        "total": total_filas,
+        "ok": 0 if errores else total_filas,
+        "errores": errores,
+    }
+
+
 @csrf_exempt
 def validar_carga(request, fuente_id, carga_id):
     if request.method != "POST":
@@ -532,7 +600,10 @@ def validar_carga(request, fuente_id, carga_id):
         filas_con_error = set()
 
         for mapeo in mapeos:
-            resultado = _validar_columna(df, mapeo.columna_origen, mapeo.modelo_destino, mapeo.campo_destino)
+            if mapeo.transformacion == "constante":
+                resultado = _validar_constante(mapeo, carga.total_filas)
+            else:
+                resultado = _validar_columna(df, mapeo.columna_origen, mapeo.modelo_destino, mapeo.campo_destino)
             if "advertencia" not in resultado:
                 for e in resultado["errores"]:
                     filas_con_error.add(e["fila"])

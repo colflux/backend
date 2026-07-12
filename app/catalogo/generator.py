@@ -15,7 +15,7 @@ GRUPOS_CATALOGO = [
         "entidades": ["Region", "Departamento", "Municipio"],
     },
     {
-        "nombre": "Sitio y Parcelas",
+        "nombre": "Sitio y Unidad Experimental",
         "icono": "📍",
         "entidades": ["Sitio", "UnidadMuestreoTipo", "UnidadMuestreo", "UnidadExperimental", "Parcela", "Transecto"],
     },

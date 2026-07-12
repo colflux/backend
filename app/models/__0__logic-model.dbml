@@ -116,7 +116,6 @@ Table unidad_muestreo_tipo [headercolor: #f1c40f] {
 Table unidad_experimental [headercolor: #f1c40f] {
   id int [pk]
   nombre varchar
-  tratamiento varchar
   descripcion text
 }
 

@@ -70,8 +70,8 @@ class UnidadMuestreoTipoAdmin(admin.ModelAdmin):
 
 @admin.register(UnidadExperimental)
 class UnidadExperimentalAdmin(admin.ModelAdmin):
-    list_display = ("nombre", "tratamiento")
-    search_fields = ("nombre", "tratamiento")
+    list_display = ("nombre",)
+    search_fields = ("nombre",)
 
 
 @admin.register(UnidadMuestreo)

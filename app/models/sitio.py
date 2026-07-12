@@ -97,7 +97,6 @@ class UnidadExperimental(TimestampedModel):
     """
 
     nombre = models.CharField("nombre", max_length=255)
-    tratamiento = models.CharField("tratamiento", max_length=255, blank=True)
     descripcion = models.TextField("descripción", blank=True)
 
     class Meta:
