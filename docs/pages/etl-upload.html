@@ -475,6 +475,7 @@
         <div style="padding:12px 20px;border-top:1.5px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
           <button type="button" class="btn-secondary" id="btnSeccionAnterior">← Sección anterior</button>
           <button type="button" class="btn-primary" id="btnGuardarSeccion">✅ Validar y guardar esta sección</button>
+          <button type="button" class="btn-secondary" id="btnSinDatosSeccion" style="display:none;">🚫 No tengo datos de Sitio en este archivo</button>
           <button type="button" class="btn-secondary" id="btnSeccionSiguiente">Sección siguiente →</button>
           <div id="mapeoSeccionResultado" style="font-size:.8rem;flex-basis:100%;"></div>
         </div>
@@ -513,6 +514,10 @@
 <script src="../config/services.js"></script>
 <script>
   const API_BASE = window.COLFLUX_CONFIG.apiBaseUrl;
+  // Subir/previsualizar/importar recorren el archivo fila por fila contra la
+  // base de datos: pueden tardar bastante más que una consulta normal, así
+  // que usan un timeout propio en vez del general de COLFLUX_CONFIG (5s).
+  const HEAVY_TIMEOUT_MS = Math.max(window.COLFLUX_CONFIG.requestTimeoutMs, 120000);
 
   // ── Estado global ─────────────────────────────────────────────────────────
   let state = {
@@ -552,6 +557,40 @@
   // más una pestaña especial "Todos los atributos" con el resumen editable
   // de cómo quedó mapeada cada columna) ────────────────────────────────────
   const SIN_MAPEAR_ORDEN = -1;
+
+  // ── Progreso local (sección actual + secciones ya guardadas) ────────────
+  // Cada "Analizar archivo" crea una CargaArchivo nueva (el backend copia los
+  // mapeos de la anterior como punto de partida), así que el progreso no se
+  // puede indexar por cargaId: se guarda por fuenteId para poder retomar en
+  // la misma sección al salir y volver a entrar con la misma fuente.
+  function progresoKey() {
+    return state.fuenteId ? `etlProgreso:${state.fuenteId}` : null;
+  }
+
+  function guardarProgresoLocal() {
+    const key = progresoKey();
+    if (!key) return;
+    try {
+      localStorage.setItem(key, JSON.stringify({
+        seccionIdx: state.seccionIdx,
+        seccionesGuardadas: [...state.seccionesGuardadas],
+      }));
+    } catch (e) { /* localStorage no disponible: se ignora */ }
+  }
+
+  function cargarProgresoLocal() {
+    const key = progresoKey();
+    if (!key) return;
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return;
+      const datos = JSON.parse(raw);
+      if (typeof datos.seccionIdx === 'number') state.seccionIdx = datos.seccionIdx;
+      if (Array.isArray(datos.seccionesGuardadas)) {
+        state.seccionesGuardadas = new Set(datos.seccionesGuardadas);
+      }
+    } catch (e) { /* datos corruptos o localStorage no disponible: se ignora */ }
+  }
 
   function contarColumnasSinMapear() {
     return state.columnas.filter((col, idx) => !state.mapeoSeleccion[idx]).length;
@@ -618,6 +657,14 @@
     const esSinMapear = state.seccionIdx === SIN_MAPEAR_ORDEN;
     document.getElementById('btnGuardarSeccion').style.display = esSinMapear ? 'none' : '';
     document.getElementById('mapeoSeccionResultado').style.display = esSinMapear ? 'none' : '';
+
+    // Botón "sin datos" — por ahora solo para Sitio: el archivo fuente no
+    // siempre trae columnas de sitio (se georreferencia aparte), así que se
+    // permite avanzar sin mapear/crear nada en esta sección.
+    const esSitio = !esSinMapear && actual && actual.nombre === 'Sitio';
+    document.getElementById('btnSinDatosSeccion').style.display = esSitio ? '' : 'none';
+
+    guardarProgresoLocal();
   }
 
   document.getElementById('btnSeccionAnterior').addEventListener('click', () => {
@@ -823,7 +870,7 @@
       const res = await fetch(`${API_BASE}/api/fuentes-datos/${state.fuenteId}/upload/`, {
         method: 'POST',
         body,
-        signal: AbortSignal.timeout(window.COLFLUX_CONFIG.requestTimeoutMs),
+        signal: AbortSignal.timeout(HEAVY_TIMEOUT_MS),
       });
 
       if (!res.ok) {
@@ -846,6 +893,7 @@
       await cargarCamposDestino();
       aplicarMapeosGuardados(data.mapeos || []);
       aplicarSugerencias();
+      cargarProgresoLocal();
       renderPaso2();
       showSection(2);
 
@@ -1397,6 +1445,76 @@
     choicesContainer.style.display = 'none';
     choicesContainer.style.padding = '0 20px 14px';
 
+    // Sub-panel de revisión de horas ambiguas (TimeField): el backend nunca
+    // decide solo cómo interpretar una hora contradictoria (p. ej. "14:29:00
+    // a. m."); solo sugiere una lectura y aquí se le pide al usuario que la
+    // confirme o la corrija antes de guardar.
+    const actualizarPanelHoras = (campoMeta, campoNombre) => {
+      const sugerencias = col.sugerencias_hora || {};
+      const valoresAmbiguos = Object.keys(sugerencias);
+      if (valoresAmbiguos.length === 0) { delete state.mapeoValores[idx]; return; }
+
+      choicesContainer.style.display = 'block';
+      const panel = document.createElement('div');
+      panel.className = 'choices-panel';
+      panel.innerHTML = `
+        <div class="choices-panel-title">
+          ⏱️ Horas ambiguas por revisar — <span style="font-weight:400;">${escapeHtml(campoMeta.verbose_name || campoNombre)}</span>
+        </div>
+        <div style="font-size:.78rem;color:var(--gray);margin:-6px 0 10px;">
+          Estos valores mezclan formato 24h con a. m./p. m. de forma contradictoria.
+          Confirma o corrige la interpretación antes de guardar.
+        </div>
+      `;
+
+      const mapeoPrevio = state.mapeoValores[idx] || {};
+      const mapeoNuevo = {};
+
+      valoresAmbiguos.forEach(valorOrigen => {
+        const sugerencia = sugerencias[valorOrigen];
+        const valorActual = mapeoPrevio[valorOrigen] !== undefined ? mapeoPrevio[valorOrigen] : sugerencia;
+        mapeoNuevo[valorOrigen] = valorActual;
+
+        const fila = document.createElement('div');
+        fila.className = 'choices-row';
+
+        const spanOrigen = document.createElement('div');
+        spanOrigen.className = 'choices-valor-origen';
+        spanOrigen.title = valorOrigen;
+        spanOrigen.textContent = valorOrigen;
+
+        const spanArrow = document.createElement('div');
+        spanArrow.className = 'choices-arrow';
+        spanArrow.textContent = '→';
+
+        const inputDestino = document.createElement('input');
+        inputDestino.type = 'text';
+        inputDestino.placeholder = 'HH:MM:ss';
+        inputDestino.value = valorActual;
+        inputDestino.style.cssText = 'width:100%;border:1.5px solid var(--border);border-radius:8px;padding:6px 10px;font-size:.82rem;font-family:inherit;';
+
+        const badgeSugerido = document.createElement('span');
+        badgeSugerido.className = 'mapeo-sugerido';
+        badgeSugerido.textContent = '❓ confirmar';
+        badgeSugerido.title = 'Interpretación sugerida, sin confirmar todavía';
+        badgeSugerido.style.display = mapeoPrevio[valorOrigen] !== undefined ? 'none' : '';
+
+        inputDestino.addEventListener('input', () => {
+          badgeSugerido.style.display = 'none';
+          state.mapeoValores[idx][valorOrigen] = inputDestino.value;
+        });
+
+        spanOrigen.appendChild(badgeSugerido);
+        fila.appendChild(spanOrigen);
+        fila.appendChild(spanArrow);
+        fila.appendChild(inputDestino);
+        panel.appendChild(fila);
+      });
+
+      state.mapeoValores[idx] = mapeoNuevo;
+      choicesContainer.appendChild(panel);
+    };
+
     const actualizarChoicesPanel = () => {
       const modelo = selModelo.value;
       const campoNombre = selCampo.value;
@@ -1407,6 +1525,12 @@
 
       const campos = state.modelosDestino[modelo] || [];
       const campoMeta = campos.find(c => c.nombre === campoNombre);
+
+      if (campoMeta && campoMeta.tipo_raw === 'TimeField') {
+        actualizarPanelHoras(campoMeta, campoNombre);
+        return;
+      }
+
       if (!campoMeta || !campoMeta.choices || campoMeta.choices.length === 0) { delete state.mapeoValores[idx]; return; }
 
       const valoresUnicos = col.valores_unicos || [];
@@ -1730,7 +1854,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ hasta_grupo: ordenGrupo }),
-          signal: AbortSignal.timeout(window.COLFLUX_CONFIG.requestTimeoutMs),
+          signal: AbortSignal.timeout(HEAVY_TIMEOUT_MS),
         }
       );
       const dataPreview = await resPreview.json().catch(() => ({}));
@@ -1755,7 +1879,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ hasta_grupo: ordenGrupo }),
-          signal: AbortSignal.timeout(window.COLFLUX_CONFIG.requestTimeoutMs),
+          signal: AbortSignal.timeout(HEAVY_TIMEOUT_MS),
         }
       );
       const data = await res.json().catch(() => ({}));
@@ -1799,6 +1923,29 @@
       document.getElementById('btnGuardarSeccion'),
       document.getElementById('mapeoSeccionResultado'),
     );
+  });
+
+  document.getElementById('btnSinDatosSeccion').addEventListener('click', () => {
+    const ordenGrupo = state.seccionIdx;
+    const secciones = seccionesDisponibles();
+    const seccionActual = secciones.find(s => s.orden === ordenGrupo);
+    const confirmado = window.confirm(
+      `¿Confirmas que el archivo no trae datos para "${seccionActual ? seccionActual.nombre : 'esta sección'}"? ` +
+      'No se creará ni actualizará ningún registro y se avanzará a la siguiente sección.'
+    );
+    if (!confirmado) return;
+
+    state.seccionesGuardadas.add(ordenGrupo);
+    const resultadoEl = document.getElementById('mapeoSeccionResultado');
+    resultadoEl.innerHTML = '<span style="color:var(--gray);">Sección omitida — sin datos en el archivo.</span>';
+
+    const idx = secciones.findIndex(s => s.orden === ordenGrupo);
+    const idxSiguienteValido = secciones.findIndex((s, i) => i > idx && !seccionBloqueada(s.orden));
+    if (idxSiguienteValido !== -1) {
+      state.seccionIdx = secciones[idxSiguienteValido].orden;
+      showToast(`Sección omitida ✓ — avanzando a "${secciones[idxSiguienteValido].nombre}"`);
+    }
+    renderMapeoRows();
   });
 
   // ── Init ──────────────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import csv
 import json
 import math
+import re
 import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
@@ -32,9 +33,21 @@ from app.catalogo.generator import GRUPOS_CATALOGO, campo_to_catalogo, fk_choice
 # - Excluye "Publicaciones": es metadato bibliográfico del proyecto, no
 #   datos fila por fila del archivo. Al quitarla, "Unidad Experimental"
 #   queda como primera sección real del wizard.
+# - Excluye temporalmente "Cobertura y Vegetación", "Suelo", "Torre EC y
+#   Flujos", "Proyecto" y "Usuarios, Roles y ETL": todavía no se está
+#   mapeando/importando esas entidades desde el ETL. Por ahora el wizard
+#   llega hasta "Muestras CO₂". Quitar de esta lista cuando se retome cada
+#   una.
+_GRUPOS_EXCLUIDOS_TEMPORAL = (
+    "Cobertura y Vegetación",
+    "Suelo",
+    "Torre EC y Flujos",
+    "Proyecto",
+    "Usuarios, Roles y ETL",
+)
 SECCIONES_ETL = []
 for _grupo in GRUPOS_CATALOGO:
-    if _grupo["nombre"] in ("Geografía", "Publicaciones"):
+    if _grupo["nombre"] in ("Geografía", "Publicaciones") or _grupo["nombre"] in _GRUPOS_EXCLUIDOS_TEMPORAL:
         continue
     if _grupo["nombre"] == "Unidad de Muestreo y Experimental":
         SECCIONES_ETL.append({
@@ -81,15 +94,30 @@ def _valores_unicos(series, max_n=50):
     return [str(v) for v in unicos[:max_n]]
 
 
+def _sugerencias_hora(valores_unicos):
+    """Para columnas que puedan mapearse a un TimeField: de sus valores únicos,
+    cuáles tienen forma de hora ambigua (24h + sufijo a. m./p. m. contradictorio)
+    y qué interpretación se les podría sugerir al usuario para que la confirme
+    o corrija en la UI (nunca se aplica sola)."""
+    sugerencias = {}
+    for val in valores_unicos:
+        sugerencia = _sugerir_hora(val)
+        if sugerencia is not None:
+            sugerencias[val] = sugerencia
+    return sugerencias
+
+
 def _columnas_desde_dataframe(df):
     columnas = []
     for col in df.columns:
+        valores_unicos = _valores_unicos(df[col])
         columnas.append({
             "nombre": col,
             "dtype": _infer_dtype(df[col]),
             "nulls": int(df[col].isna().sum()),
             "muestra": _muestra(df[col]),
-            "valores_unicos": _valores_unicos(df[col]),
+            "valores_unicos": valores_unicos,
+            "sugerencias_hora": _sugerencias_hora(valores_unicos),
         })
     return columnas
 
@@ -482,6 +510,32 @@ def _choices_de_campo(field):
     return None
 
 
+_RE_HORA_MERIDIANO = re.compile(r"^(\d{1,2}):(\d{2})(?::(\d{2}(?:\.\d+)?))?\s*([ap]\.?\s*m\.?)\s*$", re.IGNORECASE)
+
+
+def _sugerir_hora(valor):
+    """Si `valor` tiene forma de hora con sufijo a. m./p. m. pero el formato
+    estricto (el que exige Django) lo rechaza -por contradicción entre la
+    hora en 24h y el sufijo, p. ej. "14:29:00 a. m."-, devuelve una
+    *sugerencia* de interpretación (ignorando el sufijo) para que el usuario
+    la confirme o la corrija en la UI. No se aplica automáticamente. Si el
+    valor no aplica o ya es válido tal cual, devuelve None."""
+    match = _RE_HORA_MERIDIANO.match(str(valor).strip())
+    if not match:
+        return None
+    try:
+        pd.to_datetime(valor)
+        return None  # ya es válido en formato estricto, no hay ambigüedad
+    except Exception:
+        pass
+    hora, minuto, segundo = match.group(1), match.group(2), match.group(3) or "00"
+    candidato = f"{hora}:{minuto}:{segundo}"
+    try:
+        return pd.to_datetime(candidato).strftime("%H:%M:%S")
+    except Exception:
+        return None
+
+
 def _resolver_valor_columna(val, mapeo):
     """Aplica la traducción de mapeo_valores (origen -> destino) de una columna
     mapeada a un campo con choices, igual que hace la UI antes de guardar."""
@@ -571,6 +625,18 @@ def _validar_columna(df, mapeo):
                 })
                 continue
 
+        elif tipo_campo == "TimeField":
+            try:
+                pd.to_datetime(val)
+            except Exception:
+                errores.append({
+                    "fila": fila,
+                    "valor": py_val,
+                    "tipo": "tipo_invalido",
+                    "mensaje": "No se puede interpretar como hora",
+                })
+                continue
+
         if max_length is not None:
             if len(str(val)) > max_length:
                 errores.append({
@@ -636,6 +702,11 @@ def _validar_constante(mapeo, total_filas):
                 pd.to_datetime(val)
             except Exception:
                 errores.append({"fila": None, "valor": val, "tipo": "tipo_invalido", "mensaje": "No se puede interpretar como fecha"})
+        elif tipo_campo == "TimeField":
+            try:
+                pd.to_datetime(val)
+            except Exception:
+                errores.append({"fila": None, "valor": val, "tipo": "tipo_invalido", "mensaje": "No se puede interpretar como hora"})
         if not errores and max_length is not None and len(str(val)) > max_length:
             errores.append({"fila": None, "valor": val, "tipo": "longitud_excedida", "mensaje": f"Longitud {len(str(val))} supera el máximo de {max_length}"})
         if not errores and choices is not None and str(val) not in {v for v, _ in choices}:
@@ -899,6 +970,8 @@ def _coercionar_valor(valor, field):
     if tipo_campo in ("DateField", "DateTimeField"):
         ts = pd.to_datetime(valor)
         return ts.date() if tipo_campo == "DateField" else ts.to_pydatetime()
+    if tipo_campo == "TimeField":
+        return pd.to_datetime(valor).time()
     if tipo_campo == "BooleanField":
         if isinstance(valor, bool):
             return valor

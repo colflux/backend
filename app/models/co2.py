@@ -92,13 +92,16 @@ class MuestraAmbiental(TimestampedModel):
 class MuestraCO2(TimestampedModel):
     """Evento de medición de flujo de CO₂: una cámara conectada a un anillo."""
 
+    # Temporalmente opcionales: el ETL todavía no tiene forma de crear/vincular
+    # Anillo ni Camara (Camara depende de Equipo, cuya sección "Torre EC y
+    # Flujos" está oculta del wizard). Volver a null=False cuando se resuelva.
     anillo = models.ForeignKey(
         Anillo, on_delete=models.PROTECT, related_name="muestras_co2",
-        verbose_name="anillo",
+        null=True, blank=True, verbose_name="anillo",
     )
     camara = models.ForeignKey(
         Camara, on_delete=models.PROTECT, related_name="muestras_co2",
-        verbose_name="cámara",
+        null=True, blank=True, verbose_name="cámara",
     )
     fecha = models.DateField("fecha", null=True, blank=True)
     muestra_ambiental = models.ForeignKey(
