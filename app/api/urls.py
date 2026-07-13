@@ -4,7 +4,7 @@ from rest_framework.routers import DefaultRouter
 from app.api.dashboard.views import DashboardView
 from app.api.datos.views import FuenteDatosViewSet, fuentes_datos_api
 from app.api.etl.views import (
-    archivo_fuente, campos_destino, importar_carga, mapeo_carga, upload_archivo, validar_carga,
+    archivo_fuente, campos_destino, importar_carga, mapeo_carga, previsualizar_carga, upload_archivo, validar_carga,
 )
 from app.api.institucion.views import InstitucionViewSet
 from app.api.proyecto.views import ProyectoViewSet
@@ -30,6 +30,7 @@ urlpatterns = [
     path("api/etl/campos-destino/", campos_destino, name="etl-campos-destino"),
     path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/mapeo/", mapeo_carga, name="mapeo-carga"),
     path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/validar/", validar_carga, name="validar-carga"),
+    path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/previsualizar/", previsualizar_carga, name="previsualizar-carga"),
     path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/importar/", importar_carga, name="importar-carga"),
     path("", include(router.urls)),
 ]

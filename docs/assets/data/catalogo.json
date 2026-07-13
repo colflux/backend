@@ -8894,6 +8894,34 @@
               "max_length": null,
               "choices": [
                 {
+                  "valor": "89",
+                  "etiqueta": "Carga #89 — CO2"
+                },
+                {
+                  "valor": "88",
+                  "etiqueta": "Carga #88 — CO2"
+                },
+                {
+                  "valor": "87",
+                  "etiqueta": "Carga #87 — CO2"
+                },
+                {
+                  "valor": "86",
+                  "etiqueta": "Carga #86 — CO2"
+                },
+                {
+                  "valor": "85",
+                  "etiqueta": "Carga #85 — CO2"
+                },
+                {
+                  "valor": "84",
+                  "etiqueta": "Carga #84 — CO2"
+                },
+                {
+                  "valor": "83",
+                  "etiqueta": "Carga #83 — CO2"
+                },
+                {
                   "valor": "82",
                   "etiqueta": "Carga #82 — CO2"
                 },

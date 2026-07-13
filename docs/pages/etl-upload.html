@@ -326,6 +326,47 @@
     .btn-importar:hover { opacity: .9; }
     .btn-secondary { background: white; color: var(--gray); border: 1.5px solid var(--border); border-radius: 8px; padding: 10px 16px; font-size: .88rem; font-weight: 600; font-family: inherit; cursor: pointer; }
     .btn-secondary:hover { border-color: var(--gray); color: #1a2236; }
+
+    /* ── Vista previa antes de guardar sección ── */
+    .preview-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(15,23,42,.55);
+      z-index: 500; align-items: center; justify-content: center; padding: 24px;
+    }
+    .preview-overlay.open { display: flex; }
+    .preview-modal {
+      background: white; border-radius: 14px; max-width: 780px; width: 100%;
+      max-height: 84vh; display: flex; flex-direction: column; overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,.25);
+    }
+    .preview-modal-header { padding: 18px 22px; border-bottom: 1px solid var(--border); }
+    .preview-modal-header h3 { font-size: 1.05rem; font-weight: 800; margin-bottom: 4px; }
+    .preview-modal-header p { font-size: .82rem; color: var(--gray); }
+    .preview-modal-body { padding: 12px 22px; overflow-y: auto; flex: 1; }
+    .preview-entidad { margin-bottom: 18px; }
+    .preview-entidad-titulo {
+      font-size: .82rem; font-weight: 800; color: var(--green-d); margin-bottom: 6px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .preview-count { font-weight: 600; color: var(--gray); font-size: .76rem; }
+    .preview-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+    .preview-table th {
+      text-align: left; background: var(--gray-l); color: #374151; font-weight: 700;
+      padding: 6px 10px; border-bottom: 1.5px solid var(--border); white-space: nowrap;
+    }
+    .preview-table td {
+      padding: 6px 10px; border-bottom: 1px solid var(--border); color: #1a2236;
+      max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .preview-accion {
+      font-size: .68rem; font-weight: 700; padding: 2px 8px; border-radius: 20px; white-space: nowrap;
+    }
+    .preview-accion-creado { background: #dcfce7; color: #166534; }
+    .preview-accion-reutilizado { background: var(--blue-l); color: var(--blue); }
+    .preview-truncado { font-size: .74rem; color: var(--gray); margin-top: 4px; }
+    .preview-modal-footer {
+      padding: 14px 22px; border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+    }
   </style>
 </head>
 <body>
@@ -453,6 +494,21 @@
 
 <div id="app-footer"></div>
 
+<!-- Vista previa antes de guardar una sección -->
+<div class="preview-overlay" id="previewOverlay">
+  <div class="preview-modal">
+    <div class="preview-modal-header">
+      <h3 id="previewTitulo">Vista previa</h3>
+      <p>Esto es lo que se va a crear o reutilizar en base de datos para esta sección. Revisa antes de confirmar.</p>
+    </div>
+    <div class="preview-modal-body" id="previewBody"></div>
+    <div class="preview-modal-footer">
+      <button type="button" class="btn-secondary" id="btnPreviewCancelar">Cancelar</button>
+      <button type="button" class="btn-primary" id="btnPreviewConfirmar">✅ Confirmar y guardar</button>
+    </div>
+  </div>
+</div>
+
 <script src="../assets/js/layout.js"></script>
 <script src="../config/services.js"></script>
 <script>
@@ -510,23 +566,27 @@
     return [{ orden: SIN_MAPEAR_ORDEN, nombre: 'Todos los atributos', icono: '📋' }, ...resto];
   }
 
-  // Primera sección "real" del wizard (hoy: Unidad Experimental). Las demás
-  // quedan bloqueadas hasta que esta quede guardada en base de datos.
-  function primeraSeccionOrden() {
-    const reales = seccionesDisponibles().filter(s => s.orden !== SIN_MAPEAR_ORDEN);
-    return reales.length ? Math.min(...reales.map(s => s.orden)) : null;
+  // Secciones "reales" del wizard en orden (excluye "Todos los atributos").
+  function seccionesReales() {
+    return seccionesDisponibles()
+      .filter(s => s.orden !== SIN_MAPEAR_ORDEN)
+      .sort((a, b) => a.orden - b.orden);
   }
 
+  // Cada sección queda bloqueada hasta que TODAS las anteriores (en orden)
+  // ya se hayan guardado en base de datos, no solo la primera.
   function seccionBloqueada(orden) {
     if (orden === SIN_MAPEAR_ORDEN) return false;
-    const primera = primeraSeccionOrden();
-    if (primera === null || orden === primera) return false;
-    return !state.seccionesGuardadas.has(primera);
+    const reales = seccionesReales();
+    const idx = reales.findIndex(s => s.orden === orden);
+    if (idx <= 0) return false;
+    return !reales.slice(0, idx).every(s => state.seccionesGuardadas.has(s.orden));
   }
 
   function renderSeccionNav() {
     const cont = document.getElementById('seccionNav');
     const secciones = seccionesDisponibles();
+    const reales = seccionesReales();
     const nSinMapear = contarColumnasSinMapear();
     cont.innerHTML = secciones.map(s => {
       const bloqueada = seccionBloqueada(s.orden);
@@ -537,7 +597,8 @@
       const hecha = state.seccionesGuardadas.has(s.orden) && s.orden !== state.seccionIdx;
       const icono = bloqueada ? '🔒' : (hecha ? '✓' : s.icono);
       const badge = s.orden === SIN_MAPEAR_ORDEN && nSinMapear ? ` (${nSinMapear} sin mapear)` : '';
-      const title = bloqueada ? ' title="Primero guarda \'Unidad Experimental\' en base de datos"' : '';
+      const faltante = bloqueada ? reales.find(r => !state.seccionesGuardadas.has(r.orden)) : null;
+      const title = bloqueada ? ` title="Primero guarda '${escapeHtml(faltante ? faltante.nombre : '')}' en base de datos"` : '';
       return `<button type="button" class="${clases.join(' ')}" data-orden="${s.orden}"${bloqueada ? ' disabled' : ''}${title}>${icono} ${escapeHtml(s.nombre)}${badge}</button>`;
     }).join('');
     cont.querySelectorAll('button[data-orden]:not([disabled])').forEach(btn => {
@@ -778,6 +839,7 @@
       state.mapeoValores = {};
       state.mapeoSeleccion = {};
       state.atributosManuales = [];
+      state.seccionesGuardadas = new Set();
       document.getElementById('avanceGuardadoInfo').textContent = '';
 
       // Cargar campos destino antes de mostrar paso 2
@@ -972,6 +1034,15 @@
 
     const tipoUnidadEsParcela = [...valoresDetectadosParaCampo('UnidadMuestreo', 'tipo')]
       .some(v => v.includes('parcela'));
+    const tipoUnidadEsTransecto = [...valoresDetectadosParaCampo('UnidadMuestreo', 'tipo')]
+      .some(v => v.includes('transecto'));
+    // ¿Ya hay una columna o atributo manual mapeado a UnidadMuestreo.unidad_experimental?
+    const unidadExperimentalMapeada =
+      state.columnas.some((col, idx) => {
+        const sel = state.mapeoSeleccion[idx];
+        return sel && sel.modelo === 'UnidadMuestreo' && sel.campo === 'unidad_experimental';
+      }) ||
+      state.atributosManuales.some(a => a.modelo === 'UnidadMuestreo' && a.campo === 'unidad_experimental');
 
     // Agrupar índices de columna por entidad seleccionada
     // ('' = sin decidir, IGNORADAS = "— ignorar —" explícito)
@@ -1022,12 +1093,30 @@
       header.innerHTML = `${grupoLabel}${escapeHtml(modelo)} · ${sufijo}`;
       groupEl.appendChild(header);
 
+      if (modelo === 'UnidadMuestreo') {
+        const vinculo = document.createElement('div');
+        vinculo.className = 'mapeo-group-vinculo' + (unidadExperimentalMapeada ? '' : ' pendiente');
+        vinculo.textContent = unidadExperimentalMapeada
+          ? '🔗 "unidad_experimental" mapeada desde una columna del archivo.'
+          : '💡 "unidad_experimental" no está mapeada: cada unidad de muestreo se vinculará automáticamente a la Unidad Experimental creada para esa misma fila en la sección anterior.';
+        groupEl.appendChild(vinculo);
+      }
+
       if (modelo === 'Parcela') {
         const vinculo = document.createElement('div');
         vinculo.className = 'mapeo-group-vinculo' + (tipoUnidadEsParcela ? '' : ' pendiente');
         vinculo.textContent = tipoUnidadEsParcela
           ? '🔗 Vinculada — se detectó "tipo: parcela" en Unidad de Muestreo. Mapeá aquí sus medidas.'
           : '💡 Esta sección solo aplica si el campo "tipo" de Unidad de Muestreo se mapea a "parcela".';
+        groupEl.appendChild(vinculo);
+      }
+
+      if (modelo === 'Transecto') {
+        const vinculo = document.createElement('div');
+        vinculo.className = 'mapeo-group-vinculo' + (tipoUnidadEsTransecto ? '' : ' pendiente');
+        vinculo.textContent = tipoUnidadEsTransecto
+          ? '🔗 Vinculada — se detectó "tipo: transecto" en Unidad de Muestreo. Mapeá aquí sus medidas.'
+          : '🔌 Desvinculada — no hay unidades de muestreo de tipo "transecto" en este archivo.';
         groupEl.appendChild(vinculo);
       }
 
@@ -1112,7 +1201,9 @@
     const row = document.createElement('div');
     row.className = 'mapeo-row';
 
-    // Izquierda: valor fijo (input o select según choices del campo destino)
+    // Izquierda: campo destino (la entidad ya la define el grupo) — se elige
+    // primero para saber qué tipo de valor corresponde (select existente si
+    // es FK, texto libre si no).
     const infoDiv = document.createElement('div');
     infoDiv.className = 'mapeo-col-info';
     const label = document.createElement('div');
@@ -1120,9 +1211,42 @@
     label.innerHTML = `<span class="mapeo-sugerido" style="background:var(--purple-l);color:var(--purple);">✏️ manual</span> valor fijo para todas las filas`;
     infoDiv.appendChild(label);
 
+    const selCampo = document.createElement('select');
+    selCampo.innerHTML = '<option value="">— campo —</option>';
+    (state.modelosDestino[attr.modelo] || []).forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.nombre;
+      opt.textContent = c.verbose_name ? `${c.verbose_name} (${c.nombre})` : c.nombre;
+      if (c.es_fk) opt.textContent += ' 🔗';
+      selCampo.appendChild(opt);
+    });
+    selCampo.value = attr.campo || '';
+    selCampo.style.cssText = 'margin-top:6px;width:100%;border:1.5px solid var(--border);border-radius:8px;padding:7px 12px;font-size:.82rem;font-family:inherit;background:white;cursor:pointer;';
+
+    selCampo.addEventListener('change', () => {
+      attr.campo = selCampo.value;
+      attr.valor = '';
+      renderMapeoRows();
+    });
+    infoDiv.appendChild(selCampo);
+
+    const arrowDiv = document.createElement('div');
+    arrowDiv.className = 'mapeo-arrow';
+    arrowDiv.textContent = '→';
+
+    // Derecha: valor fijo — select con los registros existentes si el campo
+    // es una FK (así siempre se referencia algo que ya existe en la base de
+    // datos, nunca texto libre), o un input de texto para campos normales.
+    const destDiv = document.createElement('div');
+    destDiv.className = 'mapeo-col-destino';
+
     const campoMeta = (state.modelosDestino[attr.modelo] || []).find(c => c.nombre === attr.campo);
     let valorInput;
-    if (campoMeta && campoMeta.choices && campoMeta.choices.length) {
+    if (campoMeta && campoMeta.es_fk && (!campoMeta.choices || !campoMeta.choices.length)) {
+      valorInput = document.createElement('div');
+      valorInput.textContent = `Aún no hay ningún ${campoMeta.modelo_fk} registrado en la base de datos.`;
+      valorInput.style.cssText = 'font-size:.78rem;color:var(--gray);font-style:italic;flex:1;';
+    } else if (campoMeta && campoMeta.choices && campoMeta.choices.length) {
       valorInput = document.createElement('select');
       const optVacio = document.createElement('option');
       optVacio.value = ''; optVacio.textContent = '— valor —';
@@ -1137,43 +1261,20 @@
         attr.valor = valorInput.value;
         if (attr.modelo === 'UnidadMuestreo' && attr.campo === 'tipo') renderMapeoRows();
       });
-      valorInput.style.cssText = 'margin-top:6px;width:100%;border:1.5px solid var(--border);border-radius:8px;padding:7px 12px;font-size:.82rem;font-family:inherit;background:white;';
+      valorInput.style.cssText = 'width:100%;border:1.5px solid var(--border);border-radius:8px;padding:7px 12px;font-size:.82rem;font-family:inherit;background:white;cursor:pointer;';
     } else {
       valorInput = document.createElement('input');
       valorInput.type = 'text';
-      valorInput.placeholder = 'valor…';
+      valorInput.placeholder = campoMeta ? 'valor…' : 'elige un campo primero…';
+      valorInput.disabled = !campoMeta;
       valorInput.value = attr.valor || '';
       valorInput.addEventListener('input', () => { attr.valor = valorInput.value; });
       valorInput.addEventListener('blur', () => {
         if (attr.modelo === 'UnidadMuestreo' && attr.campo === 'tipo') renderMapeoRows();
       });
-      valorInput.style.cssText = 'margin-top:6px;width:100%;border:1.5px solid var(--border);border-radius:8px;padding:7px 12px;font-size:.82rem;font-family:inherit;';
+      valorInput.style.cssText = 'width:100%;border:1.5px solid var(--border);border-radius:8px;padding:7px 12px;font-size:.82rem;font-family:inherit;';
     }
-    infoDiv.appendChild(valorInput);
-
-    const arrowDiv = document.createElement('div');
-    arrowDiv.className = 'mapeo-arrow';
-    arrowDiv.textContent = '→';
-
-    // Derecha: campo destino (la entidad ya la define el grupo) y quitar
-    const destDiv = document.createElement('div');
-    destDiv.className = 'mapeo-col-destino';
-
-    const selCampo = document.createElement('select');
-    selCampo.innerHTML = '<option value="">— campo —</option>';
-    (state.modelosDestino[attr.modelo] || []).forEach(c => {
-      const opt = document.createElement('option');
-      opt.value = c.nombre;
-      opt.textContent = c.verbose_name ? `${c.verbose_name} (${c.nombre})` : c.nombre;
-      selCampo.appendChild(opt);
-    });
-    selCampo.value = attr.campo || '';
-
-    selCampo.addEventListener('change', () => {
-      attr.campo = selCampo.value;
-      attr.valor = '';
-      renderMapeoRows();
-    });
+    destDiv.appendChild(valorInput);
 
     const btnQuitar = document.createElement('button');
     btnQuitar.type = 'button';
@@ -1184,8 +1285,6 @@
       state.atributosManuales.splice(i, 1);
       renderMapeoRows();
     });
-
-    destDiv.appendChild(selCampo);
     destDiv.appendChild(btnQuitar);
 
     row.appendChild(infoDiv);
@@ -1284,6 +1383,7 @@
         const opt = document.createElement('option');
         opt.value = c.nombre;
         opt.textContent = c.verbose_name ? `${c.verbose_name} (${c.nombre})` : c.nombre;
+        if (c.es_fk) opt.textContent += ' 🔗';
         selCampo.appendChild(opt);
       });
       selCampo.value = seleccion.campo || '';
@@ -1396,9 +1496,11 @@
     selCampo.addEventListener('change', () => {
       state.mapeoSeleccion[idx] = { modelo: selModelo.value, campo: selCampo.value };
       infoDiv.querySelector('.mapeo-sugerido')?.remove();
-      // Si se (des)asigna UnidadMuestreo.tipo, el vínculo con la sección
-      // Parcela puede cambiar: se necesita un re-render completo del listado.
-      if (selModelo.value === 'UnidadMuestreo' && (selCampo.value === 'tipo' || seleccion.campo === 'tipo')) {
+      // Si se (des)asigna UnidadMuestreo.tipo o .unidad_experimental, los
+      // vínculos con Parcela/Transecto o el mensaje de vínculo automático
+      // pueden cambiar: se necesita un re-render completo del listado.
+      const campoRelevante = c => c === 'tipo' || c === 'unidad_experimental';
+      if (selModelo.value === 'UnidadMuestreo' && (campoRelevante(selCampo.value) || campoRelevante(seleccion.campo))) {
         renderMapeoRows();
       } else {
         actualizarChoicesPanel();
@@ -1521,6 +1623,97 @@
     return `<div style="color:var(--red);">✗ ${r.total_errores ?? ''} error(es) — no se guardó nada de esta sección:${detalle}</div>`;
   }
 
+  // ── Vista previa de lo que se va a crear/reutilizar, antes de guardar ────
+  function nombreEntidad(modelo) {
+    return grupoDeModelo(modelo)?.nombre ? `${modelo}` : modelo;
+  }
+
+  function renderPreviewBody(detalle) {
+    const body = document.getElementById('previewBody');
+    body.innerHTML = '';
+
+    const modelos = Object.keys(detalle).sort((a, b) =>
+      (grupoDeModelo(a)?.orden_modelo ?? 999) - (grupoDeModelo(b)?.orden_modelo ?? 999)
+    );
+
+    if (!modelos.length) {
+      body.innerHTML = '<p style="font-size:.85rem;color:var(--gray);">Esta sección no crea ni reutiliza registros con los mapeos actuales.</p>';
+      return;
+    }
+
+    modelos.forEach(modelo => {
+      const info = detalle[modelo];
+      const registros = info.registros || [];
+      if (!registros.length) return;
+
+      // Columnas = unión de campos presentes en los registros, en orden de aparición
+      const columnas = [];
+      registros.forEach(r => Object.keys(r.campos || {}).forEach(c => {
+        if (!columnas.includes(c)) columnas.push(c);
+      }));
+
+      const wrap = document.createElement('div');
+      wrap.className = 'preview-entidad';
+      const creados = registros.filter(r => r.accion === 'creado').length;
+      const reutilizados = registros.length - creados;
+      wrap.innerHTML = `
+        <div class="preview-entidad-titulo">
+          ${escapeHtml(nombreEntidad(modelo))}
+          <span class="preview-count">${info.total} registro${info.total === 1 ? '' : 's'} · ${creados} nuevo${creados === 1 ? '' : 's'}, ${reutilizados} reutilizado${reutilizados === 1 ? '' : 's'}</span>
+        </div>
+      `;
+
+      const table = document.createElement('table');
+      table.className = 'preview-table';
+      const thead = document.createElement('thead');
+      thead.innerHTML = `<tr><th></th>${columnas.map(c => `<th>${escapeHtml(c)}</th>`).join('')}</tr>`;
+      table.appendChild(thead);
+
+      const tbody = document.createElement('tbody');
+      registros.forEach(r => {
+        const tr = document.createElement('tr');
+        const accionHtml = `<span class="preview-accion preview-accion-${r.accion}">${r.accion === 'creado' ? '➕ nuevo' : '♻️ existente'}</span>`;
+        const celdas = columnas.map(c => `<td title="${escapeHtml(String(r.campos[c] ?? ''))}">${escapeHtml(String(r.campos[c] ?? '—'))}</td>`).join('');
+        tr.innerHTML = `<td>${accionHtml}</td>${celdas}`;
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+
+      if (info.truncado) {
+        const nota = document.createElement('div');
+        nota.className = 'preview-truncado';
+        nota.textContent = `Mostrando los primeros ${registros.length} de ${info.total} registros.`;
+        wrap.appendChild(nota);
+      }
+
+      body.appendChild(wrap);
+    });
+  }
+
+  function mostrarPreviewYConfirmar(detalle, tituloSeccion) {
+    return new Promise(resolve => {
+      document.getElementById('previewTitulo').textContent = `Vista previa — ${tituloSeccion}`;
+      renderPreviewBody(detalle);
+      const overlay = document.getElementById('previewOverlay');
+      const btnConfirmar = document.getElementById('btnPreviewConfirmar');
+      const btnCancelar = document.getElementById('btnPreviewCancelar');
+
+      const cerrar = (confirmado) => {
+        overlay.classList.remove('open');
+        btnConfirmar.removeEventListener('click', onConfirmar);
+        btnCancelar.removeEventListener('click', onCancelar);
+        resolve(confirmado);
+      };
+      const onConfirmar = () => cerrar(true);
+      const onCancelar = () => cerrar(false);
+
+      btnConfirmar.addEventListener('click', onConfirmar);
+      btnCancelar.addEventListener('click', onCancelar);
+      overlay.classList.add('open');
+    });
+  }
+
   async function guardarSeccion(ordenGrupo, btn, resultadoEl) {
     showError('step2Error', '');
     btn.disabled = true;
@@ -1530,6 +1723,31 @@
 
     try {
       await enviarMapeos(true);
+
+      const resPreview = await fetch(
+        `${API_BASE}/api/fuentes-datos/${state.fuenteId}/carga/${state.cargaId}/previsualizar/`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hasta_grupo: ordenGrupo }),
+          signal: AbortSignal.timeout(window.COLFLUX_CONFIG.requestTimeoutMs),
+        }
+      );
+      const dataPreview = await resPreview.json().catch(() => ({}));
+      if (!resPreview.ok) {
+        resultadoEl.innerHTML = renderErroresSeccionHtml(dataPreview);
+        return;
+      }
+
+      const secciones = seccionesDisponibles();
+      const seccionActual = secciones.find(s => s.orden === ordenGrupo);
+      const confirmado = await mostrarPreviewYConfirmar(dataPreview.detalle || {}, seccionActual ? seccionActual.nombre : '');
+      if (!confirmado) {
+        resultadoEl.innerHTML = '<span style="color:var(--gray);">Guardado cancelado tras revisar la vista previa.</span>';
+        return;
+      }
+
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
 
       const res = await fetch(
         `${API_BASE}/api/fuentes-datos/${state.fuenteId}/carga/${state.cargaId}/importar/`,

@@ -45,7 +45,12 @@ for _grupo in GRUPOS_CATALOGO:
         SECCIONES_ETL.append({
             "nombre": "Unidad de Muestreo",
             "icono": "📏",
-            "entidades": ["UnidadMuestreoTipo", "UnidadMuestreo", "Parcela", "Transecto"],
+            # UnidadMuestreoTipo no se incluye aquí a propósito: es un catálogo
+            # cerrado de tipos (parcela, transecto, etc.), no datos que el ETL
+            # deba crear o modificar. El campo "tipo" de UnidadMuestreo se sigue
+            # pudiendo mapear igual, pero como FK de solo selección entre los
+            # tipos ya existentes (ver fk_choices en catalogo/generator.py).
+            "entidades": ["UnidadMuestreo", "Parcela", "Transecto"],
         })
         SECCIONES_ETL.append({
             "nombre": "Sitio",
@@ -660,6 +665,51 @@ def _valores_fila_modelo(df, mapeos_modelo, fila_idx):
     return valores
 
 
+def _validar_obligatorios_unidad_muestreo(mapeos, modelos_incluidos, total_filas):
+    """Reglas de negocio de UnidadMuestreo que no se derivan de blank/null del
+    modelo (por eso _validar_columna/_validar_constante no las cubren):
+    - 'nombre' es obligatorio para toda unidad de muestreo, así que debe
+      quedar mapeado (columna o atributo manual) antes de guardar la sección.
+    - 'unidad_experimental' debe quedar resuelto sí o sí: mapeado explícito,
+      o heredado automáticamente porque 'UnidadExperimental' se importa en la
+      misma tanda (ver el vínculo automático por fila en importar_carga)."""
+    if "UnidadMuestreo" not in modelos_incluidos:
+        return None
+
+    campos_um = {m.campo_destino for m in mapeos if m.modelo_destino == "UnidadMuestreo"}
+    errores = []
+
+    if "nombre" not in campos_um:
+        errores.append({
+            "fila": None, "valor": None, "tipo": "campo_obligatorio_sin_mapear",
+            "mensaje": (
+                "El campo 'nombre' de Unidad de Muestreo no está mapeado (ni por "
+                "columna ni como atributo manual). Es obligatorio: toda unidad de "
+                "muestreo necesita un nombre."
+            ),
+        })
+
+    if "unidad_experimental" not in campos_um and "UnidadExperimental" not in modelos_incluidos:
+        errores.append({
+            "fila": None, "valor": None, "tipo": "campo_obligatorio_sin_mapear",
+            "mensaje": (
+                "Unidad de Muestreo no tiene 'unidad_experimental' mapeada, y la "
+                "sección 'Unidad Experimental' no forma parte de esta importación, "
+                "así que no se puede vincular automáticamente. Mapea la columna, o "
+                "guarda primero la sección Unidad Experimental."
+            ),
+        })
+
+    return {
+        "columna": "Unidad de Muestreo (campos obligatorios)",
+        "modelo_destino": "UnidadMuestreo",
+        "campo_destino": "",
+        "total": total_filas,
+        "ok": 0 if errores else total_filas,
+        "errores": errores,
+    }
+
+
 def _validar_unicidad_unidad_experimental(carga, df):
     """Unidad Experimental es única por (proyecto, nombre): la fuente debe
     tener un proyecto asociado, y si ese nombre ya existe en el proyecto con
@@ -762,6 +812,13 @@ def validar_carga(request, fuente_id, carga_id):
                 filas_con_error.add(e["fila"])
             resultados.append(resultado_ue)
 
+        modelos_incluidos = {m.modelo_destino for m in mapeos}
+        resultado_um = _validar_obligatorios_unidad_muestreo(mapeos, modelos_incluidos, carga.total_filas)
+        if resultado_um is not None:
+            for e in resultado_um["errores"]:
+                filas_con_error.add(e["fila"])
+            resultados.append(resultado_um)
+
         columnas_con_errores = sum(
             1 for r in resultados
             if "advertencia" not in r and len(r["errores"]) > 0
@@ -849,6 +906,257 @@ def _coercionar_valor(valor, field):
     return valor
 
 
+_PREVIEW_MAX_POR_MODELO = 200
+
+
+def _representar_kwargs(kwargs):
+    """Convierte los kwargs de creación de una instancia (que pueden incluir
+    otras instancias de modelo como valores de FK) en algo serializable y
+    legible para mostrar en la tabla de vista previa."""
+    out = {}
+    for k, v in kwargs.items():
+        if hasattr(v, "pk"):
+            out[k] = str(v)
+        elif hasattr(v, "isoformat"):
+            out[k] = v.isoformat()
+        else:
+            out[k] = v
+    return out
+
+
+def _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos, capturar_detalle=False):
+    """Recorre cada fila del archivo y crea/reutiliza (get_or_create /
+    update_or_create) una instancia por modelo en `orden`, vinculando por FK
+    las que se crearon para la misma fila. Se usa tanto para importar de
+    verdad como, dentro de una transacción que se revierte, para la vista
+    previa (capturar_detalle=True) sin escribir nada permanente."""
+    detalle = {} if capturar_detalle else None
+
+    for fila_idx in range(len(df)):
+        instancias_fila = {}
+        for modelo in orden:
+            modelo_cls = apps.get_model("app", modelo)
+            kwargs = {}
+            incompleto = False
+
+            for mapeo in mapeos_por_modelo.get(modelo, []):
+                field = modelo_cls._meta.get_field(mapeo.campo_destino)
+
+                if mapeo.transformacion == "constante":
+                    valor = None if _es_vacio(mapeo.valor_constante) else mapeo.valor_constante
+                else:
+                    val_crudo = df[mapeo.columna_origen].iloc[fila_idx]
+                    valor = _resolver_valor_columna(val_crudo, mapeo)
+
+                if valor is None:
+                    if not (getattr(field, "blank", True) or getattr(field, "null", True)):
+                        incompleto = True
+                    continue
+
+                if _es_fk(field):
+                    fk_modelo = field.related_model.__name__
+                    if fk_modelo in instancias_fila:
+                        kwargs[mapeo.campo_destino] = instancias_fila[fk_modelo]
+                    else:
+                        try:
+                            kwargs[mapeo.campo_destino] = field.related_model.objects.get(pk=valor)
+                        except (field.related_model.DoesNotExist, ValueError, TypeError):
+                            incompleto = True
+                else:
+                    try:
+                        kwargs[mapeo.campo_destino] = _coercionar_valor(valor, field)
+                    except (ValueError, TypeError):
+                        incompleto = True
+
+            # Vincular automáticamente los FK hacia otros modelos ya
+            # creados en esta misma fila, aunque el usuario no haya
+            # mapeado esa columna explícitamente (p. ej. Parcela se
+            # asocia solo a la UnidadMuestreo de su misma fila).
+            for field in modelo_cls._meta.get_fields():
+                if not _es_fk(field) or field.name in kwargs:
+                    continue
+                fk_modelo = field.related_model.__name__
+                if fk_modelo in instancias_fila:
+                    kwargs[field.name] = instancias_fila[fk_modelo]
+
+            if incompleto or not kwargs:
+                continue
+
+            if modelo == "UnidadMuestreo":
+                kwargs.setdefault("fuente_datos", carga.fuente)
+
+            if modelo == "UnidadExperimental":
+                kwargs.setdefault("proyecto", carga.fuente.proyecto)
+
+            # Si el modelo tiene un vínculo OneToOne (p. ej. Parcela →
+            # unidad_muestreo), ese vínculo es su clave real: solo puede
+            # existir una fila por unidad, así que el resto de los
+            # campos se actualizan en vez de intentar crear otra fila
+            # (que violaría la restricción única).
+            campos_clave = {
+                nombre: valor
+                for nombre, valor in kwargs.items()
+                if type(modelo_cls._meta.get_field(nombre)).__name__ == "OneToOneField"
+            }
+            if campos_clave:
+                defaults = {k: v for k, v in kwargs.items() if k not in campos_clave}
+                obj, creado = modelo_cls.objects.update_or_create(**campos_clave, defaults=defaults)
+            else:
+                obj, creado = modelo_cls.objects.get_or_create(**kwargs)
+
+            instancias_fila[modelo] = obj
+            resumen_modelos[modelo]["creados" if creado else "reutilizados"] += 1
+
+            if capturar_detalle:
+                bucket = detalle.setdefault(modelo, {})
+                if obj.pk not in bucket and len(bucket) < _PREVIEW_MAX_POR_MODELO:
+                    bucket[obj.pk] = {
+                        "accion": "creado" if creado else "reutilizado",
+                        "campos": _representar_kwargs(kwargs),
+                    }
+
+    return detalle
+
+
+def _preparar_importacion(carga, hasta_grupo_solicitado):
+    """Validaciones y datos comunes a importar_carga y previsualizar_carga:
+    resuelve `hasta_grupo`, arma los mapeos de la sección y valida el archivo.
+    Devuelve (mapeos, hasta_grupo, grupo_maximo, error_response) — si hay
+    error, todo lo demás es None y `error_response` ya es el JsonResponse a
+    devolver tal cual."""
+    todos_mapeos = list(carga.mapeos.exclude(modelo_destino=""))
+    if not todos_mapeos:
+        return None, None, None, JsonResponse({"error": "La carga no tiene mapeos definidos."}, status=400)
+
+    grupo_maximo = max(_grupo_de_modelo(m.modelo_destino) for m in todos_mapeos)
+    hasta_grupo = hasta_grupo_solicitado if hasta_grupo_solicitado is not None else grupo_maximo
+    try:
+        hasta_grupo = int(hasta_grupo)
+    except (TypeError, ValueError):
+        return None, None, None, JsonResponse({"error": "hasta_grupo inválido"}, status=400)
+
+    mapeos = [m for m in todos_mapeos if _grupo_de_modelo(m.modelo_destino) <= hasta_grupo]
+    if not mapeos:
+        return None, None, None, JsonResponse({"error": "No hay mapeos para esta sección."}, status=400)
+
+    return mapeos, hasta_grupo, grupo_maximo, None
+
+
+def _validar_seccion(carga, df, mapeos):
+    """Corre todas las validaciones (por columna + reglas de negocio) sobre
+    el subconjunto `mapeos` de esta sección. Devuelve (resultados, total_errores,
+    filas_con_error)."""
+    resultados = []
+    filas_con_error = set()
+    for mapeo in mapeos:
+        if mapeo.transformacion == "constante":
+            resultado = _validar_constante(mapeo, carga.total_filas)
+        else:
+            resultado = _validar_columna(df, mapeo)
+        if "advertencia" not in resultado:
+            for e in resultado["errores"]:
+                filas_con_error.add(e["fila"])
+        resultados.append(resultado)
+
+    resultado_ue = _validar_unicidad_unidad_experimental(carga, df)
+    if resultado_ue is not None:
+        for e in resultado_ue["errores"]:
+            filas_con_error.add(e["fila"])
+        resultados.append(resultado_ue)
+
+    modelos_incluidos = {m.modelo_destino for m in mapeos}
+    resultado_um = _validar_obligatorios_unidad_muestreo(mapeos, modelos_incluidos, carga.total_filas)
+    if resultado_um is not None:
+        for e in resultado_um["errores"]:
+            filas_con_error.add(e["fila"])
+        resultados.append(resultado_um)
+
+    total_errores = sum(len(r["errores"]) for r in resultados if "advertencia" not in r)
+    return resultados, total_errores, filas_con_error
+
+
+@csrf_exempt
+def previsualizar_carga(request, fuente_id, carga_id):
+    """Simula la importación de esta sección (mismo orden de creación/vínculo
+    por FK que importar_carga) sin escribir nada permanente en la base, para
+    mostrar en el wizard qué se va a crear/reutilizar y con qué referencias
+    antes de confirmar el guardado."""
+    if request.method != "POST":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+
+    try:
+        carga = CargaArchivo.objects.get(pk=carga_id, fuente_id=fuente_id)
+    except CargaArchivo.DoesNotExist:
+        return JsonResponse({"error": "Carga no encontrada"}, status=404)
+
+    try:
+        body = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "JSON inválido"}, status=400)
+
+    mapeos, hasta_grupo, grupo_maximo, error_response = _preparar_importacion(carga, body.get("hasta_grupo"))
+    if error_response is not None:
+        return error_response
+
+    try:
+        path = _resolver_ruta_fuente(carga.fuente)
+        nombre = str(path).lower()
+        if nombre.endswith(".csv"):
+            df = _leer_csv(path)
+        else:
+            df = pd.read_excel(path, sheet_name=carga.hoja_activa)
+
+        resultados, total_errores, filas_con_error = _validar_seccion(carga, df, mapeos)
+        if total_errores > 0:
+            return JsonResponse({
+                "ok": False,
+                "resumen": {
+                    "total_filas": carga.total_filas,
+                    "columnas_mapeadas": len(mapeos),
+                    "total_errores": total_errores,
+                    "filas_limpias": carga.total_filas - len(filas_con_error),
+                    "filas_con_errores": len(filas_con_error),
+                },
+                "columnas": resultados,
+            }, status=400, json_dumps_params={"ensure_ascii": False})
+
+        modelos_incluidos = sorted({m.modelo_destino for m in mapeos})
+        orden = _orden_topologico(modelos_incluidos)
+
+        mapeos_por_modelo = {}
+        for mapeo in mapeos:
+            mapeos_por_modelo.setdefault(mapeo.modelo_destino, []).append(mapeo)
+
+        resumen_modelos = {m: {"creados": 0, "reutilizados": 0} for m in modelos_incluidos}
+
+        with transaction.atomic():
+            sid = transaction.savepoint()
+            detalle = _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos, capturar_detalle=True)
+            transaction.savepoint_rollback(sid)
+
+        modelos_preview = {
+            modelo: {
+                "registros": list(bucket.values()),
+                "total": resumen_modelos[modelo]["creados"] + resumen_modelos[modelo]["reutilizados"],
+                "truncado": (resumen_modelos[modelo]["creados"] + resumen_modelos[modelo]["reutilizados"]) > len(bucket),
+            }
+            for modelo, bucket in (detalle or {}).items()
+        }
+
+        return JsonResponse({
+            "ok": True,
+            "hasta_grupo": hasta_grupo,
+            "completo": hasta_grupo >= grupo_maximo,
+            "modelos": resumen_modelos,
+            "detalle": modelos_preview,
+        }, json_dumps_params={"ensure_ascii": False})
+
+    except (ValueError, FileNotFoundError) as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse({"error": str(exc)}, status=500)
+
+
 @csrf_exempt
 def importar_carga(request, fuente_id, carga_id):
     if request.method != "POST":
@@ -864,20 +1172,9 @@ def importar_carga(request, fuente_id, carga_id):
     except json.JSONDecodeError:
         return JsonResponse({"error": "JSON inválido"}, status=400)
 
-    todos_mapeos = list(carga.mapeos.exclude(modelo_destino=""))
-    if not todos_mapeos:
-        return JsonResponse({"error": "La carga no tiene mapeos definidos."}, status=400)
-
-    grupo_maximo = max(_grupo_de_modelo(m.modelo_destino) for m in todos_mapeos)
-    hasta_grupo = body.get("hasta_grupo", grupo_maximo)
-    try:
-        hasta_grupo = int(hasta_grupo)
-    except (TypeError, ValueError):
-        return JsonResponse({"error": "hasta_grupo inválido"}, status=400)
-
-    mapeos = [m for m in todos_mapeos if _grupo_de_modelo(m.modelo_destino) <= hasta_grupo]
-    if not mapeos:
-        return JsonResponse({"error": "No hay mapeos para esta sección."}, status=400)
+    mapeos, hasta_grupo, grupo_maximo, error_response = _preparar_importacion(carga, body.get("hasta_grupo"))
+    if error_response is not None:
+        return error_response
 
     try:
         path = _resolver_ruta_fuente(carga.fuente)
@@ -889,25 +1186,7 @@ def importar_carga(request, fuente_id, carga_id):
 
         # 1) Validar solo el subconjunto de mapeos de esta sección; no se
         # escribe nada en la base si queda algún error.
-        resultados = []
-        filas_con_error = set()
-        for mapeo in mapeos:
-            if mapeo.transformacion == "constante":
-                resultado = _validar_constante(mapeo, carga.total_filas)
-            else:
-                resultado = _validar_columna(df, mapeo)
-            if "advertencia" not in resultado:
-                for e in resultado["errores"]:
-                    filas_con_error.add(e["fila"])
-            resultados.append(resultado)
-
-        resultado_ue = _validar_unicidad_unidad_experimental(carga, df)
-        if resultado_ue is not None:
-            for e in resultado_ue["errores"]:
-                filas_con_error.add(e["fila"])
-            resultados.append(resultado_ue)
-
-        total_errores = sum(len(r["errores"]) for r in resultados if "advertencia" not in r)
+        resultados, total_errores, filas_con_error = _validar_seccion(carga, df, mapeos)
         if total_errores > 0:
             return JsonResponse({
                 "ok": False,
@@ -932,80 +1211,7 @@ def importar_carga(request, fuente_id, carga_id):
         resumen_modelos = {m: {"creados": 0, "reutilizados": 0} for m in modelos_incluidos}
 
         with transaction.atomic():
-            for fila_idx in range(len(df)):
-                instancias_fila = {}
-                for modelo in orden:
-                    modelo_cls = apps.get_model("app", modelo)
-                    kwargs = {}
-                    incompleto = False
-
-                    for mapeo in mapeos_por_modelo.get(modelo, []):
-                        field = modelo_cls._meta.get_field(mapeo.campo_destino)
-
-                        if mapeo.transformacion == "constante":
-                            valor = None if _es_vacio(mapeo.valor_constante) else mapeo.valor_constante
-                        else:
-                            val_crudo = df[mapeo.columna_origen].iloc[fila_idx]
-                            valor = _resolver_valor_columna(val_crudo, mapeo)
-
-                        if valor is None:
-                            if not (getattr(field, "blank", True) or getattr(field, "null", True)):
-                                incompleto = True
-                            continue
-
-                        if _es_fk(field):
-                            fk_modelo = field.related_model.__name__
-                            if fk_modelo in instancias_fila:
-                                kwargs[mapeo.campo_destino] = instancias_fila[fk_modelo]
-                            else:
-                                try:
-                                    kwargs[mapeo.campo_destino] = field.related_model.objects.get(pk=valor)
-                                except (field.related_model.DoesNotExist, ValueError, TypeError):
-                                    incompleto = True
-                        else:
-                            try:
-                                kwargs[mapeo.campo_destino] = _coercionar_valor(valor, field)
-                            except (ValueError, TypeError):
-                                incompleto = True
-
-                    # Vincular automáticamente los FK hacia otros modelos ya
-                    # creados en esta misma fila, aunque el usuario no haya
-                    # mapeado esa columna explícitamente (p. ej. Parcela se
-                    # asocia solo a la UnidadMuestreo de su misma fila).
-                    for field in modelo_cls._meta.get_fields():
-                        if not _es_fk(field) or field.name in kwargs:
-                            continue
-                        fk_modelo = field.related_model.__name__
-                        if fk_modelo in instancias_fila:
-                            kwargs[field.name] = instancias_fila[fk_modelo]
-
-                    if incompleto or not kwargs:
-                        continue
-
-                    if modelo == "UnidadMuestreo":
-                        kwargs.setdefault("fuente_datos", carga.fuente)
-
-                    if modelo == "UnidadExperimental":
-                        kwargs.setdefault("proyecto", carga.fuente.proyecto)
-
-                    # Si el modelo tiene un vínculo OneToOne (p. ej. Parcela →
-                    # unidad_muestreo), ese vínculo es su clave real: solo puede
-                    # existir una fila por unidad, así que el resto de los
-                    # campos se actualizan en vez de intentar crear otra fila
-                    # (que violaría la restricción única).
-                    campos_clave = {
-                        nombre: valor
-                        for nombre, valor in kwargs.items()
-                        if type(modelo_cls._meta.get_field(nombre)).__name__ == "OneToOneField"
-                    }
-                    if campos_clave:
-                        defaults = {k: v for k, v in kwargs.items() if k not in campos_clave}
-                        obj, creado = modelo_cls.objects.update_or_create(**campos_clave, defaults=defaults)
-                    else:
-                        obj, creado = modelo_cls.objects.get_or_create(**kwargs)
-
-                    instancias_fila[modelo] = obj
-                    resumen_modelos[modelo]["creados" if creado else "reutilizados"] += 1
+            _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos)
 
             if hasta_grupo >= grupo_maximo:
                 carga.estado = "importado"
