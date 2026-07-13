@@ -3,6 +3,7 @@ from django.db import models
 from .base import TimestampedModel
 from .geo import Municipio, SistemaReferencia
 from .cobertura import Cobertura, Disturbio, Vegetacion
+from .datos import FuenteDatos
 
 
 class Sitio(TimestampedModel):
@@ -96,6 +97,10 @@ class UnidadExperimental(TimestampedModel):
     puntos/plots, o varias parcelas).
     """
 
+    proyecto = models.ForeignKey(
+        "app.Proyecto", on_delete=models.PROTECT,
+        related_name="unidades_experimentales", verbose_name="proyecto",
+    )
     nombre = models.CharField("nombre", max_length=255)
     descripcion = models.TextField("descripción", blank=True)
 
@@ -103,6 +108,12 @@ class UnidadExperimental(TimestampedModel):
         verbose_name = "unidad experimental"
         verbose_name_plural = "unidades experimentales"
         ordering = ["nombre"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["proyecto", "nombre"],
+                name="unidad_experimental_unica_por_proyecto",
+            ),
+        ]
 
     def __str__(self):
         return self.nombre
@@ -119,6 +130,14 @@ class UnidadMuestreo(TimestampedModel):
     unidad_experimental = models.ForeignKey(
         UnidadExperimental, on_delete=models.CASCADE, related_name="unidades_muestreo",
         null=True, blank=True, verbose_name="unidad experimental",
+    )
+    sitio = models.ForeignKey(
+        Sitio, on_delete=models.SET_NULL, related_name="unidades_muestreo",
+        null=True, blank=True, verbose_name="sitio",
+    )
+    fuente_datos = models.ForeignKey(
+        FuenteDatos, on_delete=models.SET_NULL, related_name="unidades_muestreo",
+        null=True, blank=True, verbose_name="fuente de datos",
     )
 
     class Meta:
@@ -137,18 +156,18 @@ class Parcela(TimestampedModel):
         UnidadMuestreo, on_delete=models.CASCADE, related_name="parcela",
         null=True, blank=True, verbose_name="unidad de muestreo",
     )
-    nombre = models.CharField("nombre", max_length=255, blank=True, default="")
     medida_largo = models.DecimalField("medida largo (m)", max_digits=10, decimal_places=2, null=True, blank=True)
     medida_ancho = models.DecimalField("medida ancho (m)", max_digits=10, decimal_places=2, null=True, blank=True)
+    area = models.DecimalField("área (m²)", max_digits=10, decimal_places=2, null=True, blank=True)
     descripcion = models.TextField("descripción", blank=True, default="")
 
     class Meta:
         verbose_name = "parcela"
         verbose_name_plural = "parcelas"
-        ordering = ["nombre"]
+        ordering = ["pk"]
 
     def __str__(self):
-        return self.nombre or f"Parcela {self.pk}"
+        return f"Parcela {self.pk}"
 
 
 class Transecto(TimestampedModel):

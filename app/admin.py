@@ -84,8 +84,7 @@ class UnidadMuestreoAdmin(admin.ModelAdmin):
 
 @admin.register(Parcela)
 class ParcelaAdmin(admin.ModelAdmin):
-    list_display = ("pk", "nombre", "unidad_muestreo", "medida_largo", "medida_ancho")
-    search_fields = ("nombre",)
+    list_display = ("pk", "unidad_muestreo", "medida_largo", "medida_ancho", "area")
     raw_id_fields = ("unidad_muestreo",)
 
 

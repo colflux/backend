@@ -12,13 +12,19 @@ GRUPOS_CATALOGO = [
     {
         "nombre": "Geografía",
         "icono": "🗺️",
-        "entidades": ["Region", "Departamento", "Municipio"],
+        "entidades": ["Region", "Departamento", "Municipio", "Sitio"],
     },
     {
-        "nombre": "Sitio y Unidad Experimental",
+        "nombre": "Unidad de Muestreo y Experimental",
         "icono": "📍",
-        "entidades": ["Sitio", "UnidadMuestreoTipo", "UnidadMuestreo", "UnidadExperimental", "Parcela", "Transecto"],
+        "entidades": ["UnidadMuestreoTipo", "UnidadMuestreo", "UnidadExperimental", "Parcela", "Transecto"],
     },
+    # Nota: el ETL (app/api/etl/views.py) usa su propio SECCIONES_ETL, que
+    # divide este grupo en "Unidad Experimental" y "Unidad de Muestreo" (y
+    # separa "Sitio" de Geografía en su propia sección) para reflejar el
+    # orden real de carga: primero se define la unidad experimental, luego
+    # la unidad de muestreo (que depende de ella), y por último el sitio.
+    # Este agrupamiento se mantiene tal cual para el catálogo de referencia.
     {
         "nombre": "Cobertura y Vegetación",
         "icono": "🌿",
@@ -92,8 +98,27 @@ def semilla_rows(modelo_cls):
     return rows
 
 
+def fk_choices(field):
+    """Instancias existentes del modelo relacionado, para usar como opciones de un FK."""
+    try:
+        return [
+            {"valor": str(obj.pk), "etiqueta": str(obj)}
+            for obj in field.related_model.objects.all()
+        ]
+    except Exception:
+        # La tabla puede no existir aún (p. ej. generación del catálogo antes de migrar).
+        return []
+
+
 def campo_to_catalogo(field):
     tipo_raw = field.__class__.__name__
+    es_fk = tipo_raw == "ForeignKey"
+    choices = [
+        {"valor": valor, "etiqueta": etiqueta}
+        for valor, etiqueta in (getattr(field, "choices", None) or [])
+    ]
+    if es_fk and not choices:
+        choices = fk_choices(field)
     return {
         "nombre": field.name,
         "verbose_name": str(getattr(field, "verbose_name", field.name)),
@@ -103,12 +128,9 @@ def campo_to_catalogo(field):
             getattr(field, "blank", True) or getattr(field, "null", True)
         ),
         "max_length": getattr(field, "max_length", None),
-        "choices": [
-            {"valor": valor, "etiqueta": etiqueta}
-            for valor, etiqueta in (getattr(field, "choices", None) or [])
-        ],
-        "es_fk": tipo_raw == "ForeignKey",
-        "modelo_fk": field.related_model.__name__ if tipo_raw == "ForeignKey" else None,
+        "choices": choices,
+        "es_fk": es_fk,
+        "modelo_fk": field.related_model.__name__ if es_fk else None,
     }
 
 

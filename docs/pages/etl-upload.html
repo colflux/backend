@@ -189,6 +189,31 @@
     }
     .mapeo-group-header.sin-mapear { color: var(--gray); background: var(--gray-l); }
     .mapeo-group-header .mapeo-group-grupo { font-weight: 600; opacity: .75; text-transform: none; letter-spacing: 0; }
+    .mapeo-group-vinculo {
+      padding: 7px 20px; font-size: .74rem; font-weight: 600;
+      background: var(--green-l); color: var(--green-d); border-bottom: 1px solid var(--border);
+    }
+    .mapeo-group-vinculo.pendiente { background: var(--gray-l); color: var(--gray); }
+    .mapeo-pendientes {
+      border: 1.5px dashed var(--border); border-radius: 10px; padding: 10px 14px;
+      margin-bottom: 14px; background: var(--amber-l);
+    }
+    .mapeo-pendientes-header { font-size: .8rem; font-weight: 700; color: #92400e; margin-bottom: 4px; }
+    .mapeo-pendientes-lista { font-size: .76rem; color: #78350f; }
+    .seccion-nav {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      padding: 10px 0; margin-bottom: 10px; border-bottom: 1.5px solid var(--border);
+    }
+    .seccion-chip {
+      border: 1.5px solid var(--border); background: white; color: var(--gray);
+      border-radius: 20px; padding: 5px 12px; font-size: .74rem; font-weight: 600;
+      font-family: inherit; cursor: pointer; white-space: nowrap;
+    }
+    .seccion-chip.hecha { border-color: var(--green); color: var(--green-d); background: var(--green-l); }
+    .seccion-chip.activa { border-color: var(--blue); color: white; background: var(--blue); }
+    .seccion-chip.bloqueada { color: #a1a8b5; background: var(--gray-l); cursor: not-allowed; }
+    .seccion-chip:disabled { opacity: .7; }
+    .seccion-actual-titulo { font-size: 1rem; font-weight: 800; margin: 4px 0 10px; }
     .mapeo-sugerido {
       font-size: .68rem; font-weight: 700; padding: 2px 8px; border-radius: 20px;
       background: var(--amber-l); color: #92400e;
@@ -328,17 +353,7 @@
       <div class="step-connector"></div>
       <div class="step" id="step2">
         <div class="step-circle">2</div>
-        <span class="step-label">Mapear columnas</span>
-      </div>
-      <div class="step-connector"></div>
-      <div class="step" id="step3">
-        <div class="step-circle">3</div>
-        <span class="step-label">Calidad del dato</span>
-      </div>
-      <div class="step-connector"></div>
-      <div class="step" id="step4">
-        <div class="step-circle">4</div>
-        <span class="step-label">Importar</span>
+        <span class="step-label">Mapear y guardar por sección</span>
       </div>
     </div>
   </div>
@@ -387,7 +402,7 @@
     <!-- Step 2: Mapeo de columnas (oculto hasta avanzar) -->
     <div id="sectionStep2" style="display:none; max-width: 820px;">
       <h2>Paso 2 — Mapeo de columnas</h2>
-      <p class="step-desc">Asocia cada columna del archivo con el campo correspondiente en la base de datos, o márcala como ignorar. Las columnas con nombre similar a un campo del modelo llegan con un mapeo <strong>✨ sugerido</strong> que puedes ajustar. En los campos de tipo catálogo, los valores del archivo también llegan con su opción <strong>✨ sugerida</strong> por similitud. Si un campo no viene en la fuente pero conoces su valor, usa <strong>➕ Agregar atributo</strong> dentro del grupo de la entidad para añadirlo como <strong>✏️ atributo manual</strong> con un valor fijo para todas las filas.</p>
+      <p class="step-desc">Avanza sección por sección: cada una agrupa las entidades que dependen de las anteriores (p. ej. primero Unidad Experimental, luego Sitio/Unidad de Muestreo, luego las muestras). Asigna el destino de cada columna en el panel <strong>Sin mapear</strong> (siempre visible abajo); una vez asignada, la columna pasa a la sección correspondiente. Si un campo no viene en la fuente pero conoces su valor, usa <strong>➕ Agregar atributo</strong> para añadirlo como <strong>✏️ atributo manual</strong> con un valor fijo. Cuando termines de mapear una sección, dale <strong>✅ Validar y guardar esta sección</strong> para insertarla en la base y avanzar a la siguiente.</p>
 
       <!-- Selector de hoja -->
       <div class="mapeo-sheet-bar" id="sheetBar">
@@ -411,42 +426,27 @@
           <span id="mapeoHeaderTitle">Mapeo de columnas</span>
           <span id="avanceGuardadoInfo" style="font-size:.78rem;font-weight:600;color:var(--gray);"></span>
         </div>
+        <div class="seccion-nav" id="seccionNav" style="padding-left:20px;padding-right:20px;"></div>
+        <div style="padding:0 20px;">
+          <div class="seccion-actual-titulo" id="seccionActualTitulo"></div>
+        </div>
         <div class="mapeo-list" id="mapeoList"></div>
+        <div style="padding:12px 20px;border-top:1.5px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <button type="button" class="btn-secondary" id="btnSeccionAnterior">← Sección anterior</button>
+          <button type="button" class="btn-primary" id="btnGuardarSeccion">✅ Validar y guardar esta sección</button>
+          <button type="button" class="btn-secondary" id="btnSeccionSiguiente">Sección siguiente →</button>
+          <div id="mapeoSeccionResultado" style="font-size:.8rem;flex-basis:100%;"></div>
+        </div>
       </div>
 
       <div id="step2Error"></div>
+      <div id="cargaCompletaBanner"></div>
 
       <div class="step-actions">
-        <button class="btn-primary" id="btnGuardarMapeo">Guardar mapeo →</button>
         <button class="btn-secondary" id="btnGuardarAvance">💾 Guardar avance</button>
         <button class="btn-secondary" id="btnVolverPaso1">← Volver al paso 1</button>
       </div>
     </div>
-
-    <!-- Step 3: Reporte de calidad -->
-    <section id="sectionStep3" style="display:none;">
-      <div class="etl-card">
-        <h2 style="font-size:1.1rem;font-weight:800;margin-bottom:6px;">Reporte de calidad del dato</h2>
-        <p style="font-size:.85rem;color:var(--gray);margin-bottom:20px;">
-          Validación automática de las columnas mapeadas contra los tipos y restricciones del modelo.
-        </p>
-
-        <div id="calidadLoading" style="text-align:center;padding:40px 0;">
-          <div class="spinner" style="margin:0 auto 12px;border-color:rgba(0,0,0,.15);border-top-color:var(--green-d);"></div>
-          <p style="color:var(--gray);font-size:.88rem;">Analizando datos…</p>
-        </div>
-
-        <div id="calidadContent" style="display:none;">
-          <div class="calidad-resumen" id="calidadResumen"></div>
-          <div id="calidadColumnas"></div>
-          <div id="paso3Error" class="error-box" style="display:none;margin-top:12px;"></div>
-          <div class="calidad-actions">
-            <button class="btn-importar" id="btnImportar">Importar datos →</button>
-            <button class="btn-secondary" id="btnVolverPaso2">← Volver al mapeo</button>
-          </div>
-        </div>
-      </div>
-    </section>
 
   </div>
 </div>
@@ -471,7 +471,9 @@
     gruposModelo: {},    // { ModelName: { nombre, icono, orden } }
     mapeoValores: {},    // { colIdx: { "valor_origen": "valor_destino" } }
     mapeoSeleccion: {},  // { colIdx: { modelo, campo, sugerido? } }
-    atributosManuales: [] // [ { modelo, campo, valor } ] — campos sin columna en la fuente, con valor fijo
+    atributosManuales: [], // [ { modelo, campo, valor } ] — campos sin columna en la fuente, con valor fijo
+    seccionIdx: 0,           // orden de la sección del wizard que se está mostrando/guardando
+    seccionesGuardadas: new Set(), // ordenes de sección ya guardadas exitosamente en esta sesión
   };
 
   // Misma paleta y orden que el diagrama del modelo de datos (db.html)
@@ -489,6 +491,86 @@
     if (!grupo) return 'var(--green-d)';
     return GRUPO_PALETTE[grupo.orden % GRUPO_PALETTE.length];
   }
+
+  // ── Secciones del wizard (una por cada "orden" de grupo del catálogo,
+  // más una pestaña especial "Todos los atributos" con el resumen editable
+  // de cómo quedó mapeada cada columna) ────────────────────────────────────
+  const SIN_MAPEAR_ORDEN = -1;
+
+  function contarColumnasSinMapear() {
+    return state.columnas.filter((col, idx) => !state.mapeoSeleccion[idx]).length;
+  }
+
+  function seccionesDisponibles() {
+    const vistos = new Map();
+    Object.values(state.gruposModelo).forEach(g => {
+      if (!vistos.has(g.orden)) vistos.set(g.orden, { orden: g.orden, nombre: g.nombre, icono: g.icono });
+    });
+    const resto = [...vistos.values()].sort((a, b) => a.orden - b.orden);
+    return [{ orden: SIN_MAPEAR_ORDEN, nombre: 'Todos los atributos', icono: '📋' }, ...resto];
+  }
+
+  // Primera sección "real" del wizard (hoy: Unidad Experimental). Las demás
+  // quedan bloqueadas hasta que esta quede guardada en base de datos.
+  function primeraSeccionOrden() {
+    const reales = seccionesDisponibles().filter(s => s.orden !== SIN_MAPEAR_ORDEN);
+    return reales.length ? Math.min(...reales.map(s => s.orden)) : null;
+  }
+
+  function seccionBloqueada(orden) {
+    if (orden === SIN_MAPEAR_ORDEN) return false;
+    const primera = primeraSeccionOrden();
+    if (primera === null || orden === primera) return false;
+    return !state.seccionesGuardadas.has(primera);
+  }
+
+  function renderSeccionNav() {
+    const cont = document.getElementById('seccionNav');
+    const secciones = seccionesDisponibles();
+    const nSinMapear = contarColumnasSinMapear();
+    cont.innerHTML = secciones.map(s => {
+      const bloqueada = seccionBloqueada(s.orden);
+      const clases = ['seccion-chip'];
+      if (s.orden === state.seccionIdx) clases.push('activa');
+      else if (state.seccionesGuardadas.has(s.orden)) clases.push('hecha');
+      if (bloqueada) clases.push('bloqueada');
+      const hecha = state.seccionesGuardadas.has(s.orden) && s.orden !== state.seccionIdx;
+      const icono = bloqueada ? '🔒' : (hecha ? '✓' : s.icono);
+      const badge = s.orden === SIN_MAPEAR_ORDEN && nSinMapear ? ` (${nSinMapear} sin mapear)` : '';
+      const title = bloqueada ? ' title="Primero guarda \'Unidad Experimental\' en base de datos"' : '';
+      return `<button type="button" class="${clases.join(' ')}" data-orden="${s.orden}"${bloqueada ? ' disabled' : ''}${title}>${icono} ${escapeHtml(s.nombre)}${badge}</button>`;
+    }).join('');
+    cont.querySelectorAll('button[data-orden]:not([disabled])').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.seccionIdx = Number(btn.dataset.orden);
+        renderMapeoRows();
+      });
+    });
+
+    const idxEnLista = secciones.findIndex(s => s.orden === state.seccionIdx);
+    const idxSiguienteValido = secciones.findIndex((s, i) => i > idxEnLista && !seccionBloqueada(s.orden));
+    document.getElementById('btnSeccionAnterior').disabled = idxEnLista <= 0;
+    document.getElementById('btnSeccionSiguiente').disabled = idxEnLista === -1 || idxSiguienteValido === -1;
+    const actual = secciones[idxEnLista];
+    document.getElementById('seccionActualTitulo').textContent = actual ? `${actual.icono} ${actual.nombre}` : '';
+
+    const esSinMapear = state.seccionIdx === SIN_MAPEAR_ORDEN;
+    document.getElementById('btnGuardarSeccion').style.display = esSinMapear ? 'none' : '';
+    document.getElementById('mapeoSeccionResultado').style.display = esSinMapear ? 'none' : '';
+  }
+
+  document.getElementById('btnSeccionAnterior').addEventListener('click', () => {
+    const secciones = seccionesDisponibles();
+    const idx = secciones.findIndex(s => s.orden === state.seccionIdx);
+    if (idx > 0) { state.seccionIdx = secciones[idx - 1].orden; renderMapeoRows(); }
+  });
+
+  document.getElementById('btnSeccionSiguiente').addEventListener('click', () => {
+    const secciones = seccionesDisponibles();
+    const idx = secciones.findIndex(s => s.orden === state.seccionIdx);
+    const idxSiguienteValido = secciones.findIndex((s, i) => i > idx && !seccionBloqueada(s.orden));
+    if (idxSiguienteValido !== -1) { state.seccionIdx = secciones[idxSiguienteValido].orden; renderMapeoRows(); }
+  });
 
   // ── Utilidades ────────────────────────────────────────────────────────────
   function showToast(msg, duration = 3000) {
@@ -592,8 +674,8 @@
 
   // ── Stepper ───────────────────────────────────────────────────────────────
   function setStepperState(active) {
-    // active = 1 | 2 | 3 | 4
-    [1, 2, 3, 4].forEach(n => {
+    // active = 1 | 2
+    [1, 2].forEach(n => {
       const el = document.getElementById(`step${n}`);
       el.classList.remove('active', 'done');
       if (n < active) {
@@ -609,11 +691,10 @@
   }
 
   function showSection(num) {
-    [1, 2, 3].forEach(n => {
+    [1, 2].forEach(n => {
       document.getElementById(`sectionStep${n}`).style.display = n === num ? '' : 'none';
     });
     setStepperState(num);
-    if (num === 3) iniciarValidacion();
   }
 
   // ── Hero: cargar nombre de la fuente ─────────────────────────────────────
@@ -846,17 +927,55 @@
     document.getElementById('mapeoHeaderTitle').textContent =
       `Mapeo de columnas (${state.columnas.length} columnas)`;
 
+    // Arranca en la primera sección disponible
+    const secciones = seccionesDisponibles();
+    if (secciones.length && !secciones.some(s => s.orden === state.seccionIdx)) {
+      state.seccionIdx = secciones[0].orden;
+    }
+
     // Filas de mapeo
     renderMapeoRows();
+  }
+
+  // Valores (de columnas mapeadas o atributos manuales) asignados a un campo
+  // de un modelo, en minúsculas. Sirve para detectar, p. ej., que el usuario
+  // mapeó UnidadMuestreo.tipo a un valor que corresponde a "parcela".
+  function valoresDetectadosParaCampo(modelo, campo) {
+    const valores = new Set();
+    // Si el campo tiene choices (p. ej. un FK), el valor guardado es el pk;
+    // agregamos también la etiqueta para poder detectar texto como "parcela".
+    const campoMeta = (state.modelosDestino[modelo] || []).find(c => c.nombre === campo);
+    const etiquetaPorValor = new Map((campoMeta?.choices || []).map(ch => [String(ch.valor), ch.etiqueta]));
+    const agregar = (v) => {
+      const str = String(v).toLowerCase();
+      valores.add(str);
+      const etiqueta = etiquetaPorValor.get(String(v));
+      if (etiqueta) valores.add(String(etiqueta).toLowerCase());
+    };
+    state.columnas.forEach((col, idx) => {
+      const sel = state.mapeoSeleccion[idx];
+      if (sel && sel.modelo === modelo && sel.campo === campo) {
+        (col.valores_unicos || []).forEach(agregar);
+      }
+    });
+    state.atributosManuales.forEach(attr => {
+      if (attr.modelo === modelo && attr.campo === campo && attr.valor) {
+        agregar(attr.valor);
+      }
+    });
+    return valores;
   }
 
   function renderMapeoRows() {
     const list = document.getElementById('mapeoList');
     list.innerHTML = '';
 
+    const tipoUnidadEsParcela = [...valoresDetectadosParaCampo('UnidadMuestreo', 'tipo')]
+      .some(v => v.includes('parcela'));
+
     // Agrupar índices de columna por entidad seleccionada
     // ('' = sin decidir, IGNORADAS = "— ignorar —" explícito)
-    const IGNORADAS = ' ignoradas';
+    const IGNORADAS = '__ignoradas__';
     const grupos = new Map();
     state.columnas.forEach((col, idx) => {
       const seleccion = state.mapeoSeleccion[idx];
@@ -876,75 +995,116 @@
       if (!grupos.has(modelo)) grupos.set(modelo, []);
     });
 
-    const modelosOrdenados = [...grupos.keys()].sort((a, b) => {
-      // "Sin mapear" al final, "Ignoradas" justo antes;
-      // el resto en el mismo orden en que aparecen en el catálogo de datos
-      const peso = m => (m === '' ? 2 : m === IGNORADAS ? 1 : 0);
-      if (peso(a) !== peso(b)) return peso(a) - peso(b);
-      if (peso(a) > 0) return 0;
+    // Arma el bloque visual de una entidad (cabecera + filas de columnas +
+    // atributos manuales + botón "agregar atributo"). Se reusa tanto en la
+    // pestaña "Todos los atributos" como dentro de cada sección real.
+    function renderGrupoEntidad(modelo, idxs) {
+      const groupEl = document.createElement('div');
+      groupEl.className = 'mapeo-group';
+
+      const header = document.createElement('div');
+      header.className = 'mapeo-group-header';
+      const n = idxs.length;
+      const nManuales = state.atributosManuales.filter(a => a.modelo === modelo).length;
+      const partes = [];
+      if (n) partes.push(`${n} columna${n > 1 ? 's' : ''}`);
+      if (nManuales) partes.push(`${nManuales} manual${nManuales > 1 ? 'es' : ''}`);
+      const sufijo = partes.join(' + ') || 'sin columnas';
+      const grupoInfo = grupoDeModelo(modelo);
+      let grupoLabel = '';
+      if (grupoInfo) {
+        const color = colorDeModelo(modelo);
+        header.style.color = color;
+        header.style.background = `${color}14`;
+        header.style.borderLeft = `4px solid ${color}`;
+        grupoLabel = `<span class="mapeo-group-grupo">${escapeHtml(grupoInfo.icono)} ${escapeHtml(grupoInfo.nombre)} · </span>`;
+      }
+      header.innerHTML = `${grupoLabel}${escapeHtml(modelo)} · ${sufijo}`;
+      groupEl.appendChild(header);
+
+      if (modelo === 'Parcela') {
+        const vinculo = document.createElement('div');
+        vinculo.className = 'mapeo-group-vinculo' + (tipoUnidadEsParcela ? '' : ' pendiente');
+        vinculo.textContent = tipoUnidadEsParcela
+          ? '🔗 Vinculada — se detectó "tipo: parcela" en Unidad de Muestreo. Mapeá aquí sus medidas.'
+          : '💡 Esta sección solo aplica si el campo "tipo" de Unidad de Muestreo se mapea a "parcela".';
+        groupEl.appendChild(vinculo);
+      }
+
+      idxs.forEach(idx => groupEl.appendChild(renderMapeoRow(idx)));
+
+      // Atributos manuales de esta entidad + botón para agregar otro
+      state.atributosManuales.forEach((attr, i) => {
+        if (attr.modelo === modelo) groupEl.appendChild(renderAtributoManualRow(i));
+      });
+
+      const footer = document.createElement('div');
+      footer.style.padding = '8px 20px';
+      const btnAdd = document.createElement('button');
+      btnAdd.type = 'button';
+      btnAdd.textContent = '➕ Agregar atributo';
+      btnAdd.title = `Agrega un campo de ${modelo} que no viene en la fuente y asígnale un valor fijo para todas las filas`;
+      btnAdd.style.cssText = 'border:1.5px dashed var(--border);background:white;color:var(--gray);border-radius:8px;padding:5px 12px;font-size:.78rem;font-weight:600;font-family:inherit;cursor:pointer;';
+      btnAdd.addEventListener('click', () => {
+        state.atributosManuales.push({ modelo, campo: '', valor: '' });
+        renderMapeoRows();
+      });
+      footer.appendChild(btnAdd);
+      groupEl.appendChild(footer);
+
+      return groupEl;
+    }
+
+    // ── Pestaña "Todos los atributos" — resumen editable de TODAS las
+    // columnas del archivo (mapeadas, sin decidir o ignoradas), agrupadas
+    // por su destino actual. Es el punto para asignar/reasignar destino a
+    // cualquier columna, sin importar a qué sección pertenezca ───────────
+    if (state.seccionIdx === SIN_MAPEAR_ORDEN) {
+      const sinMapearIdxs = grupos.get('') || [];
+      const ignoradasIdxs = grupos.get(IGNORADAS) || [];
+
+      if (sinMapearIdxs.length) {
+        const header = document.createElement('div');
+        header.className = 'mapeo-group-header sin-mapear';
+        header.textContent = `🕗 Sin mapear · ${sinMapearIdxs.length} columna${sinMapearIdxs.length > 1 ? 's' : ''}`;
+        list.appendChild(header);
+        sinMapearIdxs.forEach(idx => list.appendChild(renderMapeoRow(idx)));
+      }
+
+      // Entidades con al menos una columna o atributo manual mapeado,
+      // en el mismo orden que las secciones del wizard.
+      const modelosMapeados = [...grupos.keys()].filter(modelo => modelo && modelo !== IGNORADAS && grupos.get(modelo).length)
+        .sort((a, b) => (grupoDeModelo(a)?.orden_modelo ?? 999) - (grupoDeModelo(b)?.orden_modelo ?? 999));
+      modelosMapeados.forEach(modelo => list.appendChild(renderGrupoEntidad(modelo, grupos.get(modelo))));
+
+      if (ignoradasIdxs.length) {
+        const header = document.createElement('div');
+        header.className = 'mapeo-group-header sin-mapear';
+        header.textContent = `🚫 Ignoradas · ${ignoradasIdxs.length} columna${ignoradasIdxs.length > 1 ? 's' : ''}`;
+        list.appendChild(header);
+        ignoradasIdxs.forEach(idx => list.appendChild(renderMapeoRow(idx)));
+      }
+
+      renderSeccionNav();
+      return;
+    }
+
+    // ── Sección real: solo se listan las entidades cuya sección de
+    // catálogo coincide con state.seccionIdx (o que quedaron sin sección
+    // de catálogo — legado — para no perderlas de vista).
+    const modelosSeccion = [...grupos.keys()].filter(modelo => {
+      if (modelo === '' || modelo === IGNORADAS) return false; // viven en "Todos los atributos"
+      const grupoInfo = grupoDeModelo(modelo);
+      return grupoInfo ? grupoInfo.orden === state.seccionIdx : true;
+    }).sort((a, b) => {
       const ordenA = grupoDeModelo(a)?.orden_modelo ?? 999;
       const ordenB = grupoDeModelo(b)?.orden_modelo ?? 999;
       return ordenA - ordenB;
     });
 
-    modelosOrdenados.forEach(modelo => {
-      const idxs = grupos.get(modelo);
+    modelosSeccion.forEach(modelo => list.appendChild(renderGrupoEntidad(modelo, grupos.get(modelo))));
 
-      const groupEl = document.createElement('div');
-      groupEl.className = 'mapeo-group';
-
-      const header = document.createElement('div');
-      const esSinDestino = modelo === '' || modelo === IGNORADAS;
-      header.className = 'mapeo-group-header' + (esSinDestino ? ' sin-mapear' : '');
-      const n = idxs.length;
-      const nManuales = esSinDestino ? 0 : state.atributosManuales.filter(a => a.modelo === modelo).length;
-      const partes = [];
-      if (n) partes.push(`${n} columna${n > 1 ? 's' : ''}`);
-      if (nManuales) partes.push(`${nManuales} manual${nManuales > 1 ? 'es' : ''}`);
-      const sufijo = partes.join(' + ') || 'sin columnas';
-      if (modelo === IGNORADAS) {
-        header.textContent = `🚫 Ignoradas · ${sufijo}`;
-      } else if (modelo) {
-        const grupoInfo = grupoDeModelo(modelo);
-        let grupoLabel = '';
-        if (grupoInfo) {
-          const color = colorDeModelo(modelo);
-          header.style.color = color;
-          header.style.background = `${color}14`;
-          header.style.borderLeft = `4px solid ${color}`;
-          grupoLabel = `<span class="mapeo-group-grupo">${escapeHtml(grupoInfo.icono)} ${escapeHtml(grupoInfo.nombre)} · </span>`;
-        }
-        header.innerHTML = `${grupoLabel}${escapeHtml(modelo)} · ${sufijo}`;
-      } else {
-        header.textContent = `Sin mapear · ${sufijo}`;
-      }
-      groupEl.appendChild(header);
-
-      idxs.forEach(idx => groupEl.appendChild(renderMapeoRow(idx)));
-
-      // Atributos manuales de esta entidad + botón para agregar otro
-      if (!esSinDestino) {
-        state.atributosManuales.forEach((attr, i) => {
-          if (attr.modelo === modelo) groupEl.appendChild(renderAtributoManualRow(i));
-        });
-
-        const footer = document.createElement('div');
-        footer.style.padding = '8px 20px';
-        const btnAdd = document.createElement('button');
-        btnAdd.type = 'button';
-        btnAdd.textContent = '➕ Agregar atributo';
-        btnAdd.title = `Agrega un campo de ${modelo} que no viene en la fuente y asígnale un valor fijo para todas las filas`;
-        btnAdd.style.cssText = 'border:1.5px dashed var(--border);background:white;color:var(--gray);border-radius:8px;padding:5px 12px;font-size:.78rem;font-weight:600;font-family:inherit;cursor:pointer;';
-        btnAdd.addEventListener('click', () => {
-          state.atributosManuales.push({ modelo, campo: '', valor: '' });
-          renderMapeoRows();
-        });
-        footer.appendChild(btnAdd);
-        groupEl.appendChild(footer);
-      }
-
-      list.appendChild(groupEl);
-    });
+    renderSeccionNav();
   }
 
   function renderAtributoManualRow(i) {
@@ -973,7 +1133,10 @@
         valorInput.appendChild(opt);
       });
       valorInput.value = attr.valor || '';
-      valorInput.addEventListener('change', () => { attr.valor = valorInput.value; });
+      valorInput.addEventListener('change', () => {
+        attr.valor = valorInput.value;
+        if (attr.modelo === 'UnidadMuestreo' && attr.campo === 'tipo') renderMapeoRows();
+      });
       valorInput.style.cssText = 'margin-top:6px;width:100%;border:1.5px solid var(--border);border-radius:8px;padding:7px 12px;font-size:.82rem;font-family:inherit;background:white;';
     } else {
       valorInput = document.createElement('input');
@@ -981,6 +1144,9 @@
       valorInput.placeholder = 'valor…';
       valorInput.value = attr.valor || '';
       valorInput.addEventListener('input', () => { attr.valor = valorInput.value; });
+      valorInput.addEventListener('blur', () => {
+        if (attr.modelo === 'UnidadMuestreo' && attr.campo === 'tipo') renderMapeoRows();
+      });
       valorInput.style.cssText = 'margin-top:6px;width:100%;border:1.5px solid var(--border);border-radius:8px;padding:7px 12px;font-size:.82rem;font-family:inherit;';
     }
     infoDiv.appendChild(valorInput);
@@ -1030,7 +1196,13 @@
 
   function renderMapeoRow(idx) {
     const col = state.columnas[idx];
-    const modeloKeys = Object.keys(state.modelosDestino);
+    // En la pestaña "Sin mapear" se puede elegir cualquier entidad del
+    // catálogo (todavía no se sabe a qué sección va la columna). Dentro de
+    // una sección real, el destino queda fijo a esa sección (estas filas ya
+    // vienen filtradas por sección desde renderMapeoRows).
+    const modeloKeys = state.seccionIdx === SIN_MAPEAR_ORDEN
+      ? Object.keys(state.modelosDestino)
+      : Object.keys(state.modelosDestino).filter(m => grupoDeModelo(m)?.orden === state.seccionIdx);
     const seleccion = state.mapeoSeleccion[idx] || {};
 
     // Wrapper que incluye la fila + sub-panel de choices
@@ -1224,7 +1396,13 @@
     selCampo.addEventListener('change', () => {
       state.mapeoSeleccion[idx] = { modelo: selModelo.value, campo: selCampo.value };
       infoDiv.querySelector('.mapeo-sugerido')?.remove();
-      actualizarChoicesPanel();
+      // Si se (des)asigna UnidadMuestreo.tipo, el vínculo con la sección
+      // Parcela puede cambiar: se necesita un re-render completo del listado.
+      if (selModelo.value === 'UnidadMuestreo' && (selCampo.value === 'tipo' || seleccion.campo === 'tipo')) {
+        renderMapeoRows();
+      } else {
+        actualizarChoicesPanel();
+      }
     });
 
     destDiv.appendChild(selModelo);
@@ -1326,124 +1504,83 @@
     }
   });
 
-  document.getElementById('btnGuardarMapeo').addEventListener('click', async () => {
-    showError('step2Error', '');
-    const btn = document.getElementById('btnGuardarMapeo');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Guardando…';
-
-    try {
-      const data = await enviarMapeos(false);
-      showToast(`Mapeo guardado ✓ (${data.guardados ?? state.columnas.length} campos)`);
-      showSection(3);
-
-    } catch (e) {
-      showError('step2Error', `Error al guardar el mapeo: ${e.message}`);
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = 'Guardar mapeo →';
+  // ── Guardado + importación por sección ───────────────────────────────────
+  function renderErroresSeccionHtml(data) {
+    const r = data.resumen || {};
+    const cols = (data.columnas || []).filter(c => c.errores && c.errores.length);
+    if (!cols.length) {
+      return `<span style="color:var(--red);">${escapeHtml(data.error || 'Error de validación')}</span>`;
     }
-  });
-
-  // ── Paso 3: validación y calidad del dato ────────────────────────────────
-  async function iniciarValidacion() {
-    document.getElementById('calidadLoading').style.display = 'block';
-    document.getElementById('calidadContent').style.display = 'none';
-    document.getElementById('paso3Error').style.display = 'none';
-
-    try {
-      const res = await fetch(
-        `${API_BASE}/api/fuentes-datos/${state.fuenteId}/carga/${state.cargaId}/validar/`,
-        { method: 'POST' }
-      );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      renderCalidad(data);
-    } catch (e) {
-      document.getElementById('paso3Error').textContent = e.message || 'Error al validar';
-      document.getElementById('paso3Error').style.display = 'block';
-    } finally {
-      document.getElementById('calidadLoading').style.display = 'none';
-      document.getElementById('calidadContent').style.display = 'block';
-    }
+    const detalle = cols.map(c => {
+      const errs = c.errores.slice(0, 5).map(e =>
+        `Fila ${e.fila ?? '?'}: ${escapeHtml(e.mensaje || e.tipo)}`
+      ).join('<br>');
+      const extra = c.errores.length > 5 ? `<br>… y ${c.errores.length - 5} más` : '';
+      return `<div style="margin-top:6px;"><strong>${escapeHtml(c.columna)}</strong> (${c.errores.length} error${c.errores.length > 1 ? 'es' : ''})<br>${errs}${extra}</div>`;
+    }).join('');
+    return `<div style="color:var(--red);">✗ ${r.total_errores ?? ''} error(es) — no se guardó nada de esta sección:${detalle}</div>`;
   }
 
-  function renderCalidad(data) {
-    const r = data.resumen || {};
+  async function guardarSeccion(ordenGrupo, btn, resultadoEl) {
+    showError('step2Error', '');
+    btn.disabled = true;
+    const textoOriginal = btn.textContent;
+    btn.innerHTML = '<span class="spinner"></span> Guardando…';
+    resultadoEl.innerHTML = '';
 
-    // ── Resumen ──
-    const statDefs = [
-      { valor: r.total_filas,        label: 'Total filas',         color: '#1a2236' },
-      { valor: r.filas_limpias,      label: 'Filas limpias',       color: '#166534' },
-      { valor: r.filas_con_errores,  label: 'Filas con errores',   color: 'var(--red)' },
-      { valor: r.total_errores,      label: 'Total errores',       color: 'var(--amber)' },
-    ];
-    const resumenEl = document.getElementById('calidadResumen');
-    resumenEl.innerHTML = '';
-    statDefs.forEach(({ valor, label, color }) => {
-      const div = document.createElement('div');
-      div.className = 'calidad-stat';
-      div.innerHTML = `<strong style="color:${color};">${valor ?? '—'}</strong><span>${label}</span>`;
-      resumenEl.appendChild(div);
-    });
+    try {
+      await enviarMapeos(true);
 
-    // ── Columnas ──
-    const colsEl = document.getElementById('calidadColumnas');
-    colsEl.innerHTML = '';
-    (data.columnas || []).forEach(col => {
-      const tieneErrores = col.errores && col.errores.length > 0;
-      const wrapper = document.createElement('div');
-      wrapper.className = 'calidad-col';
+      const res = await fetch(
+        `${API_BASE}/api/fuentes-datos/${state.fuenteId}/carga/${state.cargaId}/importar/`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hasta_grupo: ordenGrupo }),
+          signal: AbortSignal.timeout(window.COLFLUX_CONFIG.requestTimeoutMs),
+        }
+      );
+      const data = await res.json().catch(() => ({}));
 
-      const destino = [col.modelo_destino, col.campo_destino].filter(Boolean).join(' → ');
-      const badgeClass = tieneErrores ? 'calidad-col-badge-err' : 'calidad-col-badge-ok';
-      const badgeText  = tieneErrores
-        ? `${col.errores.length} error${col.errores.length > 1 ? 'es' : ''}`
-        : '✓ OK';
-
-      const header = document.createElement('div');
-      header.className = 'calidad-col-header';
-      header.innerHTML = `
-        <div>
-          <div class="calidad-col-title">${escapeHtml(col.columna)}</div>
-          ${destino ? `<div class="calidad-col-destino">${escapeHtml(destino)}</div>` : ''}
-        </div>
-        <span class="badge ${badgeClass}">${badgeText}</span>
-      `;
-
-      wrapper.appendChild(header);
-
-      if (tieneErrores) {
-        const body = document.createElement('div');
-        body.className = 'calidad-col-body';
-
-        col.errores.forEach(err => {
-          const errRow = document.createElement('div');
-          errRow.className = 'calidad-error-row';
-          const valorDisplay = err.valor === null || err.valor === undefined ? '<em style="color:var(--gray);">nulo</em>' : escapeHtml(String(err.valor));
-          const tipoClass = `tipo-${escapeHtml(err.tipo || '')}`;
-          errRow.innerHTML = `
-            <span class="calidad-fila">Fila ${err.fila ?? '?'}</span>
-            <span class="calidad-valor">${valorDisplay}</span>
-            <span class="calidad-tipo ${tipoClass}">${escapeHtml(err.tipo || 'desconocido')}</span>
-          `;
-          body.appendChild(errRow);
-        });
-
-        header.addEventListener('click', () => body.classList.toggle('open'));
-        wrapper.appendChild(body);
+      if (!res.ok) {
+        resultadoEl.innerHTML = renderErroresSeccionHtml(data);
+        return;
       }
 
-      colsEl.appendChild(wrapper);
-    });
+      const partes = Object.entries(data.modelos || {}).map(([m, c]) =>
+        `${escapeHtml(m)}: ${c.creados} nuevo${c.creados === 1 ? '' : 's'}, ${c.reutilizados} reutilizado${c.reutilizados === 1 ? '' : 's'}`
+      );
+      resultadoEl.innerHTML = `<span style="color:var(--green-d);font-weight:700;">✓ Guardado en base de datos</span>${partes.length ? ' — ' + partes.join(' · ') : ''}`;
+      state.seccionesGuardadas.add(ordenGrupo);
+
+      if (data.completo) {
+        document.getElementById('cargaCompletaBanner').innerHTML =
+          `<div style="margin-top:16px;background:var(--green-l);border:1.5px solid var(--green);border-radius:10px;padding:12px 16px;color:var(--green-d);font-weight:700;">🎉 Carga completa — todas las secciones mapeadas fueron validadas e importadas.</div>`;
+        showToast('🎉 Carga completa: todas las secciones fueron importadas');
+      } else {
+        // Avanza automáticamente a la siguiente sección del wizard
+        const secciones = seccionesDisponibles();
+        const idx = secciones.findIndex(s => s.orden === ordenGrupo);
+        if (idx !== -1 && idx < secciones.length - 1) {
+          state.seccionIdx = secciones[idx + 1].orden;
+          showToast(`Sección guardada ✓ — avanzando a "${secciones[idx + 1].nombre}"`);
+        }
+      }
+      renderMapeoRows();
+    } catch (e) {
+      resultadoEl.innerHTML = `<span style="color:var(--red);">Error: ${escapeHtml(e.message)}</span>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = textoOriginal;
+    }
   }
 
-  document.getElementById('btnImportar').addEventListener('click', () => {
-    alert('Fase 5: importación próximamente');
-  });
-
-  document.getElementById('btnVolverPaso2').addEventListener('click', () => {
-    showSection(2);
+  document.getElementById('btnGuardarSeccion').addEventListener('click', () => {
+    guardarSeccion(
+      state.seccionIdx,
+      document.getElementById('btnGuardarSeccion'),
+      document.getElementById('mapeoSeccionResultado'),
+    );
   });
 
   // ── Init ──────────────────────────────────────────────────────────────────

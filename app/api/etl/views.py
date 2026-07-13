@@ -9,12 +9,51 @@ import pandas as pd
 
 from django.apps import apps
 from django.conf import settings
+from django.db import transaction
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
 from app.models import CargaArchivo, FuenteDatos, MapeoColumna
 
-from app.catalogo.generator import GRUPOS_CATALOGO, campo_to_catalogo
+from app.catalogo.generator import GRUPOS_CATALOGO, campo_to_catalogo, fk_choices
+
+# El wizard del ETL usa su propio agrupamiento de secciones, más fino que
+# GRUPOS_CATALOGO (que sigue usándose tal cual para el catálogo de
+# referencia en docs/):
+# - Separa "Unidad Experimental" de "Unidad de Muestreo" porque en los
+#   archivos reales primero se identifica la unidad experimental y solo
+#   después se resuelve el tipo/unidad de muestreo/parcela que dependen de
+#   ella (vía la FK a UnidadExperimental mapeada en la sección anterior).
+# - Excluye "Geografía" (Region/Departamento/Municipio) salvo "Sitio", que
+#   se saca de ese grupo y se deja como su propia sección al final: en el
+#   catálogo vive junto a la geografía porque se georreferencia por
+#   Municipio, pero en el wizard depende de que ya exista la Unidad de
+#   Muestreo (no siempre se completa con datos del archivo).
+# - Excluye "Publicaciones": es metadato bibliográfico del proyecto, no
+#   datos fila por fila del archivo. Al quitarla, "Unidad Experimental"
+#   queda como primera sección real del wizard.
+SECCIONES_ETL = []
+for _grupo in GRUPOS_CATALOGO:
+    if _grupo["nombre"] in ("Geografía", "Publicaciones"):
+        continue
+    if _grupo["nombre"] == "Unidad de Muestreo y Experimental":
+        SECCIONES_ETL.append({
+            "nombre": "Unidad Experimental",
+            "icono": "🧪",
+            "entidades": ["UnidadExperimental"],
+        })
+        SECCIONES_ETL.append({
+            "nombre": "Unidad de Muestreo",
+            "icono": "📏",
+            "entidades": ["UnidadMuestreoTipo", "UnidadMuestreo", "Parcela", "Transecto"],
+        })
+        SECCIONES_ETL.append({
+            "nombre": "Sitio",
+            "icono": "📍",
+            "entidades": ["Sitio"],
+        })
+    else:
+        SECCIONES_ETL.append(_grupo)
 
 
 def _infer_dtype(series):
@@ -302,7 +341,7 @@ def campos_destino(request):
     modelos = {}
     grupos = {}
     orden_modelo = 0
-    for orden, grupo in enumerate(GRUPOS_CATALOGO):
+    for orden, grupo in enumerate(SECCIONES_ETL):
         for nombre in grupo["entidades"]:
             try:
                 modelo_cls = apps.get_model("app", nombre)
@@ -421,7 +460,37 @@ def _es_vacio(val):
     return False
 
 
-def _validar_columna(df, columna_origen, modelo_destino, campo_destino):
+def _es_fk(field):
+    """True para ForeignKey y OneToOneField (esta última no aparece con ese
+    nombre de clase, pero se comporta igual como relación N:1 con columna)."""
+    return type(field).__name__ in ("ForeignKey", "OneToOneField")
+
+
+def _choices_de_campo(field):
+    """Choices efectivas de un campo: las declaradas en Django, o -para FK sin
+    choices propias- las instancias existentes del modelo relacionado."""
+    choices = getattr(field, "choices", None)
+    if choices:
+        return [(str(valor), etiqueta) for valor, etiqueta in choices]
+    if _es_fk(field):
+        return [(c["valor"], c["etiqueta"]) for c in fk_choices(field)]
+    return None
+
+
+def _resolver_valor_columna(val, mapeo):
+    """Aplica la traducción de mapeo_valores (origen -> destino) de una columna
+    mapeada a un campo con choices, igual que hace la UI antes de guardar."""
+    if _es_vacio(val):
+        return None
+    if mapeo.mapeo_valores:
+        return mapeo.mapeo_valores.get(str(val), val)
+    return val
+
+
+def _validar_columna(df, mapeo):
+    columna_origen = mapeo.columna_origen
+    modelo_destino = mapeo.modelo_destino
+    campo_destino = mapeo.campo_destino
     try:
         modelo_cls = apps.get_model("app", modelo_destino)
     except LookupError:
@@ -440,16 +509,17 @@ def _validar_columna(df, columna_origen, modelo_destino, campo_destino):
 
     campo_requerido = not getattr(field, "blank", True) and not getattr(field, "null", True)
     max_length = getattr(field, "max_length", None)
-    choices = getattr(field, "choices", None)
-    choices_valores = {c[0] for c in choices} if choices else None
+    choices = _choices_de_campo(field)
+    choices_valores = {v for v, _ in choices} if choices else None
 
     tipo_campo = type(field).__name__
 
-    for idx, val in serie.items():
+    for idx, val_crudo in serie.items():
         fila = int(idx) + 2
+        val = _resolver_valor_columna(val_crudo, mapeo)
         py_val = _to_python(val)
 
-        if _es_vacio(val):
+        if val is None:
             if campo_requerido:
                 errores.append({
                     "fila": fila,
@@ -538,7 +608,7 @@ def _validar_constante(mapeo, total_filas):
     errores = []
     campo_requerido = not getattr(field, "blank", True) and not getattr(field, "null", True)
     max_length = getattr(field, "max_length", None)
-    choices = getattr(field, "choices", None)
+    choices = _choices_de_campo(field)
     tipo_campo = type(field).__name__
 
     if _es_vacio(val):
@@ -563,8 +633,8 @@ def _validar_constante(mapeo, total_filas):
                 errores.append({"fila": None, "valor": val, "tipo": "tipo_invalido", "mensaje": "No se puede interpretar como fecha"})
         if not errores and max_length is not None and len(str(val)) > max_length:
             errores.append({"fila": None, "valor": val, "tipo": "longitud_excedida", "mensaje": f"Longitud {len(str(val))} supera el máximo de {max_length}"})
-        if not errores and choices is not None and str(val) not in {str(c[0]) for c in choices}:
-            errores.append({"fila": None, "valor": val, "tipo": "fuera_de_vocabulario", "mensaje": f"Valor no permitido. Opciones: {sorted(str(c[0]) for c in choices)}"})
+        if not errores and choices is not None and str(val) not in {v for v, _ in choices}:
+            errores.append({"fila": None, "valor": val, "tipo": "fuera_de_vocabulario", "mensaje": f"Valor no permitido. Opciones: {sorted(v for v, _ in choices)}"})
 
     return {
         "columna": mapeo.columna_origen,
@@ -572,6 +642,83 @@ def _validar_constante(mapeo, total_filas):
         "campo_destino": mapeo.campo_destino,
         "total": total_filas,
         "ok": 0 if errores else total_filas,
+        "errores": errores,
+    }
+
+
+def _valores_fila_modelo(df, mapeos_modelo, fila_idx):
+    """Valores {campo_destino: valor} que tendría una instancia del modelo en
+    una fila dada, según sus mapeos (columna directa o constante)."""
+    valores = {}
+    for m in mapeos_modelo:
+        if m.transformacion == "constante":
+            valor = None if _es_vacio(m.valor_constante) else m.valor_constante
+        else:
+            val_crudo = df[m.columna_origen].iloc[fila_idx]
+            valor = _resolver_valor_columna(val_crudo, m)
+        valores[m.campo_destino] = valor
+    return valores
+
+
+def _validar_unicidad_unidad_experimental(carga, df):
+    """Unidad Experimental es única por (proyecto, nombre): la fuente debe
+    tener un proyecto asociado, y si ese nombre ya existe en el proyecto con
+    otros datos (p. ej. otra descripción), se avisa acá en vez de fallar con
+    un error de base de datos al intentar crearla."""
+    mapeos_ue = [m for m in carga.mapeos.exclude(modelo_destino="") if m.modelo_destino == "UnidadExperimental"]
+    mapeo_nombre = next((m for m in mapeos_ue if m.campo_destino == "nombre"), None)
+    if mapeo_nombre is None:
+        return None
+
+    errores = []
+    proyecto = carga.fuente.proyecto
+    if proyecto is None:
+        errores.append({
+            "fila": None, "valor": None, "tipo": "sin_proyecto",
+            "mensaje": "La fuente de datos no tiene un proyecto asociado. Asigna un proyecto a la fuente antes de continuar.",
+        })
+    else:
+        UnidadExperimental = apps.get_model("app", "UnidadExperimental")
+        vistos = {}
+        for fila_idx in range(carga.total_filas):
+            valores = _valores_fila_modelo(df, mapeos_ue, fila_idx)
+            nombre = valores.get("nombre")
+            if _es_vacio(nombre):
+                continue
+            fila = fila_idx + 2
+
+            previo = vistos.get(nombre)
+            if previo is not None and previo != valores:
+                errores.append({
+                    "fila": fila, "valor": nombre, "tipo": "conflicto_unicidad",
+                    "mensaje": f"'{nombre}' aparece con datos distintos en otra fila de este mismo archivo.",
+                })
+            vistos[nombre] = valores
+
+            existente = UnidadExperimental.objects.filter(proyecto=proyecto, nombre=nombre).first()
+            if existente is not None:
+                for campo, valor in valores.items():
+                    if campo == "nombre" or valor is None:
+                        continue
+                    if str(getattr(existente, campo)) != str(valor):
+                        errores.append({
+                            "fila": fila, "valor": nombre, "tipo": "conflicto_unicidad",
+                            "mensaje": (
+                                f"Ya existe una Unidad Experimental '{nombre}' en el proyecto "
+                                f"'{proyecto.nombre}' con datos distintos (campo '{campo}'). "
+                                "Cambia el nombre o corrige el valor para que coincida."
+                            ),
+                        })
+                        break
+
+    filas_con_error = {e["fila"] for e in errores if e["fila"] is not None}
+    ok = 0 if any(e["tipo"] == "sin_proyecto" for e in errores) else carga.total_filas - len(filas_con_error)
+    return {
+        "columna": "Unidad Experimental (nombre único por proyecto)",
+        "modelo_destino": "UnidadExperimental",
+        "campo_destino": "nombre",
+        "total": carga.total_filas,
+        "ok": ok,
         "errores": errores,
     }
 
@@ -603,11 +750,17 @@ def validar_carga(request, fuente_id, carga_id):
             if mapeo.transformacion == "constante":
                 resultado = _validar_constante(mapeo, carga.total_filas)
             else:
-                resultado = _validar_columna(df, mapeo.columna_origen, mapeo.modelo_destino, mapeo.campo_destino)
+                resultado = _validar_columna(df, mapeo)
             if "advertencia" not in resultado:
                 for e in resultado["errores"]:
                     filas_con_error.add(e["fila"])
             resultados.append(resultado)
+
+        resultado_ue = _validar_unicidad_unidad_experimental(carga, df)
+        if resultado_ue is not None:
+            for e in resultado_ue["errores"]:
+                filas_con_error.add(e["fila"])
+            resultados.append(resultado_ue)
 
         columnas_con_errores = sum(
             1 for r in resultados
@@ -627,6 +780,242 @@ def validar_carga(request, fuente_id, carga_id):
                 "filas_con_errores": len(filas_con_error),
             },
             "columnas": resultados,
+        }, json_dumps_params={"ensure_ascii": False})
+
+    except (ValueError, FileNotFoundError) as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse({"error": str(exc)}, status=500)
+
+
+_ORDEN_GRUPO_MODELO = {
+    nombre: orden
+    for orden, grupo in enumerate(SECCIONES_ETL)
+    for nombre in grupo["entidades"]
+}
+
+
+def _grupo_de_modelo(modelo):
+    return _ORDEN_GRUPO_MODELO.get(modelo, len(SECCIONES_ETL))
+
+
+def _orden_topologico(modelos):
+    """Ordena `modelos` (nombres) de forma que cada uno quede después de
+    cualquier otro modelo de la misma lista al que referencia por FK, para
+    poder crearlos en ese orden (p. ej. UnidadMuestreo antes que Parcela)."""
+    dependencias = {}
+    for modelo in modelos:
+        try:
+            modelo_cls = apps.get_model("app", modelo)
+        except LookupError:
+            dependencias[modelo] = set()
+            continue
+        dependencias[modelo] = {
+            field.related_model.__name__
+            for field in modelo_cls._meta.get_fields()
+            if _es_fk(field) and field.related_model.__name__ in modelos
+        }
+
+    ordenados = []
+    vistos = set()
+
+    def visitar(modelo):
+        if modelo in vistos:
+            return
+        vistos.add(modelo)
+        for dependencia in dependencias.get(modelo, ()):
+            visitar(dependencia)
+        ordenados.append(modelo)
+
+    for modelo in modelos:
+        visitar(modelo)
+    return ordenados
+
+
+def _coercionar_valor(valor, field):
+    tipo_campo = type(field).__name__
+    if tipo_campo in ("FloatField", "DecimalField"):
+        return float(valor)
+    if tipo_campo in ("IntegerField", "PositiveIntegerField", "PositiveSmallIntegerField",
+                      "SmallIntegerField", "BigIntegerField"):
+        return int(float(valor))
+    if tipo_campo in ("DateField", "DateTimeField"):
+        ts = pd.to_datetime(valor)
+        return ts.date() if tipo_campo == "DateField" else ts.to_pydatetime()
+    if tipo_campo == "BooleanField":
+        if isinstance(valor, bool):
+            return valor
+        return str(valor).strip().lower() in ("1", "true", "verdadero", "si", "sí", "x")
+    return valor
+
+
+@csrf_exempt
+def importar_carga(request, fuente_id, carga_id):
+    if request.method != "POST":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+
+    try:
+        carga = CargaArchivo.objects.get(pk=carga_id, fuente_id=fuente_id)
+    except CargaArchivo.DoesNotExist:
+        return JsonResponse({"error": "Carga no encontrada"}, status=404)
+
+    try:
+        body = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "JSON inválido"}, status=400)
+
+    todos_mapeos = list(carga.mapeos.exclude(modelo_destino=""))
+    if not todos_mapeos:
+        return JsonResponse({"error": "La carga no tiene mapeos definidos."}, status=400)
+
+    grupo_maximo = max(_grupo_de_modelo(m.modelo_destino) for m in todos_mapeos)
+    hasta_grupo = body.get("hasta_grupo", grupo_maximo)
+    try:
+        hasta_grupo = int(hasta_grupo)
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "hasta_grupo inválido"}, status=400)
+
+    mapeos = [m for m in todos_mapeos if _grupo_de_modelo(m.modelo_destino) <= hasta_grupo]
+    if not mapeos:
+        return JsonResponse({"error": "No hay mapeos para esta sección."}, status=400)
+
+    try:
+        path = _resolver_ruta_fuente(carga.fuente)
+        nombre = str(path).lower()
+        if nombre.endswith(".csv"):
+            df = _leer_csv(path)
+        else:
+            df = pd.read_excel(path, sheet_name=carga.hoja_activa)
+
+        # 1) Validar solo el subconjunto de mapeos de esta sección; no se
+        # escribe nada en la base si queda algún error.
+        resultados = []
+        filas_con_error = set()
+        for mapeo in mapeos:
+            if mapeo.transformacion == "constante":
+                resultado = _validar_constante(mapeo, carga.total_filas)
+            else:
+                resultado = _validar_columna(df, mapeo)
+            if "advertencia" not in resultado:
+                for e in resultado["errores"]:
+                    filas_con_error.add(e["fila"])
+            resultados.append(resultado)
+
+        resultado_ue = _validar_unicidad_unidad_experimental(carga, df)
+        if resultado_ue is not None:
+            for e in resultado_ue["errores"]:
+                filas_con_error.add(e["fila"])
+            resultados.append(resultado_ue)
+
+        total_errores = sum(len(r["errores"]) for r in resultados if "advertencia" not in r)
+        if total_errores > 0:
+            return JsonResponse({
+                "ok": False,
+                "resumen": {
+                    "total_filas": carga.total_filas,
+                    "columnas_mapeadas": len(mapeos),
+                    "total_errores": total_errores,
+                    "filas_limpias": carga.total_filas - len(filas_con_error),
+                    "filas_con_errores": len(filas_con_error),
+                },
+                "columnas": resultados,
+            }, status=400, json_dumps_params={"ensure_ascii": False})
+
+        # 2) Importar: crear/reutilizar instancias, en orden de dependencia FK.
+        modelos_incluidos = sorted({m.modelo_destino for m in mapeos})
+        orden = _orden_topologico(modelos_incluidos)
+
+        mapeos_por_modelo = {}
+        for mapeo in mapeos:
+            mapeos_por_modelo.setdefault(mapeo.modelo_destino, []).append(mapeo)
+
+        resumen_modelos = {m: {"creados": 0, "reutilizados": 0} for m in modelos_incluidos}
+
+        with transaction.atomic():
+            for fila_idx in range(len(df)):
+                instancias_fila = {}
+                for modelo in orden:
+                    modelo_cls = apps.get_model("app", modelo)
+                    kwargs = {}
+                    incompleto = False
+
+                    for mapeo in mapeos_por_modelo.get(modelo, []):
+                        field = modelo_cls._meta.get_field(mapeo.campo_destino)
+
+                        if mapeo.transformacion == "constante":
+                            valor = None if _es_vacio(mapeo.valor_constante) else mapeo.valor_constante
+                        else:
+                            val_crudo = df[mapeo.columna_origen].iloc[fila_idx]
+                            valor = _resolver_valor_columna(val_crudo, mapeo)
+
+                        if valor is None:
+                            if not (getattr(field, "blank", True) or getattr(field, "null", True)):
+                                incompleto = True
+                            continue
+
+                        if _es_fk(field):
+                            fk_modelo = field.related_model.__name__
+                            if fk_modelo in instancias_fila:
+                                kwargs[mapeo.campo_destino] = instancias_fila[fk_modelo]
+                            else:
+                                try:
+                                    kwargs[mapeo.campo_destino] = field.related_model.objects.get(pk=valor)
+                                except (field.related_model.DoesNotExist, ValueError, TypeError):
+                                    incompleto = True
+                        else:
+                            try:
+                                kwargs[mapeo.campo_destino] = _coercionar_valor(valor, field)
+                            except (ValueError, TypeError):
+                                incompleto = True
+
+                    # Vincular automáticamente los FK hacia otros modelos ya
+                    # creados en esta misma fila, aunque el usuario no haya
+                    # mapeado esa columna explícitamente (p. ej. Parcela se
+                    # asocia solo a la UnidadMuestreo de su misma fila).
+                    for field in modelo_cls._meta.get_fields():
+                        if not _es_fk(field) or field.name in kwargs:
+                            continue
+                        fk_modelo = field.related_model.__name__
+                        if fk_modelo in instancias_fila:
+                            kwargs[field.name] = instancias_fila[fk_modelo]
+
+                    if incompleto or not kwargs:
+                        continue
+
+                    if modelo == "UnidadMuestreo":
+                        kwargs.setdefault("fuente_datos", carga.fuente)
+
+                    if modelo == "UnidadExperimental":
+                        kwargs.setdefault("proyecto", carga.fuente.proyecto)
+
+                    # Si el modelo tiene un vínculo OneToOne (p. ej. Parcela →
+                    # unidad_muestreo), ese vínculo es su clave real: solo puede
+                    # existir una fila por unidad, así que el resto de los
+                    # campos se actualizan en vez de intentar crear otra fila
+                    # (que violaría la restricción única).
+                    campos_clave = {
+                        nombre: valor
+                        for nombre, valor in kwargs.items()
+                        if type(modelo_cls._meta.get_field(nombre)).__name__ == "OneToOneField"
+                    }
+                    if campos_clave:
+                        defaults = {k: v for k, v in kwargs.items() if k not in campos_clave}
+                        obj, creado = modelo_cls.objects.update_or_create(**campos_clave, defaults=defaults)
+                    else:
+                        obj, creado = modelo_cls.objects.get_or_create(**kwargs)
+
+                    instancias_fila[modelo] = obj
+                    resumen_modelos[modelo]["creados" if creado else "reutilizados"] += 1
+
+            if hasta_grupo >= grupo_maximo:
+                carga.estado = "importado"
+                carga.save(update_fields=["estado"])
+
+        return JsonResponse({
+            "ok": True,
+            "hasta_grupo": hasta_grupo,
+            "completo": hasta_grupo >= grupo_maximo,
+            "modelos": resumen_modelos,
         }, json_dumps_params={"ensure_ascii": False})
 
     except (ValueError, FileNotFoundError) as exc:
