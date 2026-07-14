@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>COLFLUX — Datos cargados</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Inter', sans-serif; color: #1a2236; background: #f8fafc; line-height: 1.6; }
+
+    :root {
+      --green:   #18735d; --green-l: #e6f4f0; --green-d: #0d4f40;
+      --blue:    #1a6e9b; --blue-l:  #e6f3fb;
+      --purple:  #6b4f9e; --purple-l:#f0ecfa;
+      --amber:   #d97706; --amber-l: #fef3c7;
+      --red:     #dc2626; --red-l:   #fee2e2;
+      --gray:    #64748b; --gray-l:  #f1f5f9;
+      --border:  #e2e8f0;
+    }
+
+    .container { max-width: 1400px; margin: 0 auto; padding: 0 24px; }
+
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(255,255,255,.96); backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border); padding: 12px 0;
+    }
+    .nav-inner { display: flex; align-items: center; justify-content: space-between; max-width: 1400px; margin: 0 auto; padding: 0 24px; }
+    .nav-logo { font-weight: 800; font-size: 1rem; color: var(--green-d); text-decoration: none; display: flex; align-items: center; gap: 8px; }
+    .nav-links { display: flex; gap: 24px; list-style: none; }
+    .nav-links a { color: var(--gray); font-size: .85rem; font-weight: 500; text-decoration: none; transition: color .2s; }
+    .nav-links a:hover, .nav-links a.active { color: var(--green); font-weight: 700; }
+    .nav-pill { background: var(--green-d); color: white; font-size: .75rem; font-weight: 700; padding: 5px 12px; border-radius: 20px; text-decoration: none; }
+    @media (max-width: 600px) { .nav-links { display: none; } }
+
+    .hero { background: #0d4f40; color: white; padding: 40px 0 28px; }
+    .hero-badge { display: inline-flex; align-items: center; gap: 7px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.3); border-radius: 20px; padding: 4px 14px; font-size: .75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 14px; }
+    .hero h1 { font-size: clamp(1.4rem, 3vw, 2rem); font-weight: 800; margin-bottom: 6px; }
+    .hero h1 em { font-style: normal; color: #6ee7b7; }
+    .hero p { font-size: .88rem; color: rgba(255,255,255,.8); }
+
+    .toolbar {
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+      padding: 16px 0; border-bottom: 1px solid var(--border); background: white;
+    }
+    .toolbar-info { font-size: .84rem; color: var(--gray); }
+    .toolbar-actions { display: flex; align-items: center; gap: 10px; }
+    .btn-secondary { background: white; color: var(--gray); border: 1.5px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: .84rem; font-weight: 600; font-family: inherit; cursor: pointer; text-decoration: none; }
+    .btn-secondary:hover { border-color: var(--gray); color: #1a2236; }
+    .btn-secondary:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-primary { background: var(--green-d); color: white; border: none; border-radius: 8px; padding: 8px 16px; font-size: .84rem; font-weight: 700; font-family: inherit; cursor: pointer; text-decoration: none; display: inline-block; }
+    .btn-primary:hover { opacity: .9; }
+
+    .estado-box { padding: 40px 0; text-align: center; color: var(--gray); font-size: .9rem; }
+    .error-box { background: var(--red-l); color: var(--red); border-radius: 10px; padding: 14px 18px; font-size: .85rem; margin: 20px 0; }
+    .warn-box { background: var(--amber-l); color: #92400e; border-radius: 10px; padding: 14px 18px; font-size: .85rem; margin: 20px 0; }
+
+    .tabla-wrap { overflow-x: auto; margin: 20px 0; border: 1.5px solid var(--border); border-radius: 12px; background: white; }
+    table.datos-table { border-collapse: collapse; font-size: .78rem; white-space: nowrap; }
+    table.datos-table th, table.datos-table td { padding: 7px 12px; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); }
+    table.datos-table td { color: #1a2236; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+    table.datos-table tr:hover td { background: var(--gray-l); }
+    table.datos-table tr:nth-child(even) td { background: #fafbfc; }
+
+    .th-modelo-row th {
+      font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em;
+      padding: 5px 12px; text-align: left; color: white;
+    }
+    .th-campo-row th {
+      font-size: .72rem; font-weight: 700; text-align: left; color: #374151; background: var(--gray-l);
+    }
+    .th-filtro-row th { background: white; padding: 4px 8px; }
+    .th-filtro-row input {
+      width: 100%; border: 1.5px solid var(--border); border-radius: 6px; padding: 4px 8px;
+      font-size: .74rem; font-family: inherit;
+    }
+    .th-filtro-row input:focus { border-color: var(--green); outline: none; }
+
+    .tabs { display: flex; gap: 6px; margin: 20px 0 0; }
+    .tab-btn {
+      background: white; border: 1.5px solid var(--border); border-bottom: none; border-radius: 10px 10px 0 0;
+      padding: 8px 16px; font-size: .84rem; font-weight: 600; font-family: inherit; color: var(--gray); cursor: pointer;
+    }
+    .tab-btn.active { color: var(--green-d); background: var(--green-l); border-color: var(--green); }
+
+    .paginacion { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 16px 0 32px; font-size: .84rem; color: var(--gray); }
+
+    footer { background: #0d1117; color: rgba(255,255,255,.5); padding: 28px 0; font-size: .82rem; margin-top: 40px; }
+  </style>
+</head>
+<body>
+
+<div id="app-nav"></div>
+
+<div class="hero">
+  <div class="container">
+    <div class="hero-badge">📊 ETL · Datos cargados</div>
+    <h1>Vista <em>desnormalizada</em> de lo importado</h1>
+    <p id="heroSubtitulo">Cargando…</p>
+  </div>
+</div>
+
+<div class="container">
+  <div class="tabs" id="tabsVistas"></div>
+
+  <div class="toolbar">
+    <div class="toolbar-info" id="toolbarInfo"></div>
+    <div class="toolbar-actions">
+      <button class="btn-secondary" id="btnLimpiarFiltros" style="display:none;">✕ Limpiar filtros</button>
+      <a class="btn-secondary" id="linkVolver" href="etl-upload.html">← Volver al ETL</a>
+    </div>
+  </div>
+
+  <div id="contenido">
+    <div class="estado-box">Cargando datos…</div>
+  </div>
+</div>
+
+<div id="app-footer"></div>
+
+<script src="../assets/js/layout.js"></script>
+<script src="../config/services.js"></script>
+<script>
+  const API_BASE = window.COLFLUX_CONFIG.apiBaseUrl;
+  const params = new URLSearchParams(window.location.search);
+  const fuenteId = params.get('fuente');
+  const cargaId = params.get('carga');
+
+  const NOMBRES_VISTA = {
+    submuestra_co2: 'Muestras CO₂ (detalle)',
+    unidad_muestreo: 'Unidad de Muestreo / Experimental',
+  };
+
+  const state = { vista: 'submuestra_co2', offset: 0, limite: 200, total: 0, columnas: [], filas: [], filtros: {}, vistasDisponibles: [] };
+
+  // Colores por modelo, para agrupar visualmente las columnas de la tabla
+  // (cada modelo de la cadena SubmuestraCO2 → … → Sitio tiene su color).
+  const COLORES_MODELO = {
+    SubmuestraCO2: '#0d4f40', MuestraCO2: '#18735d', UnidadMedida: '#1a6e9b',
+    MuestraAmbiental: '#6b4f9e', Camara: '#d97706', Equipo: '#b45309',
+    Anillo: '#0e7490', UnidadMuestreo: '#1a6e9b', UnidadExperimental: '#166534',
+    Sitio: '#7c3aed',
+  };
+
+  if (fuenteId) document.getElementById('linkVolver').href = `etl-upload.html?fuente=${encodeURIComponent(fuenteId)}`;
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function renderTabs() {
+    const tabsEl = document.getElementById('tabsVistas');
+    tabsEl.innerHTML = state.vistasDisponibles.map(v => `
+      <button type="button" class="tab-btn ${v === state.vista ? 'active' : ''}" data-vista="${v}">
+        ${escapeHtml(NOMBRES_VISTA[v] || v)}
+      </button>
+    `).join('');
+    tabsEl.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (btn.dataset.vista === state.vista) return;
+        state.vista = btn.dataset.vista;
+        state.offset = 0;
+        state.filtros = {};
+        cargarDatos();
+      });
+    });
+  }
+
+  let debounceFiltro = null;
+  function onFiltroInput(input) {
+    const clave = input.dataset.clave;
+    const valor = input.value;
+    if (valor) state.filtros[clave] = valor;
+    else delete state.filtros[clave];
+    state.filtroEnFoco = { clave, cursor: input.selectionStart };
+    clearTimeout(debounceFiltro);
+    debounceFiltro = setTimeout(() => {
+      state.offset = 0;
+      cargarDatos();
+    }, 400);
+  }
+
+  function renderTabla() {
+    const contenido = document.getElementById('contenido');
+    document.getElementById('btnLimpiarFiltros').style.display = Object.keys(state.filtros).length ? 'inline-block' : 'none';
+
+    if (!state.columnas.length) {
+      contenido.innerHTML = `<div class="warn-box">${escapeHtml(state.advertencia || 'No hay datos para mostrar todavía.')}</div>`;
+      return;
+    }
+
+    const grupos = [];
+    state.columnas.forEach(c => {
+      const ultimo = grupos[grupos.length - 1];
+      if (ultimo && ultimo.modelo === c.modelo) ultimo.count++;
+      else grupos.push({ modelo: c.modelo, count: 1 });
+    });
+
+    const theadModelo = grupos.map(g =>
+      `<th colspan="${g.count}" style="background:${COLORES_MODELO[g.modelo] || '#374151'};">${escapeHtml(g.modelo)}</th>`
+    ).join('');
+    const theadCampo = state.columnas.map(c =>
+      `<th title="${escapeHtml(c.clave)}">${escapeHtml(c.verbose_name || c.campo)}</th>`
+    ).join('');
+    const theadFiltro = state.columnas.map(c => `
+      <th>
+        <input type="text" placeholder="filtrar…" data-clave="${escapeHtml(c.clave)}" value="${escapeHtml(state.filtros[c.clave] || '')}">
+      </th>
+    `).join('');
+
+    const filasHtml = state.filas.map(fila => {
+      const celdas = state.columnas.map(c => {
+        const v = fila[c.clave];
+        return `<td>${v === null || v === undefined ? '' : escapeHtml(v)}</td>`;
+      }).join('');
+      return `<tr>${celdas}</tr>`;
+    }).join('');
+
+    contenido.innerHTML = `
+      <div class="tabla-wrap">
+        <table class="datos-table">
+          <thead>
+            <tr class="th-modelo-row">${theadModelo}</tr>
+            <tr class="th-campo-row">${theadCampo}</tr>
+            <tr class="th-filtro-row">${theadFiltro}</tr>
+          </thead>
+          <tbody>${filasHtml}</tbody>
+        </table>
+      </div>
+      <div class="paginacion">
+        <button class="btn-secondary" id="btnAnterior" ${state.offset === 0 ? 'disabled' : ''}>← Anterior</button>
+        <span>${state.total ? state.offset + 1 : 0}–${Math.min(state.offset + state.filas.length, state.total)} de ${state.total}</span>
+        <button class="btn-secondary" id="btnSiguiente" ${state.offset + state.limite >= state.total ? 'disabled' : ''}>Siguiente →</button>
+      </div>
+    `;
+
+    contenido.querySelectorAll('.th-filtro-row input').forEach(input => {
+      input.addEventListener('input', () => onFiltroInput(input));
+    });
+
+    // Restaura foco + posición del cursor tras un re-render disparado por el
+    // propio filtro (si no, el usuario pierde el foco a cada tecla).
+    if (state.filtroEnFoco) {
+      const input = contenido.querySelector(`.th-filtro-row input[data-clave="${CSS.escape(state.filtroEnFoco.clave)}"]`);
+      if (input) {
+        input.focus();
+        input.setSelectionRange(state.filtroEnFoco.cursor, state.filtroEnFoco.cursor);
+      }
+    }
+    document.getElementById('btnAnterior')?.addEventListener('click', () => {
+      state.offset = Math.max(state.offset - state.limite, 0);
+      cargarDatos();
+    });
+    document.getElementById('btnSiguiente')?.addEventListener('click', () => {
+      state.offset += state.limite;
+      cargarDatos();
+    });
+  }
+
+  async function cargarDatos() {
+    if (!fuenteId || !cargaId) {
+      document.getElementById('contenido').innerHTML =
+        '<div class="error-box">Falta indicar la fuente y la carga (parámetros ?fuente=&carga= en la URL).</div>';
+      return;
+    }
+
+    // Al re-filtrar/paginar ya hay una tabla en pantalla: no se reemplaza por
+    // el estado "Cargando…" (eso le quitaría el foco al input de filtro a
+    // cada tecla). Solo se muestra en la carga inicial o al cambiar de vista.
+    if (!state.columnas.length) {
+      document.getElementById('contenido').innerHTML = '<div class="estado-box">Cargando datos…</div>';
+    }
+    try {
+      const qs = new URLSearchParams({
+        offset: state.offset, limite: state.limite, vista: state.vista,
+        filtros: JSON.stringify(state.filtros),
+      });
+      const res = await fetch(
+        `${API_BASE}/api/fuentes-datos/${fuenteId}/carga/${cargaId}/datos/?${qs}`,
+        { signal: AbortSignal.timeout(Math.max(window.COLFLUX_CONFIG.requestTimeoutMs, 30000)) }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+      state.total = data.total || 0;
+      state.columnas = data.columnas || [];
+      state.filas = data.filas || [];
+      state.advertencia = data.advertencia;
+      state.vistasDisponibles = data.vistas || [state.vista];
+
+      document.getElementById('heroSubtitulo').textContent =
+        `Carga #${cargaId} — ${NOMBRES_VISTA[state.vista] || state.vista}.`;
+      document.getElementById('toolbarInfo').textContent =
+        state.total ? `${state.total} registro${state.total === 1 ? '' : 's'} · ${state.columnas.length} columnas` : 'Sin registros';
+
+      renderTabs();
+      renderTabla();
+    } catch (e) {
+      document.getElementById('contenido').innerHTML =
+        `<div class="error-box">Error al cargar los datos: ${escapeHtml(e.message)}</div>`;
+    }
+  }
+
+  document.getElementById('btnLimpiarFiltros').addEventListener('click', () => {
+    state.filtros = {};
+    state.filtroEnFoco = null;
+    state.offset = 0;
+    cargarDatos();
+  });
+
+  cargarDatos();
+</script>
+</body>
+</html>

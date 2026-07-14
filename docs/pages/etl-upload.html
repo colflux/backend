@@ -495,6 +495,20 @@
 
 <div id="app-footer"></div>
 
+<!-- Revisión de validación de una columna (horas ambiguas, nulos, valores posibles) -->
+<div class="preview-overlay" id="revisionOverlay">
+  <div class="preview-modal">
+    <div class="preview-modal-header">
+      <h3 id="revisionTitulo">Revisión de columna</h3>
+      <p>Revisa los valores, corrige lo ambiguo y decide qué hacer con los datos faltantes antes de guardar.</p>
+    </div>
+    <div class="preview-modal-body" id="revisionBody"></div>
+    <div class="preview-modal-footer">
+      <button type="button" class="btn-primary" id="btnRevisionCerrar">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Vista previa antes de guardar una sección -->
 <div class="preview-overlay" id="previewOverlay">
   <div class="preview-modal">
@@ -999,7 +1013,12 @@
         return;
       }
       if (!m.modelo_destino) return;
-      state.mapeoSeleccion[idx] = { modelo: m.modelo_destino, campo: m.campo_destino || '' };
+      state.mapeoSeleccion[idx] = {
+        modelo: m.modelo_destino,
+        campo: m.campo_destino || '',
+        estrategiaNulos: m.estrategia_nulos || 'dejar_null',
+        valorRellenoManual: m.valor_relleno_manual || '',
+      };
       if (m.mapeo_valores && Object.keys(m.mapeo_valores).length) {
         state.mapeoValores[idx] = { ...m.mapeo_valores };
       }
@@ -1341,6 +1360,241 @@
     return row;
   }
 
+  // Construye (si aplica) el panel de horas ambiguas para la columna `idx`.
+  // Reutilizable tanto en el panel inline como en el modal de revisión.
+  // Formato siempre en 24 horas (HH:MM:ss) para evitar la ambigüedad de a. m./p. m.
+  function construirPanelHoras(idx) {
+    const col = state.columnas[idx];
+    const sugerencias = col.sugerencias_hora || {};
+    const valoresAmbiguos = Object.keys(sugerencias);
+    if (valoresAmbiguos.length === 0) return null;
+
+    const panel = document.createElement('div');
+    panel.className = 'choices-panel';
+    panel.innerHTML = `
+      <div class="choices-panel-title">⏱️ Horas ambiguas por revisar</div>
+      <div style="font-size:.78rem;color:var(--gray);margin:-6px 0 10px;">
+        Estos valores mezclan formato 24h con a. m./p. m. de forma contradictoria (p. ej. "14:29:00 a. m.").
+        Confirma o corrige la interpretación antes de guardar.
+        <strong>Formato esperado: 24 horas, HH:MM:ss</strong> (ej. <code>14:29:00</code>) — así se evita cualquier ambigüedad con a. m./p. m.
+      </div>
+    `;
+
+    const mapeoPrevio = state.mapeoValores[idx] || {};
+    const mapeoNuevo = { ...mapeoPrevio };
+
+    valoresAmbiguos.forEach(valorOrigen => {
+      const sugerencia = sugerencias[valorOrigen];
+      const valorActual = mapeoPrevio[valorOrigen] !== undefined ? mapeoPrevio[valorOrigen] : sugerencia;
+      mapeoNuevo[valorOrigen] = valorActual;
+
+      const fila = document.createElement('div');
+      fila.className = 'choices-row';
+
+      const spanOrigen = document.createElement('div');
+      spanOrigen.className = 'choices-valor-origen';
+      spanOrigen.title = valorOrigen;
+      spanOrigen.textContent = valorOrigen;
+
+      const spanArrow = document.createElement('div');
+      spanArrow.className = 'choices-arrow';
+      spanArrow.textContent = '→';
+
+      const inputDestino = document.createElement('input');
+      inputDestino.type = 'text';
+      inputDestino.placeholder = 'HH:MM:ss (24h)';
+      inputDestino.value = valorActual;
+      inputDestino.style.cssText = 'width:100%;border:1.5px solid var(--border);border-radius:8px;padding:6px 10px;font-size:.82rem;font-family:inherit;';
+
+      const badgeSugerido = document.createElement('span');
+      badgeSugerido.className = 'mapeo-sugerido';
+      badgeSugerido.textContent = '❓ confirmar';
+      badgeSugerido.title = 'Interpretación sugerida, sin confirmar todavía';
+      badgeSugerido.style.display = mapeoPrevio[valorOrigen] !== undefined ? 'none' : '';
+
+      inputDestino.addEventListener('input', () => {
+        badgeSugerido.style.display = 'none';
+        state.mapeoValores[idx][valorOrigen] = inputDestino.value;
+      });
+
+      spanOrigen.appendChild(badgeSugerido);
+      fila.appendChild(spanOrigen);
+      fila.appendChild(spanArrow);
+      fila.appendChild(inputDestino);
+      panel.appendChild(fila);
+    });
+
+    state.mapeoValores[idx] = mapeoNuevo;
+    return panel;
+  }
+
+  // Construye (si aplica) el panel de estrategia de datos faltantes para la
+  // columna `idx`: el usuario elige explícitamente qué hacer, nunca se
+  // decide solo.
+  const OPCIONES_ESTRATEGIA_NULOS = [
+    { valor: 'dejar_null', etiqueta: 'Dejar vacío', detalle: 'Las filas sin este dato quedan con el campo vacío.' },
+    { valor: 'rellenar', etiqueta: 'Rellenar hacia abajo', detalle: 'Repite el último valor no vacío en las filas siguientes (útil si el dato solo viene en la primera fila de cada bloque).' },
+    { valor: 'manual', etiqueta: 'Ingresar manualmente', detalle: 'Usa un valor fijo para todas las filas donde esta columna venga vacía.' },
+    { valor: 'ignorar_fila', etiqueta: 'Ignorar registros sin este valor', detalle: 'No se crea el registro correspondiente para las filas donde esta columna venga vacía.' },
+  ];
+
+  function construirPanelNulos(idx) {
+    const col = state.columnas[idx];
+    const seleccion = state.mapeoSeleccion[idx] || {};
+    if (!seleccion.modelo || !seleccion.campo) return null;
+    if (!col.nulls) return null;
+
+    const panel = document.createElement('div');
+    panel.className = 'choices-panel';
+
+    const titulo = document.createElement('div');
+    titulo.className = 'choices-panel-title';
+    titulo.textContent = `⚠️ ${col.nulls} de ${state.totalFilas || '?'} filas vienen vacías en esta columna`;
+    panel.appendChild(titulo);
+
+    const estrategiaActual = seleccion.estrategiaNulos || 'dejar_null';
+    const inputManual = document.createElement('input');
+    inputManual.type = 'text';
+    inputManual.placeholder = 'valor para las filas vacías…';
+    inputManual.value = seleccion.valorRellenoManual || '';
+    inputManual.style.cssText = 'width:100%;border:1.5px solid var(--border);border-radius:8px;padding:6px 10px;font-size:.82rem;font-family:inherit;margin:6px 0 0 26px;display:none;';
+    inputManual.addEventListener('input', () => {
+      state.mapeoSeleccion[idx] = { ...state.mapeoSeleccion[idx], valorRellenoManual: inputManual.value };
+    });
+
+    OPCIONES_ESTRATEGIA_NULOS.forEach(opcion => {
+      const label = document.createElement('label');
+      label.style.cssText = 'display:flex;align-items:flex-start;gap:8px;font-size:.82rem;color:var(--gray);margin-top:8px;cursor:pointer;';
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = `estrategia-nulos-${idx}`;
+      radio.value = opcion.valor;
+      radio.checked = estrategiaActual === opcion.valor;
+      radio.style.marginTop = '2px';
+      radio.addEventListener('change', () => {
+        state.mapeoSeleccion[idx] = { ...state.mapeoSeleccion[idx], estrategiaNulos: opcion.valor };
+        inputManual.style.display = opcion.valor === 'manual' ? 'block' : 'none';
+      });
+      const textoWrap = document.createElement('span');
+      textoWrap.innerHTML = `<strong style="color:#1a2236;">${escapeHtml(opcion.etiqueta)}</strong><br>${escapeHtml(opcion.detalle)}`;
+      label.appendChild(radio);
+      label.appendChild(textoWrap);
+      panel.appendChild(label);
+    });
+
+    inputManual.style.display = estrategiaActual === 'manual' ? 'block' : 'none';
+    panel.appendChild(inputManual);
+
+    return panel;
+  }
+
+  // ── Modal de revisión de columna (casos complejos: horas ambiguas o datos
+  // faltantes) — junta en una sola ventana los controles de corrección más
+  // los errores de la última validación y los valores posibles de la columna.
+  function columnaEsCompleja(idx) {
+    const col = state.columnas[idx];
+    const seleccion = state.mapeoSeleccion[idx] || {};
+    const tieneHorasAmbiguas = Object.keys(col.sugerencias_hora || {}).length > 0;
+    const tieneNulosPorResolver = !!(seleccion.modelo && seleccion.campo && col.nulls);
+    const erroresPrevios = (state.ultimosErroresPorColumna || {})[col.nombre];
+    const tieneErroresPrevios = !!(erroresPrevios && erroresPrevios.length);
+    return tieneHorasAmbiguas || tieneNulosPorResolver || tieneErroresPrevios;
+  }
+
+  function abrirModalRevision(idx) {
+    const col = state.columnas[idx];
+    const seleccion = state.mapeoSeleccion[idx] || {};
+    document.getElementById('revisionTitulo').textContent =
+      `Revisión — ${col.nombre}${seleccion.campo ? ` → ${seleccion.modelo}.${seleccion.campo}` : ''}`;
+
+    const body = document.getElementById('revisionBody');
+    body.innerHTML = '';
+
+    const erroresPrevios = (state.ultimosErroresPorColumna || {})[col.nombre];
+    if (erroresPrevios && erroresPrevios.length) {
+      const panelErrores = document.createElement('div');
+      panelErrores.className = 'choices-panel';
+      panelErrores.style.borderColor = 'var(--red)';
+      const titulo = document.createElement('div');
+      titulo.className = 'choices-panel-title';
+      titulo.textContent = `✗ ${erroresPrevios.length} error(es) en la última validación`;
+      panelErrores.appendChild(titulo);
+      erroresPrevios.slice(0, 20).forEach(e => {
+        const linea = document.createElement('div');
+        linea.style.cssText = 'font-size:.78rem;color:var(--gray);margin-top:4px;';
+        linea.textContent = `Fila ${e.fila ?? '?'}: ${e.mensaje || e.tipo}`;
+        panelErrores.appendChild(linea);
+      });
+      if (erroresPrevios.length > 20) {
+        const extra = document.createElement('div');
+        extra.style.cssText = 'font-size:.78rem;color:var(--gray);margin-top:4px;';
+        extra.textContent = `… y ${erroresPrevios.length - 20} más`;
+        panelErrores.appendChild(extra);
+      }
+      body.appendChild(panelErrores);
+    }
+
+    const panelHoras = construirPanelHoras(idx);
+    if (panelHoras) body.appendChild(panelHoras);
+
+    const panelNulos = construirPanelNulos(idx);
+    if (panelNulos) body.appendChild(panelNulos);
+
+    const campos = state.modelosDestino[seleccion.modelo] || [];
+    const campoMeta = campos.find(c => c.nombre === seleccion.campo);
+
+    if (campoMeta && campoMeta.tipo_raw === 'TimeField' && Object.keys(col.interpretaciones_hora || {}).length) {
+      // En vez de solo listar los valores crudos, se muestra cómo va a
+      // quedar cada uno en la base de datos (siempre en 24h) para que no
+      // quede ninguna duda sobre la interpretación final, ambigua o no.
+      const panelFinal = document.createElement('div');
+      panelFinal.className = 'choices-panel';
+      const titulo = document.createElement('div');
+      titulo.className = 'choices-panel-title';
+      titulo.textContent = '🕐 Cómo quedarán estos valores (formato 24h)';
+      panelFinal.appendChild(titulo);
+
+      const mapeoValores = state.mapeoValores[idx] || {};
+      const tabla = document.createElement('div');
+      tabla.style.cssText = 'font-size:.78rem;color:var(--gray);max-height:220px;overflow-y:auto;margin-top:6px;';
+      Object.entries(col.interpretaciones_hora).forEach(([origen, interpretacionBase]) => {
+        const valorFinal = mapeoValores[origen] !== undefined ? mapeoValores[origen] : interpretacionBase;
+        const fila = document.createElement('div');
+        fila.style.cssText = 'display:flex;gap:8px;padding:3px 0;border-bottom:1px solid var(--border);';
+        fila.innerHTML = `
+          <span style="flex:1;">${escapeHtml(origen)}</span>
+          <span>→</span>
+          <span style="flex:1;font-weight:600;color:#1a2236;">${escapeHtml(valorFinal)}</span>
+        `;
+        tabla.appendChild(fila);
+      });
+      panelFinal.appendChild(tabla);
+      body.appendChild(panelFinal);
+    } else {
+      const valoresUnicos = col.valores_unicos || [];
+      if (valoresUnicos.length) {
+        const panelValores = document.createElement('div');
+        panelValores.className = 'choices-panel';
+        const titulo = document.createElement('div');
+        titulo.className = 'choices-panel-title';
+        titulo.textContent = `📋 Valores posibles en la columna (${valoresUnicos.length}${valoresUnicos.length >= 50 ? '+' : ''})`;
+        panelValores.appendChild(titulo);
+        const lista = document.createElement('div');
+        lista.style.cssText = 'font-size:.78rem;color:var(--gray);max-height:160px;overflow-y:auto;margin-top:6px;';
+        lista.textContent = valoresUnicos.join(', ');
+        panelValores.appendChild(lista);
+        body.appendChild(panelValores);
+      }
+    }
+
+    document.getElementById('revisionOverlay').classList.add('open');
+  }
+
+  document.getElementById('btnRevisionCerrar').addEventListener('click', () => {
+    document.getElementById('revisionOverlay').classList.remove('open');
+    renderMapeoRows();
+  });
+
   function renderMapeoRow(idx) {
     const col = state.columnas[idx];
     // En la pestaña "Sin mapear" se puede elegir cualquier entidad del
@@ -1445,74 +1699,33 @@
     choicesContainer.style.display = 'none';
     choicesContainer.style.padding = '0 20px 14px';
 
-    // Sub-panel de revisión de horas ambiguas (TimeField): el backend nunca
-    // decide solo cómo interpretar una hora contradictoria (p. ej. "14:29:00
-    // a. m."); solo sugiere una lectura y aquí se le pide al usuario que la
-    // confirme o la corrija antes de guardar.
-    const actualizarPanelHoras = (campoMeta, campoNombre) => {
-      const sugerencias = col.sugerencias_hora || {};
-      const valoresAmbiguos = Object.keys(sugerencias);
-      if (valoresAmbiguos.length === 0) { delete state.mapeoValores[idx]; return; }
+    // Botón compacto que reemplaza al panel completo cuando la revisión es
+    // "compleja" (horas ambiguas y/o datos faltantes): en vez de llenar la
+    // fila con formularios, se abre el modal de revisión con todo junto.
+    const botonRevisarContainer = document.createElement('div');
+    botonRevisarContainer.style.padding = '0 20px 14px';
+    botonRevisarContainer.style.display = 'none';
 
-      choicesContainer.style.display = 'block';
-      const panel = document.createElement('div');
-      panel.className = 'choices-panel';
-      panel.innerHTML = `
-        <div class="choices-panel-title">
-          ⏱️ Horas ambiguas por revisar — <span style="font-weight:400;">${escapeHtml(campoMeta.verbose_name || campoNombre)}</span>
-        </div>
-        <div style="font-size:.78rem;color:var(--gray);margin:-6px 0 10px;">
-          Estos valores mezclan formato 24h con a. m./p. m. de forma contradictoria.
-          Confirma o corrige la interpretación antes de guardar.
-        </div>
-      `;
+    const actualizarBotonRevisar = () => {
+      botonRevisarContainer.innerHTML = '';
+      botonRevisarContainer.style.display = 'none';
+      if (!columnaEsCompleja(idx)) return;
 
-      const mapeoPrevio = state.mapeoValores[idx] || {};
-      const mapeoNuevo = {};
+      botonRevisarContainer.style.display = 'block';
+      const nHoras = Object.keys(col.sugerencias_hora || {}).length;
+      const erroresPrevios = (state.ultimosErroresPorColumna || {})[col.nombre] || [];
+      const partes = [];
+      if (nHoras) partes.push(`${nHoras} hora${nHoras > 1 ? 's' : ''} ambigua${nHoras > 1 ? 's' : ''}`);
+      if (col.nulls) partes.push(`${col.nulls} fila${col.nulls > 1 ? 's' : ''} vacía${col.nulls > 1 ? 's' : ''}`);
+      if (erroresPrevios.length) partes.push(`${erroresPrevios.length} error${erroresPrevios.length > 1 ? 'es' : ''}`);
 
-      valoresAmbiguos.forEach(valorOrigen => {
-        const sugerencia = sugerencias[valorOrigen];
-        const valorActual = mapeoPrevio[valorOrigen] !== undefined ? mapeoPrevio[valorOrigen] : sugerencia;
-        mapeoNuevo[valorOrigen] = valorActual;
-
-        const fila = document.createElement('div');
-        fila.className = 'choices-row';
-
-        const spanOrigen = document.createElement('div');
-        spanOrigen.className = 'choices-valor-origen';
-        spanOrigen.title = valorOrigen;
-        spanOrigen.textContent = valorOrigen;
-
-        const spanArrow = document.createElement('div');
-        spanArrow.className = 'choices-arrow';
-        spanArrow.textContent = '→';
-
-        const inputDestino = document.createElement('input');
-        inputDestino.type = 'text';
-        inputDestino.placeholder = 'HH:MM:ss';
-        inputDestino.value = valorActual;
-        inputDestino.style.cssText = 'width:100%;border:1.5px solid var(--border);border-radius:8px;padding:6px 10px;font-size:.82rem;font-family:inherit;';
-
-        const badgeSugerido = document.createElement('span');
-        badgeSugerido.className = 'mapeo-sugerido';
-        badgeSugerido.textContent = '❓ confirmar';
-        badgeSugerido.title = 'Interpretación sugerida, sin confirmar todavía';
-        badgeSugerido.style.display = mapeoPrevio[valorOrigen] !== undefined ? 'none' : '';
-
-        inputDestino.addEventListener('input', () => {
-          badgeSugerido.style.display = 'none';
-          state.mapeoValores[idx][valorOrigen] = inputDestino.value;
-        });
-
-        spanOrigen.appendChild(badgeSugerido);
-        fila.appendChild(spanOrigen);
-        fila.appendChild(spanArrow);
-        fila.appendChild(inputDestino);
-        panel.appendChild(fila);
-      });
-
-      state.mapeoValores[idx] = mapeoNuevo;
-      choicesContainer.appendChild(panel);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn-secondary';
+      btn.style.cssText = 'font-size:.8rem;padding:7px 14px;';
+      btn.textContent = `🔍 Revisar (${partes.join(', ')})`;
+      btn.addEventListener('click', () => abrirModalRevision(idx));
+      botonRevisarContainer.appendChild(btn);
     };
 
     const actualizarChoicesPanel = () => {
@@ -1527,7 +1740,6 @@
       const campoMeta = campos.find(c => c.nombre === campoNombre);
 
       if (campoMeta && campoMeta.tipo_raw === 'TimeField') {
-        actualizarPanelHoras(campoMeta, campoNombre);
         return;
       }
 
@@ -1612,13 +1824,22 @@
     };
     actualizarChoicesPanel();
 
+    actualizarChoicesPanel();
+    actualizarBotonRevisar();
+
     selModelo.addEventListener('change', () => {
-      state.mapeoSeleccion[idx] = { modelo: selModelo.value, campo: '' };
+      state.mapeoSeleccion[idx] = {
+        modelo: selModelo.value, campo: '',
+        estrategiaNulos: seleccion.estrategiaNulos, valorRellenoManual: seleccion.valorRellenoManual,
+      };
       renderMapeoRows();
     });
 
     selCampo.addEventListener('change', () => {
-      state.mapeoSeleccion[idx] = { modelo: selModelo.value, campo: selCampo.value };
+      state.mapeoSeleccion[idx] = {
+        modelo: selModelo.value, campo: selCampo.value,
+        estrategiaNulos: seleccion.estrategiaNulos, valorRellenoManual: seleccion.valorRellenoManual,
+      };
       infoDiv.querySelector('.mapeo-sugerido')?.remove();
       // Si se (des)asigna UnidadMuestreo.tipo o .unidad_experimental, los
       // vínculos con Parcela/Transecto o el mensaje de vínculo automático
@@ -1628,6 +1849,7 @@
         renderMapeoRows();
       } else {
         actualizarChoicesPanel();
+        actualizarBotonRevisar();
       }
     });
 
@@ -1640,6 +1862,7 @@
 
     wrapper.appendChild(row);
     wrapper.appendChild(choicesContainer);
+    wrapper.appendChild(botonRevisarContainer);
     return wrapper;
   }
 
@@ -1682,6 +1905,8 @@
         mapeo_valores:   Object.fromEntries(
           Object.entries(state.mapeoValores[idx] || {}).filter(([, v]) => v !== '')
         ),
+        estrategia_nulos: seleccion.estrategiaNulos || 'dejar_null',
+        valor_relleno_manual: seleccion.valorRellenoManual || '',
       };
     }));
   }
@@ -1731,6 +1956,15 @@
   });
 
   // ── Guardado + importación por sección ───────────────────────────────────
+  // Guarda los errores de la última validación por columna, para mostrarlos
+  // en el modal de revisión (🔍 Revisar) sin tener que repetir la validación.
+  function actualizarErroresPorColumna(columnasResultado) {
+    state.ultimosErroresPorColumna = state.ultimosErroresPorColumna || {};
+    (columnasResultado || []).forEach(c => {
+      if (c.columna) state.ultimosErroresPorColumna[c.columna] = c.errores || [];
+    });
+  }
+
   function renderErroresSeccionHtml(data) {
     const r = data.resumen || {};
     const cols = (data.columnas || []).filter(c => c.errores && c.errores.length);
@@ -1858,8 +2092,10 @@
         }
       );
       const dataPreview = await resPreview.json().catch(() => ({}));
+      actualizarErroresPorColumna(dataPreview.columnas);
       if (!resPreview.ok) {
         resultadoEl.innerHTML = renderErroresSeccionHtml(dataPreview);
+        renderMapeoRows();
         return;
       }
 
@@ -1883,9 +2119,11 @@
         }
       );
       const data = await res.json().catch(() => ({}));
+      actualizarErroresPorColumna(data.columnas);
 
       if (!res.ok) {
         resultadoEl.innerHTML = renderErroresSeccionHtml(data);
+        renderMapeoRows();
         return;
       }
 
@@ -1896,8 +2134,14 @@
       state.seccionesGuardadas.add(ordenGrupo);
 
       if (data.completo) {
-        document.getElementById('cargaCompletaBanner').innerHTML =
-          `<div style="margin-top:16px;background:var(--green-l);border:1.5px solid var(--green);border-radius:10px;padding:12px 16px;color:var(--green-d);font-weight:700;">🎉 Carga completa — todas las secciones mapeadas fueron validadas e importadas.</div>`;
+        document.getElementById('cargaCompletaBanner').innerHTML = `
+          <div style="margin-top:16px;background:var(--green-l);border:1.5px solid var(--green);border-radius:10px;padding:12px 16px;color:var(--green-d);">
+            <div style="font-weight:700;">🎉 Carga completa — todas las secciones mapeadas fueron validadas e importadas.</div>
+            <a class="btn-primary" style="display:inline-block;margin-top:10px;text-decoration:none;"
+               href="etl-datos.html?fuente=${encodeURIComponent(state.fuenteId)}&carga=${encodeURIComponent(state.cargaId)}">
+              📊 Ver datos cargados
+            </a>
+          </div>`;
         showToast('🎉 Carga completa: todas las secciones fueron importadas');
       } else {
         // Avanza automáticamente a la siguiente sección del wizard

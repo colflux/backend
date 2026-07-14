@@ -89,11 +89,6 @@ def _muestra(series, n=3):
     return [str(v) for v in valores]
 
 
-def _valores_unicos(series, max_n=50):
-    unicos = series.dropna().unique()
-    return [str(v) for v in unicos[:max_n]]
-
-
 def _sugerencias_hora(valores_unicos):
     """Para columnas que puedan mapearse a un TimeField: de sus valores únicos,
     cuáles tienen forma de hora ambigua (24h + sufijo a. m./p. m. contradictorio)
@@ -107,17 +102,46 @@ def _sugerencias_hora(valores_unicos):
     return sugerencias
 
 
+_RE_HORA_LAXA = re.compile(r"^\d{1,2}:\d{2}(:\d{2}(\.\d+)?)?\s*([ap]\.?\s*m\.?)?\s*$", re.IGNORECASE)
+
+
+def _interpretaciones_hora(valores_unicos):
+    """Para toda columna con pinta de hora: cómo se interpretaría cada valor
+    único en 24h (HH:MM:ss) tal como quedaría guardado en la base de datos.
+    Se usa para mostrarle al usuario, antes de guardar, exactamente en qué se
+    convierte cada valor de origen -incluidos los que ya son válidos y no
+    requieren ninguna corrección- y así detectar ambigüedades a simple vista."""
+    interpretaciones = {}
+    for val in valores_unicos:
+        if not _RE_HORA_LAXA.match(str(val).strip()):
+            continue
+        try:
+            interpretaciones[val] = pd.to_datetime(val).strftime("%H:%M:%S")
+            continue
+        except Exception:
+            pass
+        sugerencia = _sugerir_hora(val)
+        if sugerencia is not None:
+            interpretaciones[val] = sugerencia
+    return interpretaciones
+
+
 def _columnas_desde_dataframe(df):
     columnas = []
     for col in df.columns:
-        valores_unicos = _valores_unicos(df[col])
+        # Los valores únicos para el panel de choices se limitan a los
+        # primeros max_n (rendimiento), pero la detección de horas ambiguas
+        # necesita revisar TODOS los valores: un valor problemático puede
+        # aparecer más adelante en la columna y quedar fuera de ese límite.
+        todos_unicos = [str(v) for v in df[col].dropna().unique()]
         columnas.append({
             "nombre": col,
             "dtype": _infer_dtype(df[col]),
             "nulls": int(df[col].isna().sum()),
             "muestra": _muestra(df[col]),
-            "valores_unicos": valores_unicos,
-            "sugerencias_hora": _sugerencias_hora(valores_unicos),
+            "valores_unicos": todos_unicos[:50],
+            "sugerencias_hora": _sugerencias_hora(todos_unicos),
+            "interpretaciones_hora": _interpretaciones_hora(todos_unicos),
         })
     return columnas
 
@@ -340,6 +364,8 @@ def upload_archivo(request, fuente_id):
                     transformacion=m.transformacion,
                     mapeo_valores=m.mapeo_valores,
                     valor_constante=m.valor_constante,
+                    estrategia_nulos=m.estrategia_nulos,
+                    valor_relleno_manual=m.valor_relleno_manual,
                 )
                 for m in copias
             ])
@@ -351,6 +377,8 @@ def upload_archivo(request, fuente_id):
                     "transformacion": m.transformacion,
                     "mapeo_valores": m.mapeo_valores,
                     "valor_constante": m.valor_constante,
+                    "estrategia_nulos": m.estrategia_nulos,
+                    "valor_relleno_manual": m.valor_relleno_manual,
                 }
                 for m in copias
             ]
@@ -411,9 +439,18 @@ def mapeo_carga(request, fuente_id, carga_id):
             carga.mapeos.values(
                 "columna_origen", "modelo_destino", "campo_destino",
                 "transformacion", "mapeo_valores", "valor_constante",
+                "estrategia_nulos", "valor_relleno_manual",
             )
         )
-        return JsonResponse({"carga_id": carga.pk, "mapeos": mapeos}, json_dumps_params={"ensure_ascii": False})
+        return JsonResponse({
+            "carga_id": carga.pk,
+            "fuente_id": carga.fuente_id,
+            "fuente_nombre": carga.fuente.nombre,
+            "estado": carga.estado,
+            "columnas_raw": carga.columnas_raw,
+            "total_filas": carga.total_filas,
+            "mapeos": mapeos,
+        }, json_dumps_params={"ensure_ascii": False})
 
     if request.method == "POST":
         try:
@@ -444,6 +481,10 @@ def mapeo_carga(request, fuente_id, carga_id):
                         "transformacion": item.get("transformacion", "directo"),
                         "mapeo_valores": item.get("mapeo_valores") or {},
                         "valor_constante": item.get("valor_constante", ""),
+                        "estrategia_nulos": item.get("estrategia_nulos")
+                        if item.get("estrategia_nulos") in dict(MapeoColumna.ESTRATEGIA_NULOS_CHOICES)
+                        else "dejar_null",
+                        "valor_relleno_manual": item.get("valor_relleno_manual", ""),
                     },
                 )
                 enviados.add(columna_origen)
@@ -536,6 +577,21 @@ def _sugerir_hora(valor):
         return None
 
 
+def _aplicar_estrategia_nulos(df, mapeos):
+    """Aplica sobre el propio DataFrame -antes de validar/previsualizar/
+    importar- lo que el usuario eligió para los nulos de cada columna
+    mapeada: 'rellenar' repite hacia abajo el último valor visto; 'manual'
+    usa un valor fijo. 'dejar_null' e 'ignorar_fila' no tocan el DataFrame
+    ('ignorar_fila' se resuelve fila por fila en _procesar_filas)."""
+    for mapeo in mapeos:
+        if mapeo.columna_origen not in df.columns:
+            continue
+        if mapeo.estrategia_nulos == "rellenar":
+            df[mapeo.columna_origen] = df[mapeo.columna_origen].ffill()
+        elif mapeo.estrategia_nulos == "manual" and not _es_vacio(mapeo.valor_relleno_manual):
+            df[mapeo.columna_origen] = df[mapeo.columna_origen].fillna(mapeo.valor_relleno_manual)
+
+
 def _resolver_valor_columna(val, mapeo):
     """Aplica la traducción de mapeo_valores (origen -> destino) de una columna
     mapeada a un campo con choices, igual que hace la UI antes de guardar."""
@@ -579,7 +635,9 @@ def _validar_columna(df, mapeo):
         py_val = _to_python(val)
 
         if val is None:
-            if campo_requerido:
+            # "ignorar_fila": el usuario ya decidió que estas filas no crean
+            # el registro, así que no es un error de validación bloqueante.
+            if campo_requerido and mapeo.estrategia_nulos != "ignorar_fila":
                 errores.append({
                     "fila": fila,
                     "valor": None,
@@ -863,6 +921,7 @@ def validar_carga(request, fuente_id, carga_id):
             df = pd.read_excel(path, sheet_name=carga.hoja_activa)
 
         mapeos = carga.mapeos.exclude(modelo_destino="")
+        _aplicar_estrategia_nulos(df, mapeos)
 
         resultados = []
         filas_con_error = set()
@@ -1004,6 +1063,10 @@ def _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos, captur
     verdad como, dentro de una transacción que se revierte, para la vista
     previa (capturar_detalle=True) sin escribir nada permanente."""
     detalle = {} if capturar_detalle else None
+    # A diferencia de `detalle` (limitado a _PREVIEW_MAX_POR_MODELO para la
+    # UI de vista previa), esto guarda TODOS los pk tocados por esta corrida,
+    # sin límite, para poder filtrar después "solo lo de esta carga".
+    pks_por_modelo = {}
 
     for fila_idx in range(len(df)):
         instancias_fila = {}
@@ -1022,7 +1085,12 @@ def _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos, captur
                     valor = _resolver_valor_columna(val_crudo, mapeo)
 
                 if valor is None:
-                    if not (getattr(field, "blank", True) or getattr(field, "null", True)):
+                    # "ignorar_fila": el usuario decidió explícitamente no
+                    # crear el registro de este modelo cuando esta columna
+                    # viene vacía, sin importar si el campo admite nulos.
+                    if mapeo.estrategia_nulos == "ignorar_fila" or not (
+                        getattr(field, "blank", True) or getattr(field, "null", True)
+                    ):
                         incompleto = True
                     continue
 
@@ -1079,6 +1147,7 @@ def _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos, captur
 
             instancias_fila[modelo] = obj
             resumen_modelos[modelo]["creados" if creado else "reutilizados"] += 1
+            pks_por_modelo.setdefault(modelo, set()).add(obj.pk)
 
             if capturar_detalle:
                 bucket = detalle.setdefault(modelo, {})
@@ -1088,7 +1157,7 @@ def _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos, captur
                         "campos": _representar_kwargs(kwargs),
                     }
 
-    return detalle
+    return detalle, pks_por_modelo
 
 
 def _preparar_importacion(carga, hasta_grupo_solicitado):
@@ -1178,6 +1247,7 @@ def previsualizar_carga(request, fuente_id, carga_id):
             df = _leer_csv(path)
         else:
             df = pd.read_excel(path, sheet_name=carga.hoja_activa)
+        _aplicar_estrategia_nulos(df, mapeos)
 
         resultados, total_errores, filas_con_error = _validar_seccion(carga, df, mapeos)
         if total_errores > 0:
@@ -1204,7 +1274,7 @@ def previsualizar_carga(request, fuente_id, carga_id):
 
         with transaction.atomic():
             sid = transaction.savepoint()
-            detalle = _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos, capturar_detalle=True)
+            detalle, _pks = _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos, capturar_detalle=True)
             transaction.savepoint_rollback(sid)
 
         modelos_preview = {
@@ -1256,6 +1326,7 @@ def importar_carga(request, fuente_id, carga_id):
             df = _leer_csv(path)
         else:
             df = pd.read_excel(path, sheet_name=carga.hoja_activa)
+        _aplicar_estrategia_nulos(df, mapeos)
 
         # 1) Validar solo el subconjunto de mapeos de esta sección; no se
         # escribe nada en la base si queda algún error.
@@ -1284,11 +1355,26 @@ def importar_carga(request, fuente_id, carga_id):
         resumen_modelos = {m: {"creados": 0, "reutilizados": 0} for m in modelos_incluidos}
 
         with transaction.atomic():
-            _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos)
+            _, pks_por_modelo = _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos)
 
+            # Acumula (no reemplaza) los pk tocados por esta sección con los de
+            # secciones anteriores de la misma carga, para poder mostrar luego
+            # "solo lo de esta carga" en el panel de visualización.
+            acumulado = carga.pks_importados or {}
+            for modelo, pks in pks_por_modelo.items():
+                existentes = set(acumulado.get(modelo, []))
+                acumulado[modelo] = sorted(existentes | pks)
+            carga.pks_importados = acumulado
+
+            campos_actualizar = ["pks_importados"]
             if hasta_grupo >= grupo_maximo:
                 carga.estado = "importado"
-                carga.save(update_fields=["estado"])
+                campos_actualizar.append("estado")
+            carga.save(update_fields=campos_actualizar)
+
+            if hasta_grupo >= grupo_maximo and carga.fuente.estado != "completo":
+                carga.fuente.estado = "completo"
+                carga.fuente.save(update_fields=["estado"])
 
         return JsonResponse({
             "ok": True,
@@ -1301,3 +1387,155 @@ def importar_carga(request, fuente_id, carga_id):
         return JsonResponse({"error": str(exc)}, status=400)
     except Exception as exc:
         return JsonResponse({"error": str(exc)}, status=500)
+
+
+# ── Panel de visualización: tabla desnormalizada de lo importado ───────────
+# Cada "vista" define, para un modelo base, la cadena de FKs hacia arriba que
+# se aplana en columnas prefijadas por modelo. Cada tupla de la cadena es
+# (nombre_modelo, ruta_de_atributos_desde_el_modelo_base).
+#
+# "submuestra_co2" llega a UnidadMuestreo/UnidadExperimental/Sitio por el
+# vínculo directo MuestraCO2.unidad_muestreo, sin pasar por Anillo: el ETL
+# todavía no crea/vincula Anillo (Camara depende de Equipo, cuya sección
+# "Torre EC y Flujos" está oculta del wizard), y la relación anillo →
+# unidad_muestreo queda pendiente de revisar a futuro (ver app/models/co2.py).
+# "unidad_muestreo" es una vista aparte para cargas que todavía no tienen
+# MuestraCO2/SubmuestraCO2 importadas (solo unidad de muestreo/experimental).
+_VISTAS_DESNORMALIZADAS = {
+    "submuestra_co2": {
+        "modelo_base": "SubmuestraCO2",
+        "orden": ["muestra__fecha", "muestra_id", "n_toma"],
+        "cadena": [
+            ("SubmuestraCO2", []),
+            ("UnidadMedida", ["unidad_medida"]),
+            ("MuestraCO2", ["muestra"]),
+            ("MuestraAmbiental", ["muestra", "muestra_ambiental"]),
+            ("Camara", ["muestra", "camara"]),
+            ("Equipo", ["muestra", "camara", "equipo"]),
+            ("UnidadMuestreo", ["muestra", "unidad_muestreo"]),
+            ("UnidadExperimental", ["muestra", "unidad_muestreo", "unidad_experimental"]),
+            ("Sitio", ["muestra", "unidad_muestreo", "sitio"]),
+        ],
+    },
+    "unidad_muestreo": {
+        "modelo_base": "UnidadMuestreo",
+        "orden": ["unidad_experimental__nombre", "nombre"],
+        "cadena": [
+            ("UnidadMuestreo", []),
+            ("UnidadExperimental", ["unidad_experimental"]),
+            ("Sitio", ["sitio"]),
+        ],
+    },
+}
+
+
+def _select_related_de_cadena(cadena):
+    return ["__".join(ruta) for _modelo, ruta in cadena if ruta]
+
+
+def _campos_planos(modelo_cls):
+    """Campos propios de un modelo (sin FKs/relaciones ni id/timestamps),
+    listos para aplanar como columnas de la tabla desnormalizada."""
+    return [
+        f for f in modelo_cls._meta.get_fields()
+        if hasattr(f, "column") and not f.is_relation and f.name not in ("id", "created_at", "updated_at")
+    ]
+
+
+def _resolver_ruta(obj, ruta):
+    for attr in ruta:
+        if obj is None:
+            return None
+        obj = getattr(obj, attr, None)
+    return obj
+
+
+def _valor_campo_plano(obj, field):
+    if obj is None:
+        return None
+    valor = getattr(obj, field.name, None)
+    if valor is None:
+        return None
+    if getattr(field, "choices", None):
+        display = getattr(obj, f"get_{field.name}_display", None)
+        if callable(display):
+            return display()
+    return valor
+
+
+def datos_carga(request, fuente_id, carga_id):
+    try:
+        carga = CargaArchivo.objects.get(pk=carga_id, fuente_id=fuente_id)
+    except CargaArchivo.DoesNotExist:
+        return JsonResponse({"error": "Carga no encontrada"}, status=404)
+
+    nombre_vista = request.GET.get("vista", "submuestra_co2")
+    vista = _VISTAS_DESNORMALIZADAS.get(nombre_vista)
+    if vista is None:
+        return JsonResponse({"error": f"Vista desconocida: {nombre_vista}"}, status=400)
+
+    cadena = vista["cadena"]
+    modelo_base = vista["modelo_base"]
+
+    pks = (carga.pks_importados or {}).get(modelo_base, [])
+    if not pks:
+        return JsonResponse({
+            "total": 0, "columnas": [], "filas": [], "vistas": list(_VISTAS_DESNORMALIZADAS.keys()),
+            "advertencia": f"Esta carga todavía no tiene {modelo_base} importado.",
+        }, json_dumps_params={"ensure_ascii": False})
+
+    try:
+        offset = max(int(request.GET.get("offset", 0)), 0)
+    except ValueError:
+        offset = 0
+    try:
+        limite = min(max(int(request.GET.get("limite", 500)), 1), 2000)
+    except ValueError:
+        limite = 500
+
+    columnas = [
+        {"clave": f"{modelo_nombre}.{f.name}", "modelo": modelo_nombre, "campo": f.name,
+         "verbose_name": str(f.verbose_name)}
+        for modelo_nombre, _ruta in cadena
+        for f in _campos_planos(apps.get_model("app", modelo_nombre))
+    ]
+    # Mapa clave ("Modelo.campo") -> ruta ORM, para poder traducir los filtros
+    # del usuario a filter(**{"ruta__campo__icontains": ...}).
+    ruta_orm_por_clave = {}
+    for modelo_nombre, ruta in cadena:
+        for f in _campos_planos(apps.get_model("app", modelo_nombre)):
+            ruta_orm_por_clave[f"{modelo_nombre}.{f.name}"] = ruta + [f.name]
+
+    ModeloBase = apps.get_model("app", modelo_base)
+    qs = ModeloBase.objects.filter(pk__in=pks).select_related(*_select_related_de_cadena(cadena))
+
+    try:
+        filtros = json.loads(request.GET.get("filtros") or "{}")
+    except json.JSONDecodeError:
+        filtros = {}
+    for clave, texto in filtros.items():
+        ruta_orm = ruta_orm_por_clave.get(clave)
+        if not ruta_orm or not str(texto).strip():
+            continue
+        qs = qs.filter(**{f"{'__'.join(ruta_orm)}__icontains": texto})
+
+    qs = qs.order_by(*vista["orden"])
+    total = qs.count()
+
+    filas = []
+    for obj in qs[offset:offset + limite]:
+        fila = {}
+        for modelo_nombre, ruta in cadena:
+            related_obj = obj if not ruta else _resolver_ruta(obj, ruta)
+            for f in _campos_planos(apps.get_model("app", modelo_nombre)):
+                fila[f"{modelo_nombre}.{f.name}"] = _valor_campo_plano(related_obj, f)
+        filas.append(fila)
+
+    return JsonResponse({
+        "total": total,
+        "offset": offset,
+        "limite": limite,
+        "columnas": columnas,
+        "filas": filas,
+        "vistas": list(_VISTAS_DESNORMALIZADAS.keys()),
+    }, json_dumps_params={"ensure_ascii": False})

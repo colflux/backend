@@ -22,9 +22,18 @@
         : '<span class="source-muted">Sin proyecto</span>';
       const fecha = f.fecha_datos ? escapeHtml(f.fecha_datos) : '<span class="source-muted">Sin fecha</span>';
       const responsable = f.responsable ? escapeHtml(f.responsable) : '<span class="source-muted">Sin responsable</span>';
-      const startLink = window.COLFLUX_DATA.etlActions.canStartEtl(f)
-        ? `<a class="btn-table-action primary" href="etl-upload.html?fuente=${encodeURIComponent(f.id)}" title="Iniciar carga" aria-label="Iniciar carga">⬆</a>`
-        : '<span class="source-muted">No aplica carga</span>';
+      const cargaId = f.ultima_carga_importada_id;
+      let etlLink;
+      if (cargaId) {
+        etlLink = `
+          <a class="btn-table-action primary" href="etl-datos.html?fuente=${encodeURIComponent(f.id)}&carga=${encodeURIComponent(cargaId)}" title="Ver datos cargados" aria-label="Ver datos cargados">📊</a>
+          <a class="btn-table-action" href="etl-mapeo.html?fuente=${encodeURIComponent(f.id)}&carga=${encodeURIComponent(cargaId)}" title="Ver mapeo de columnas" aria-label="Ver mapeo de columnas">🔗</a>
+        `;
+      } else if (window.COLFLUX_DATA.etlActions.canStartEtl(f)) {
+        etlLink = `<a class="btn-table-action primary" href="etl-upload.html?fuente=${encodeURIComponent(f.id)}" title="Iniciar carga" aria-label="Iniciar carga">⬆</a>`;
+      } else {
+        etlLink = '<span class="source-muted">No aplica carga</span>';
+      }
 
       return `
         <tr>
@@ -39,7 +48,7 @@
           <td>${fecha}</td>
           <td>
             <div class="source-actions">
-              ${startLink}
+              ${etlLink}
               <button class="btn-table-action" onclick="editFuente(${Number(f.id)})" title="Editar fuente" aria-label="Editar fuente">✎</button>
               <button class="btn-table-action danger" onclick="deleteFuente(${Number(f.id)})" title="Eliminar fuente" aria-label="Eliminar fuente">×</button>
             </div>

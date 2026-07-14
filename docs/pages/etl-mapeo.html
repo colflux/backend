@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>COLFLUX — Mapeo de columnas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Inter', sans-serif; color: #1a2236; background: #f8fafc; line-height: 1.6; }
+
+    :root {
+      --green:   #18735d; --green-l: #e6f4f0; --green-d: #0d4f40;
+      --blue:    #1a6e9b; --blue-l:  #e6f3fb;
+      --purple:  #6b4f9e; --purple-l:#f0ecfa;
+      --amber:   #d97706; --amber-l: #fef3c7;
+      --red:     #dc2626; --red-l:   #fee2e2;
+      --gray:    #64748b; --gray-l:  #f1f5f9;
+      --border:  #e2e8f0;
+    }
+
+    .container { max-width: 1140px; margin: 0 auto; padding: 0 24px; }
+
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(255,255,255,.96); backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border); padding: 12px 0;
+    }
+    .nav-inner { display: flex; align-items: center; justify-content: space-between; max-width: 1140px; margin: 0 auto; padding: 0 24px; }
+    .nav-logo { font-weight: 800; font-size: 1rem; color: var(--green-d); text-decoration: none; display: flex; align-items: center; gap: 8px; }
+    .nav-links { display: flex; gap: 24px; list-style: none; }
+    .nav-links a { color: var(--gray); font-size: .85rem; font-weight: 500; text-decoration: none; transition: color .2s; }
+    .nav-links a:hover, .nav-links a.active { color: var(--green); font-weight: 700; }
+    .nav-pill { background: var(--green-d); color: white; font-size: .75rem; font-weight: 700; padding: 5px 12px; border-radius: 20px; text-decoration: none; }
+    @media (max-width: 600px) { .nav-links { display: none; } }
+
+    .hero { background: #0d4f40; color: white; padding: 40px 0 28px; }
+    .hero-badge { display: inline-flex; align-items: center; gap: 7px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.3); border-radius: 20px; padding: 4px 14px; font-size: .75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 14px; }
+    .hero h1 { font-size: clamp(1.4rem, 3vw, 2rem); font-weight: 800; margin-bottom: 6px; }
+    .hero h1 em { font-style: normal; color: #6ee7b7; }
+    .hero p { font-size: .88rem; color: rgba(255,255,255,.8); }
+
+    .toolbar {
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+      padding: 16px 0; border-bottom: 1px solid var(--border); background: white;
+    }
+    .toolbar-info { font-size: .84rem; color: var(--gray); }
+    .toolbar-actions { display: flex; align-items: center; gap: 10px; }
+    .btn-secondary { background: white; color: var(--gray); border: 1.5px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: .84rem; font-weight: 600; font-family: inherit; cursor: pointer; text-decoration: none; }
+    .btn-secondary:hover { border-color: var(--gray); color: #1a2236; }
+    .btn-primary { background: var(--green-d); color: white; border: none; border-radius: 8px; padding: 8px 16px; font-size: .84rem; font-weight: 700; font-family: inherit; cursor: pointer; text-decoration: none; display: inline-block; }
+    .btn-primary:hover { opacity: .9; }
+
+    .estado-box { padding: 40px 0; text-align: center; color: var(--gray); font-size: .9rem; }
+    .error-box { background: var(--red-l); color: var(--red); border-radius: 10px; padding: 14px 18px; font-size: .85rem; margin: 20px 0; }
+    .warn-box { background: var(--amber-l); color: #92400e; border-radius: 10px; padding: 14px 18px; font-size: .85rem; margin: 20px 0; }
+
+    h2.section-title { font-size: 1rem; font-weight: 800; margin: 28px 0 12px; color: var(--green-d); }
+
+    .tabla-wrap { overflow-x: auto; margin: 0 0 20px; border: 1.5px solid var(--border); border-radius: 12px; background: white; }
+    table.mapeo-table { border-collapse: collapse; width: 100%; font-size: .82rem; }
+    table.mapeo-table th, table.mapeo-table td { padding: 9px 14px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+    table.mapeo-table th { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #374151; background: var(--gray-l); }
+    table.mapeo-table tr:last-child td { border-bottom: none; }
+    table.mapeo-table tr:hover td { background: var(--gray-l); }
+
+    .pill { display: inline-flex; align-items: center; font-size: .72rem; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
+    .pill-modelo { background: var(--blue-l); color: var(--blue); }
+    .pill-ignorada { background: var(--gray-l); color: var(--gray); }
+    .pill-transformacion { background: var(--purple-l); color: var(--purple); }
+    .detalle-mapeo { font-size: .76rem; color: var(--gray); font-family: 'JetBrains Mono', monospace; }
+
+    footer { background: #0d1117; color: rgba(255,255,255,.5); padding: 28px 0; font-size: .82rem; margin-top: 40px; }
+  </style>
+</head>
+<body>
+
+<div id="app-nav"></div>
+
+<div class="hero">
+  <div class="container">
+    <div class="hero-badge">🔗 ETL · Mapeo de columnas</div>
+    <h1>Cómo se <em>mapeó</em> el archivo</h1>
+    <p id="heroSubtitulo">Cargando…</p>
+  </div>
+</div>
+
+<div class="container">
+  <div class="toolbar">
+    <div class="toolbar-info" id="toolbarInfo"></div>
+    <div class="toolbar-actions">
+      <button class="btn-primary" id="btnDescargar" style="display:none;">⬇ Descargar mapeo (JSON)</button>
+      <a class="btn-secondary" id="linkVerDatos" style="display:none;">📊 Ver datos cargados</a>
+      <a class="btn-secondary" id="linkVolver" href="data.html">← Volver</a>
+    </div>
+  </div>
+
+  <div id="contenido">
+    <div class="estado-box">Cargando mapeo…</div>
+  </div>
+</div>
+
+<div id="app-footer"></div>
+
+<script src="../assets/js/layout.js"></script>
+<script src="../config/services.js"></script>
+<script>
+  const API_BASE = window.COLFLUX_CONFIG.apiBaseUrl;
+  const params = new URLSearchParams(window.location.search);
+  const fuenteId = params.get('fuente');
+  const cargaId = params.get('carga');
+
+  let mapeoData = null;
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  const NOMBRES_TRANSFORMACION = {
+    directo: 'Directo', lookup: 'Lookup / FK', split: 'Split',
+    fecha: 'Parsear fecha', constante: 'Valor constante', ignorar: 'Ignorar',
+  };
+  const NOMBRES_ESTRATEGIA = {
+    dejar_null: 'Dejar vacío', rellenar: 'Rellenar hacia abajo',
+    manual: 'Valor manual', ignorar_fila: 'Ignorar filas sin valor',
+  };
+
+  function detalleMapeo(m) {
+    const partes = [];
+    if (m.transformacion === 'constante' && m.valor_constante) partes.push(`valor = "${m.valor_constante}"`);
+    if (m.estrategia_nulos && m.estrategia_nulos !== 'dejar_null') {
+      partes.push(NOMBRES_ESTRATEGIA[m.estrategia_nulos] || m.estrategia_nulos);
+      if (m.estrategia_nulos === 'manual' && m.valor_relleno_manual) partes.push(`relleno = "${m.valor_relleno_manual}"`);
+    }
+    if (m.mapeo_valores && Object.keys(m.mapeo_valores).length) {
+      partes.push(Object.entries(m.mapeo_valores).map(([k, v]) => `${k} → ${v}`).join(', '));
+    }
+    return partes.join(' · ');
+  }
+
+  function renderTabla() {
+    const contenido = document.getElementById('contenido');
+    const mapeosPorColumna = {};
+    mapeoData.mapeos.forEach(m => { mapeosPorColumna[m.columna_origen] = m; });
+
+    const columnasArchivo = (mapeoData.columnas_raw || []).map(c => (typeof c === 'string' ? c : c.nombre || c.columna));
+    const columnasConocidas = new Set(columnasArchivo);
+    mapeoData.mapeos.forEach(m => columnasConocidas.add(m.columna_origen));
+
+    const filas = Array.from(columnasConocidas).map(columna => {
+      const m = mapeosPorColumna[columna];
+      if (!m || !m.modelo_destino || !m.campo_destino) {
+        return `
+          <tr>
+            <td><strong>${escapeHtml(columna)}</strong></td>
+            <td colspan="4"><span class="pill pill-ignorada">Sin mapear / ignorada</span></td>
+          </tr>`;
+      }
+      return `
+        <tr>
+          <td><strong>${escapeHtml(columna)}</strong></td>
+          <td><span class="pill pill-modelo">${escapeHtml(m.modelo_destino)}</span></td>
+          <td>${escapeHtml(m.campo_destino)}</td>
+          <td><span class="pill pill-transformacion">${escapeHtml(NOMBRES_TRANSFORMACION[m.transformacion] || m.transformacion)}</span></td>
+          <td class="detalle-mapeo">${escapeHtml(detalleMapeo(m)) || '—'}</td>
+        </tr>`;
+    }).join('');
+
+    contenido.innerHTML = `
+      <h2 class="section-title">Columnas del archivo original y su destino</h2>
+      <div class="tabla-wrap">
+        <table class="mapeo-table">
+          <thead>
+            <tr>
+              <th>Columna en el archivo</th>
+              <th>Modelo destino</th>
+              <th>Campo destino</th>
+              <th>Transformación</th>
+              <th>Reglas / detalle</th>
+            </tr>
+          </thead>
+          <tbody>${filas}</tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function descargarMapeo() {
+    const payload = {
+      fuente_id: mapeoData.fuente_id,
+      fuente_nombre: mapeoData.fuente_nombre,
+      carga_id: mapeoData.carga_id,
+      total_filas: mapeoData.total_filas,
+      columnas_raw: mapeoData.columnas_raw,
+      mapeos: mapeoData.mapeos,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mapeo_carga_${mapeoData.carga_id}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  async function cargarMapeo() {
+    if (!fuenteId || !cargaId) {
+      document.getElementById('contenido').innerHTML =
+        '<div class="error-box">Falta indicar la fuente y la carga (parámetros ?fuente=&carga= en la URL).</div>';
+      return;
+    }
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/fuentes-datos/${fuenteId}/carga/${cargaId}/mapeo/`,
+        { signal: AbortSignal.timeout(window.COLFLUX_CONFIG.requestTimeoutMs) }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+      mapeoData = data;
+      document.getElementById('heroSubtitulo').textContent =
+        `${data.fuente_nombre || 'Fuente'} — Carga #${data.carga_id}.`;
+      document.getElementById('toolbarInfo').textContent =
+        `${data.mapeos.length} columna${data.mapeos.length === 1 ? '' : 's'} mapeada${data.mapeos.length === 1 ? '' : 's'} · ${data.total_filas} fila${data.total_filas === 1 ? '' : 's'}`;
+
+      document.getElementById('linkVolver').href = `data.html`;
+      const linkVerDatos = document.getElementById('linkVerDatos');
+      linkVerDatos.href = `etl-datos.html?fuente=${encodeURIComponent(fuenteId)}&carga=${encodeURIComponent(cargaId)}`;
+      linkVerDatos.style.display = 'inline-block';
+      document.getElementById('btnDescargar').style.display = 'inline-block';
+
+      renderTabla();
+    } catch (e) {
+      document.getElementById('contenido').innerHTML =
+        `<div class="error-box">Error al cargar el mapeo: ${escapeHtml(e.message)}</div>`;
+    }
+  }
+
+  document.getElementById('btnDescargar').addEventListener('click', descargarMapeo);
+
+  cargarMapeo();
+</script>
+</body>
+</html>

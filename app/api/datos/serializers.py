@@ -26,6 +26,7 @@ class FuenteDatosSerializer(serializers.ModelSerializer):
     estado_label = serializers.CharField(source="get_estado_display", read_only=True)
     fecha_datos = serializers.DateField(source="fecha_recepcion", read_only=True)
     sitio = serializers.SerializerMethodField()
+    ultima_carga_importada_id = serializers.SerializerMethodField()
 
     class Meta:
         model = FuenteDatos
@@ -47,11 +48,16 @@ class FuenteDatosSerializer(serializers.ModelSerializer):
             "fecha_datos",
             "notas",
             "created_at",
+            "ultima_carga_importada_id",
         ]
         read_only_fields = ["created_at"]
 
     def get_sitio(self, obj):
         return None
+
+    def get_ultima_carga_importada_id(self, obj):
+        carga = obj.cargas.filter(estado="importado").order_by("-created_at").first()
+        return carga.pk if carga else None
 
     def create(self, validated_data):
         return super().create(validated_data)

@@ -103,6 +103,14 @@ class MuestraCO2(TimestampedModel):
         Camara, on_delete=models.PROTECT, related_name="muestras_co2",
         null=True, blank=True, verbose_name="cámara",
     )
+    # Vínculo directo a UnidadMuestreo: el ETL todavía no crea/vincula Anillo
+    # (ver comentario arriba), así que por ahora la unidad de muestreo de una
+    # MuestraCO2 se mapea/hereda directo, sin pasar por el anillo. La relación
+    # anillo → unidad_muestreo queda pendiente de revisar a futuro.
+    unidad_muestreo = models.ForeignKey(
+        UnidadMuestreo, on_delete=models.PROTECT, related_name="muestras_co2",
+        null=True, blank=True, verbose_name="unidad de muestreo",
+    )
     fecha = models.DateField("fecha", null=True, blank=True)
     muestra_ambiental = models.ForeignKey(
         MuestraAmbiental, on_delete=models.SET_NULL, related_name="muestras_co2",

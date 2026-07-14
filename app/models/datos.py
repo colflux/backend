@@ -127,6 +127,11 @@ class CargaArchivo(TimestampedModel):
     estado = models.CharField("estado", max_length=20, choices=ESTADO_CHOICES, default="subido")
     columnas_raw = models.JSONField("columnas inspeccionadas", default=list)
     total_filas = models.IntegerField("total de filas", default=0)
+    pks_importados = models.JSONField(
+        "pks creados/vinculados por esta carga", default=dict, blank=True,
+        help_text='Acumula, por modelo, los pk que esta carga creó o reutilizó al importar. '
+                   'Ej: {"SubmuestraCO2": [10, 11, 12]}. Permite mostrar solo los datos de esta carga en el panel de visualización.',
+    )
 
     class Meta:
         verbose_name = "carga de archivo"
@@ -167,6 +172,23 @@ class MapeoColumna(TimestampedModel):
     valor_constante = models.CharField(
         "valor constante", max_length=500, blank=True, default="",
         help_text="Valor fijo para todas las filas cuando la transformación es 'constante' (atributo sin columna en la fuente).",
+    )
+
+    ESTRATEGIA_NULOS_CHOICES = [
+        ("dejar_null", "Dejar vacío"),
+        ("rellenar", "Rellenar hacia abajo"),
+        ("manual", "Ingresar valor manual"),
+        ("ignorar_fila", "Ignorar registros sin este valor"),
+    ]
+    estrategia_nulos = models.CharField(
+        "estrategia para datos faltantes", max_length=20,
+        choices=ESTRATEGIA_NULOS_CHOICES, default="dejar_null",
+        help_text="Qué hacer con las filas donde esta columna viene vacía: dejarlas vacías, repetir hacia abajo el "
+                   "último valor visto, usar un valor fijo, o no crear el registro para esas filas.",
+    )
+    valor_relleno_manual = models.CharField(
+        "valor manual para nulos", max_length=500, blank=True, default="",
+        help_text="Valor usado para las filas vacías de esta columna cuando estrategia_nulos es 'manual'.",
     )
 
     class Meta:
