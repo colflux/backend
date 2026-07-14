@@ -407,6 +407,16 @@
 <div class="main">
   <div class="container">
 
+    <!-- Fuente con datos ya cargados: el wizard queda bloqueado -->
+    <div class="step-section" id="cargaBloqueadaBox" style="display:none;">
+      <h2>Esta fuente ya fue cargada</h2>
+      <p class="step-desc">El mapeo ya se definió y los datos ya se importaron para esta fuente. Para evitar mapeos duplicados o inconsistentes, el asistente de carga queda bloqueado. Usa las siguientes pantallas para consultar lo que se cargó:</p>
+      <div style="display:flex; gap:12px; margin-top:16px;">
+        <a class="btn-primary" id="linkBloqueadaDatos" href="#">📊 Ver datos cargados</a>
+        <a class="btn-secondary" id="linkBloqueadaMapeo" href="#">🔗 Ver mapeo de columnas</a>
+      </div>
+    </div>
+
     <!-- Step 1: Analizar fuente -->
     <div class="step-section" id="sectionStep1">
       <h2>Paso 1 — Analizar fuente</h2>
@@ -525,6 +535,7 @@
 </div>
 
 <script src="../assets/js/layout.js"></script>
+<script src="../assets/js/role-guard.js"></script>
 <script src="../config/services.js"></script>
 <script>
   const API_BASE = window.COLFLUX_CONFIG.apiBaseUrl;
@@ -819,6 +830,22 @@
     setStepperState(num);
   }
 
+  function mostrarCargaBloqueada(fuente) {
+    document.getElementById('heroMeta').innerHTML = `
+      <span class="hero-fuente-nombre">${escapeHtml(fuente.nombre)}</span>
+      <span class="badge badge-estado-${escapeHtml(fuente.estado)}">${escapeHtml(fuente.estado_label || fuente.estado)}</span>
+    `;
+    document.querySelector('.stepper-wrap').style.display = 'none';
+    document.getElementById('sectionStep1').style.display = 'none';
+    document.getElementById('sectionStep2').style.display = 'none';
+    const box = document.getElementById('cargaBloqueadaBox');
+    box.style.display = '';
+    document.getElementById('linkBloqueadaDatos').href =
+      `etl-datos.html?fuente=${encodeURIComponent(fuente.id)}&carga=${encodeURIComponent(fuente.ultima_carga_importada_id)}`;
+    document.getElementById('linkBloqueadaMapeo').href =
+      `etl-mapeo.html?fuente=${encodeURIComponent(fuente.id)}&carga=${encodeURIComponent(fuente.ultima_carga_importada_id)}`;
+  }
+
   // ── Hero: cargar nombre de la fuente ─────────────────────────────────────
   async function initPage() {
     const params = new URLSearchParams(window.location.search);
@@ -841,6 +868,10 @@
           document.getElementById('fuenteSelectHint').textContent = 'Escoge otra fuente disponible para continuar.';
           return;
         }
+        if (fuente.estado === 'completo' && fuente.ultima_carga_importada_id) {
+          mostrarCargaBloqueada(fuente);
+          return;
+        }
         setSelectedFuente(requestedFuenteId, false);
         return;
       }
@@ -854,7 +885,16 @@
   }
 
   document.getElementById('fuenteSelect').addEventListener('change', event => {
-    setSelectedFuente(event.target.value);
+    const fuenteId = event.target.value;
+    const fuente = state.fuentes.find(f => String(f.id) === String(fuenteId));
+    if (fuente && fuente.estado === 'completo' && fuente.ultima_carga_importada_id) {
+      mostrarCargaBloqueada(fuente);
+      return;
+    }
+    document.getElementById('cargaBloqueadaBox').style.display = 'none';
+    document.querySelector('.stepper-wrap').style.display = '';
+    showSection(1);
+    setSelectedFuente(fuenteId);
   });
 
   // ── Paso 1 → analizar archivo registrado ─────────────────────────────────

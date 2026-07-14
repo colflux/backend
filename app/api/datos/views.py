@@ -1,4 +1,5 @@
 from django.http import JsonResponse
+from rest_framework.exceptions import ValidationError
 
 from app.api.base import DataPortalModelViewSet
 from app.api.datos.serializers import FuenteDatosSerializer
@@ -16,6 +17,11 @@ class FuenteDatosViewSet(DataPortalModelViewSet):
         if proyecto_id:
             qs = qs.filter(proyecto_id=proyecto_id)
         return qs
+
+    def perform_update(self, serializer):
+        if serializer.instance.estado == "completo":
+            raise ValidationError("Esta fuente ya tiene datos cargados: no se puede editar.")
+        super().perform_update(serializer)
 
 
 def fuentes_datos_api(request):

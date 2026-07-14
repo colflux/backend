@@ -274,6 +274,11 @@ def archivo_fuente(request, fuente_id):
     except FuenteDatos.DoesNotExist:
         return JsonResponse({"error": "Fuente de datos no encontrada"}, status=404)
 
+    if fuente.estado == "completo":
+        return JsonResponse(
+            {"error": "Esta fuente ya tiene datos cargados: el archivo no se puede reemplazar."}, status=409,
+        )
+
     archivo_subido = request.FILES.get("archivo")
     if not archivo_subido:
         return JsonResponse({"error": "No se recibió ningún archivo"}, status=400)
@@ -453,6 +458,11 @@ def mapeo_carga(request, fuente_id, carga_id):
         }, json_dumps_params={"ensure_ascii": False})
 
     if request.method == "POST":
+        if carga.estado == "importado":
+            return JsonResponse(
+                {"error": "Esta carga ya fue importada: el mapeo no se puede modificar."}, status=409,
+            )
+
         try:
             body = json.loads(request.body)
         except json.JSONDecodeError:
@@ -1309,6 +1319,9 @@ def importar_carga(request, fuente_id, carga_id):
         carga = CargaArchivo.objects.get(pk=carga_id, fuente_id=fuente_id)
     except CargaArchivo.DoesNotExist:
         return JsonResponse({"error": "Carga no encontrada"}, status=404)
+
+    if carga.estado == "importado":
+        return JsonResponse({"error": "Esta carga ya fue importada por completo."}, status=409)
 
     try:
         body = json.loads(request.body or "{}")

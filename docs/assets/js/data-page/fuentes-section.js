@@ -35,6 +35,15 @@
         etlLink = '<span class="source-muted">No aplica carga</span>';
       }
 
+      const completa = f.estado === 'completo';
+      const editBtn = completa
+        ? '<span class="btn-table-action" title="Ya no se puede editar: la fuente y el archivo quedan bloqueados una vez cargados los datos" aria-label="Edición bloqueada" style="opacity:.4;cursor:not-allowed;">✎</span>'
+        : `<button class="btn-table-action" onclick="editFuente(${Number(f.id)})" title="Editar fuente" aria-label="Editar fuente">✎</button>`;
+      const puedeBorrar = !completa || window.COLFLUX_ROLE.isAdmin();
+      const deleteBtn = puedeBorrar
+        ? `<button class="btn-table-action danger" onclick="deleteFuente(${Number(f.id)})" title="Eliminar fuente" aria-label="Eliminar fuente">×</button>`
+        : '<span class="btn-table-action" title="Solo un administrador de datos puede borrar una fuente con datos ya cargados" aria-label="Borrado restringido" style="opacity:.4;cursor:not-allowed;">×</span>';
+
       return `
         <tr>
           <td>
@@ -49,8 +58,8 @@
           <td>
             <div class="source-actions">
               ${etlLink}
-              <button class="btn-table-action" onclick="editFuente(${Number(f.id)})" title="Editar fuente" aria-label="Editar fuente">✎</button>
-              <button class="btn-table-action danger" onclick="deleteFuente(${Number(f.id)})" title="Eliminar fuente" aria-label="Eliminar fuente">×</button>
+              ${editBtn}
+              ${deleteBtn}
             </div>
           </td>
         </tr>`;
@@ -60,6 +69,10 @@
   function editFuente(id) {
     const fuente = window.COLFLUX_DATA.dataPage.state.data.fuentes.find(f => Number(f.id) === Number(id));
     if (!fuente) return;
+    if (fuente.estado === 'completo') {
+      alert('Esta fuente ya tiene datos cargados: la fuente y el archivo quedan bloqueados para edición.');
+      return;
+    }
     openDrawer(fuente);
   }
 
@@ -67,6 +80,10 @@
     const dataPage = window.COLFLUX_DATA.dataPage;
     const fuente = dataPage.state.data.fuentes.find(f => Number(f.id) === Number(id));
     const nombre = fuente?.nombre || `ID ${id}`;
+    if (fuente?.estado === 'completo' && !window.COLFLUX_ROLE.isAdmin()) {
+      alert('Solo un administrador de datos puede borrar una fuente con datos ya cargados.');
+      return;
+    }
     if (!confirm(`¿Eliminar la fuente "${nombre}"? Esta acción no se puede deshacer.`)) return;
 
     try {
@@ -85,4 +102,9 @@
   window.COLFLUX_DATA.fuentesSection = { render, editFuente, deleteFuente };
   window.editFuente = editFuente;
   window.deleteFuente = deleteFuente;
+
+  window.addEventListener('colflux-rol-cambiado', () => {
+    const dataPage = window.COLFLUX_DATA.dataPage;
+    if (dataPage) dataPage.render();
+  });
 })(window);

@@ -24,6 +24,7 @@
     <ul class="nav-links">
       ${links}
     </ul>
+    <span id="role-guard-selector"></span>
     <a class="nav-pill" href="https://github.com/colflux/backend" target="_blank">GitHub →</a>
   </div>
 </nav>`;
