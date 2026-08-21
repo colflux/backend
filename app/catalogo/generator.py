@@ -28,12 +28,33 @@ GRUPOS_CATALOGO = [
     {
         "nombre": "Cobertura y Vegetación",
         "icono": "🌿",
-        "entidades": ["Cobertura", "Vegetacion", "Disturbio"],
+        "entidades": ["TipoCobertura", "Cobertura", "Vegetacion", "Disturbio"],
     },
     {
         "nombre": "Suelo",
         "icono": "🪨",
         "entidades": ["CaracterizacionMuestreoSuelo", "MonitoreoSuelo"],
+    },
+    {
+        # Grupo aparte de "Suelo": CaracterizacionMuestreoSuelo/MonitoreoSuelo
+        # son protocolo/metadata con FK a Sitio (no compatibles con el ETL
+        # por fila, ver _GRUPOS_EXCLUIDOS_TEMPORAL en app/api/etl/views.py).
+        # SubmuestraSuelo sí tiene FK a UnidadMuestreo y guarda el valor
+        # medido (profundidad, densidad aparente, % carbono), así que puede
+        # cargarse fila por fila igual que MuestraGEI/SubmuestraGEI.
+        "nombre": "Carbono Orgánico del Suelo (COS)",
+        "icono": "🧫",
+        "entidades": ["SubmuestraSuelo"],
+    },
+    {
+        "nombre": "Biomasa",
+        "icono": "🌳",
+        "entidades": ["MuestraBiomasa", "IndividuoArboreo"],
+    },
+    {
+        "nombre": "Materia Orgánica Muerta (MOM)",
+        "icono": "🍂",
+        "entidades": ["MuestraMOM"],
     },
     {
         "nombre": "Torre EC y Flujos",
@@ -117,6 +138,15 @@ _FILTRO_PROYECTO_POR_MODELO = {
 }
 
 
+
+# Tope de instancias que se listan como choices de un FK: sin esto, un
+# modelo con catálogo masivo (p. ej. Vereda, ~550k filas del MGN) satura la
+# respuesta y el worker termina en OOM/SIGKILL construyendo el str() de cada
+# fila. Por encima del tope, el usuario sigue pudiendo escribir el valor a
+# mano/vía lookup en el wizard; esto solo acota el dropdown de sugerencias.
+_FK_CHOICES_LIMITE = 500
+
+
 def fk_choices(field, proyecto=None):
     """Instancias existentes del modelo relacionado, para usar como opciones de un FK.
 
@@ -131,6 +161,15 @@ def fk_choices(field, proyecto=None):
         filtro = _FILTRO_PROYECTO_POR_MODELO.get(modelo_cls.__name__)
         if proyecto is not None and filtro:
             qs = qs.filter(**{filtro: proyecto})
+        # select_related de las FK directas: evita N+1 al armar str(obj) para
+        # modelos cuyo __str__ recorre una relación (p. ej. Vereda -> Municipio).
+        fk_names = [
+            f.name for f in modelo_cls._meta.get_fields()
+            if getattr(f, "is_relation", False) and hasattr(f, "column")
+        ]
+        if fk_names:
+            qs = qs.select_related(*fk_names)
+        qs = qs[:_FK_CHOICES_LIMITE]
         return [{"valor": str(obj.pk), "etiqueta": str(obj)} for obj in qs]
     except Exception:
         # La tabla puede no existir aún (p. ej. generación del catálogo antes de migrar).

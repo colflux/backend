@@ -2,7 +2,7 @@ from .base import TimestampedModel
 
 from .geo import Departamento, Municipio, Region, SistemaReferencia, Vereda
 
-from .cobertura import Cobertura, Disturbio, Vegetacion
+from .cobertura import Cobertura, Disturbio, TipoCobertura, Vegetacion
 
 from .sitio import (
     MonitoreoParcela, Parcela, Sitio, Transecto,
@@ -13,7 +13,11 @@ from .proyecto import Institucion, Proyecto, ProyectoInstitucion, ProyectoUsuari
 
 from .torre import ConfiguracionSensorGas, TorreEc, TorreFuenteEnergia
 
-from .suelo import CaracterizacionMuestreoSuelo, MonitoreoSuelo
+from .suelo import CaracterizacionMuestreoSuelo, MonitoreoSuelo, SubmuestraSuelo
+
+from .biomasa import IndividuoArboreo, MuestraBiomasa
+
+from .mom import MuestraMOM
 
 from .co2 import (
     Equipo, MuestraAmbiental, MuestraGEI, SubmuestraGEI,
@@ -36,6 +40,7 @@ __all__ = [
     "Vereda",
     # Cobertura / Disturbio / Vegetación
     "Cobertura",
+    "TipoCobertura",
     "Disturbio",
     "Vegetacion",
     # Sitio
@@ -58,6 +63,12 @@ __all__ = [
     # Suelo
     "CaracterizacionMuestreoSuelo",
     "MonitoreoSuelo",
+    "SubmuestraSuelo",
+    # Biomasa
+    "MuestraBiomasa",
+    "IndividuoArboreo",
+    # Materia orgánica muerta
+    "MuestraMOM",
     # Muestras GEI
     "UnidadMedida",
     "Equipo",

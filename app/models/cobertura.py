@@ -3,61 +3,53 @@ from django.db import models
 from .base import TimestampedModel
 
 
+class TipoCobertura(TimestampedModel):
+    """Catálogo de sistemas de clasificación de cobertura (CLC, IPCC, IGBP, Köppen, Suelo IPCC, nombre local)."""
+
+    codigo = models.CharField("código", max_length=30, unique=True)
+    nombre = models.CharField("nombre", max_length=120)
+
+    class Meta:
+        verbose_name = "tipo de cobertura"
+        verbose_name_plural = "tipos de cobertura"
+        ordering = ["nombre"]
+
+    def __str__(self):
+        return self.nombre
+
+
 class Cobertura(TimestampedModel):
-    """Clasificación de cobertura del suelo de un sitio según CLC, IGBP y clima Köppen."""
+    """Un valor de cobertura reportado para un sitio, según un sistema de clasificación.
 
-    KOEPPEN_CHOICES = [
-        ("Selva_tropical_lluviosa", "Selva tropical lluviosa"),
-        ("Monzon_tropical", "Monzón tropical"),
-        ("Sabana_tropical", "Sabana tropical"),
-        ("Desierto_IC", "Desierto (IC)"),
-        ("Desierto_IF", "Desierto (IF)"),
-        ("Oceanico_de_la_costa_occidental_VC", "Oceánico costa occidental (VC)"),
-        ("Oceanico_de_la_costa_occidental_VF", "Oceánico costa occidental (VF)"),
-        ("Templado_de_montania_VC", "Templado de montaña (VC)"),
-        ("Templado_de_montania_VF", "Templado de montaña (VF)"),
-        ("Continental_humedo", "Continental húmedo"),
-        ("Continental_de_verano_calido", "Continental verano cálido"),
-        ("Continental_seco_VC", "Continental seco (VC)"),
-        ("Continental_de_verano_calido_2", "Continental verano cálido (2)"),
-        ("Continental_seco_VF", "Continental seco (VF)"),
-        ("Continental_humedo_1", "Continental húmedo (1)"),
-        ("Continental_de_verano_calido_3", "Continental verano cálido (3)"),
-        ("Casquete_de_hielo", "Casquete de hielo"),
-        ("Tundra", "Tundra"),
-    ]
+    Un mismo sitio puede tener varias filas: una por sistema de clasificación,
+    o varias del mismo sistema cuando distintas fuentes reportan valores en
+    conflicto para el mismo sitio (no hay forma de saber cuál es "el
+    correcto", así que se guardan todas en vez de que una pise a la otra).
+    """
 
-    IGBP_CHOICES = [
-        ("Vegetacion_escasa_o_suelo_desnudo", "Vegetación escasa o suelo desnudo"),
-        ("Cultivos", "Cultivos"),
-        ("Matorrales_cerrados", "Matorrales cerrados"),
-        ("Mosaico_de_cultivos_y_vegetacion_natural", "Mosaico de cultivos y vegetación natural"),
-        ("Bosques_latifoliados_caducifolios", "Bosques latifoliados caducifolios"),
-        ("Bosques_de_coniferas_caducifolias", "Bosques de coníferas caducifolias"),
-        ("Bosques_latifoliados_siempreverdes", "Bosques latifoliados siempreverdes"),
-        ("Bosques_de_coniferas_siempreverdes", "Bosques de coníferas siempreverdes"),
-        ("Pastizales", "Pastizales"),
-        ("Bosques_mixtos", "Bosques mixtos"),
-        ("Matorrales_abiertos", "Matorrales abiertos"),
-        ("Sabanas", "Sabanas"),
-        ("Nieve_y_hielo", "Nieve y hielo"),
-        ("Areas_urbanas_y_construidas", "Áreas urbanas y construidas"),
-        ("Cuerpos_de_agua", "Cuerpos de agua"),
-        ("Humedales_permanentes", "Humedales permanentes"),
-        ("Sabanas_arboladas", "Sabanas arboladas"),
-    ]
-
-    cobertura_clc = models.CharField("cobertura CLC (Corine Land Cover)", max_length=120, blank=True)
-    cobertura_nombre_comun = models.CharField("nombre común de cobertura", max_length=160, blank=True)
-    clima_koeppen = models.CharField("clima Köppen", max_length=50, choices=KOEPPEN_CHOICES, blank=True)
-    cobertura_igbp = models.CharField("cobertura IGBP", max_length=60, choices=IGBP_CHOICES, blank=True)
+    sitio = models.ForeignKey(
+        "app.Sitio", on_delete=models.CASCADE, related_name="coberturas", verbose_name="sitio",
+    )
+    tipo = models.ForeignKey(
+        TipoCobertura, on_delete=models.PROTECT, related_name="coberturas",
+        null=True, blank=True, verbose_name="tipo",
+        help_text="Sistema de clasificación de este valor. Vacío si el valor de origen no matchea ningún sistema conocido.",
+    )
+    nombre = models.CharField("nombre reportado", max_length=160)
 
     class Meta:
         verbose_name = "cobertura"
         verbose_name_plural = "coberturas"
+        ordering = ["sitio", "tipo"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["sitio", "tipo", "nombre"],
+                name="cobertura_unica_por_sitio_tipo_nombre",
+            ),
+        ]
 
     def __str__(self):
-        return self.cobertura_nombre_comun or self.cobertura_clc or f"Cobertura {self.pk}"
+        return f"{self.nombre} ({self.tipo or 'sin tipo'})"
 
 
 class Vegetacion(TimestampedModel):
@@ -126,6 +118,18 @@ class Disturbio(TimestampedModel):
         ("Estable", "Estable"),
         ("En_transicion", "En transición"),
     ]
+    # Distinto de ESTADO_CHOICES/estado_actual (severidad de degradación):
+    # esta es la taxonomía de manejo del vocabulario IDEAM ("Estado
+    # conservación"), sobre si el ecosistema tiene manejo humano y de qué
+    # tipo -no calza con las opciones de estado_actual, así que va aparte
+    # en vez de forzar una traducción incorrecta entre ambas.
+    ESTADO_CONSERVACION_CHOICES = [
+        ("Natural", "Natural (sin manejo humano significativo)"),
+        ("Seminatural", "Seminatural (manejo bajo, regeneración natural dominante)"),
+        ("Manejado", "Manejado (aprovechamiento, ganadería, agroforestería)"),
+        ("Plantacion", "Plantación (vegetación establecida y manejada)"),
+        ("Artificial_Urbano", "Artificial / Urbano (superficie no natural)"),
+    ]
 
     descripcion = models.TextField("descripción", blank=True)
     fecha_inicio = models.DateField("fecha de inicio", null=True, blank=True)
@@ -135,6 +139,14 @@ class Disturbio(TimestampedModel):
     anios_disturbio = models.PositiveIntegerField("años de disturbio", null=True, blank=True)
     anios_desde_fin = models.PositiveIntegerField("años desde fin del disturbio", null=True, blank=True)
     estado_actual = models.CharField("estado actual", max_length=30, choices=ESTADO_CHOICES, blank=True)
+    estado_conservacion = models.CharField(
+        "estado de conservación", max_length=20, choices=ESTADO_CONSERVACION_CHOICES, blank=True,
+        help_text="Estado del ecosistema frente a la presencia de manejo humano (taxonomía del vocabulario IDEAM).",
+    )
+    proteccion_legal = models.TextField(
+        "protección legal", blank=True,
+        help_text="Si el sitio está bajo alguna figura de reserva, parque, santuario, etc.",
+    )
 
     class Meta:
         verbose_name = "disturbio"

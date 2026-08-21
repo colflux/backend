@@ -132,6 +132,9 @@
 
   function detalleMapeo(m) {
     const partes = [];
+    if (m.modelo_destino === 'Cobertura' && m.campo_destino === 'nombre' && m.tipo_cobertura_nombre) {
+      partes.push(`sistema = ${m.tipo_cobertura_nombre}`);
+    }
     if (m.transformacion === 'constante' && m.valor_constante) partes.push(`valor = "${m.valor_constante}"`);
     if (m.estrategia_nulos && m.estrategia_nulos !== 'dejar_null') {
       partes.push(NOMBRES_ESTRATEGIA[m.estrategia_nulos] || m.estrategia_nulos);

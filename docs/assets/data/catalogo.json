@@ -1117,6 +1117,34 @@
               "modelo_fk": null
             },
             {
+              "nombre": "tipo_localizacion",
+              "verbose_name": "tipo de localización",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 12,
+              "choices": [
+                {
+                  "valor": "exacta",
+                  "etiqueta": "Localización exacta"
+                },
+                {
+                  "valor": "vereda",
+                  "etiqueta": "Aproximada a nivel de vereda (centroide DANE)"
+                },
+                {
+                  "valor": "municipio",
+                  "etiqueta": "Aproximada a nivel de municipio (centroide IGAC)"
+                },
+                {
+                  "valor": "inferida",
+                  "etiqueta": "Inferida (sin coordenadas ni vereda/municipio de referencia)"
+                }
+              ],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
               "nombre": "vereda",
               "verbose_name": "vereda",
               "tipo": "FK (relación)",
@@ -1148,17 +1176,6 @@
               "choices": [],
               "es_fk": true,
               "modelo_fk": "Vegetacion"
-            },
-            {
-              "nombre": "cobertura",
-              "verbose_name": "cobertura",
-              "tipo": "FK (relación)",
-              "tipo_raw": "ForeignKey",
-              "requerido": false,
-              "max_length": null,
-              "choices": [],
-              "es_fk": true,
-              "modelo_fk": "Cobertura"
             }
           ]
         }
@@ -1193,7 +1210,7 @@
           "verbose_name": "unidad de muestreo",
           "verbose_name_plural": "unidades de muestreo",
           "descripcion": "Lugar/objeto desde el cual se toma la muestra. Su tipo sale del catálogo.",
-          "total_campos": 6,
+          "total_campos": 7,
           "campos": [
             {
               "nombre": "nombre",
@@ -1258,6 +1275,38 @@
               "requerido": false,
               "max_length": null,
               "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "compartimento",
+              "verbose_name": "compartimento",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 25,
+              "choices": [
+                {
+                  "valor": "biomasa_aerea",
+                  "etiqueta": "Biomasa aérea"
+                },
+                {
+                  "valor": "biomasa_subterranea",
+                  "etiqueta": "Biomasa subterránea"
+                },
+                {
+                  "valor": "carbono_organico_suelo",
+                  "etiqueta": "Carbono orgánico del suelo"
+                },
+                {
+                  "valor": "mom_detritos",
+                  "etiqueta": "Materia orgánica muerta (detritos)"
+                },
+                {
+                  "valor": "mom_hojarasca",
+                  "etiqueta": "Materia orgánica muerta (hojarasca)"
+                }
+              ],
               "es_fk": false,
               "modelo_fk": null
             }
@@ -1497,195 +1546,73 @@
       "icono": "🌿",
       "entidades": [
         {
-          "nombre": "Cobertura",
-          "verbose_name": "cobertura",
-          "verbose_name_plural": "coberturas",
-          "descripcion": "Clasificación de cobertura del suelo de un sitio según CLC, IGBP y clima Köppen.",
-          "total_campos": 4,
+          "nombre": "TipoCobertura",
+          "verbose_name": "tipo de cobertura",
+          "verbose_name_plural": "tipos de cobertura",
+          "descripcion": "Catálogo de sistemas de clasificación de cobertura (CLC, IPCC, IGBP, Köppen, Suelo IPCC, nombre local).",
+          "total_campos": 2,
           "campos": [
             {
-              "nombre": "cobertura_clc",
-              "verbose_name": "cobertura CLC (Corine Land Cover)",
+              "nombre": "codigo",
+              "verbose_name": "código",
               "tipo": "Texto",
               "tipo_raw": "CharField",
-              "requerido": false,
+              "requerido": true,
+              "max_length": 30,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "nombre",
+              "verbose_name": "nombre",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": true,
               "max_length": 120,
               "choices": [],
               "es_fk": false,
               "modelo_fk": null
+            }
+          ]
+        },
+        {
+          "nombre": "Cobertura",
+          "verbose_name": "cobertura",
+          "verbose_name_plural": "coberturas",
+          "descripcion": "Un valor de cobertura reportado para un sitio, según un sistema de clasificación. Un mismo sitio puede tener varias filas: una por sistema de clasificación, o varias del mismo sistema cuando distintas fuentes reportan valores en conflicto para el mismo sitio (no hay forma de saber cuál es \"el correcto\", así que se guardan todas en vez de que una pise a la otra).",
+          "total_campos": 3,
+          "campos": [
+            {
+              "nombre": "sitio",
+              "verbose_name": "sitio",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": true,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "Sitio"
             },
             {
-              "nombre": "cobertura_nombre_comun",
-              "verbose_name": "nombre común de cobertura",
+              "nombre": "tipo",
+              "verbose_name": "tipo",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "TipoCobertura"
+            },
+            {
+              "nombre": "nombre",
+              "verbose_name": "nombre reportado",
               "tipo": "Texto",
               "tipo_raw": "CharField",
-              "requerido": false,
+              "requerido": true,
               "max_length": 160,
               "choices": [],
-              "es_fk": false,
-              "modelo_fk": null
-            },
-            {
-              "nombre": "clima_koeppen",
-              "verbose_name": "clima Köppen",
-              "tipo": "Texto",
-              "tipo_raw": "CharField",
-              "requerido": false,
-              "max_length": 50,
-              "choices": [
-                {
-                  "valor": "Selva_tropical_lluviosa",
-                  "etiqueta": "Selva tropical lluviosa"
-                },
-                {
-                  "valor": "Monzon_tropical",
-                  "etiqueta": "Monzón tropical"
-                },
-                {
-                  "valor": "Sabana_tropical",
-                  "etiqueta": "Sabana tropical"
-                },
-                {
-                  "valor": "Desierto_IC",
-                  "etiqueta": "Desierto (IC)"
-                },
-                {
-                  "valor": "Desierto_IF",
-                  "etiqueta": "Desierto (IF)"
-                },
-                {
-                  "valor": "Oceanico_de_la_costa_occidental_VC",
-                  "etiqueta": "Oceánico costa occidental (VC)"
-                },
-                {
-                  "valor": "Oceanico_de_la_costa_occidental_VF",
-                  "etiqueta": "Oceánico costa occidental (VF)"
-                },
-                {
-                  "valor": "Templado_de_montania_VC",
-                  "etiqueta": "Templado de montaña (VC)"
-                },
-                {
-                  "valor": "Templado_de_montania_VF",
-                  "etiqueta": "Templado de montaña (VF)"
-                },
-                {
-                  "valor": "Continental_humedo",
-                  "etiqueta": "Continental húmedo"
-                },
-                {
-                  "valor": "Continental_de_verano_calido",
-                  "etiqueta": "Continental verano cálido"
-                },
-                {
-                  "valor": "Continental_seco_VC",
-                  "etiqueta": "Continental seco (VC)"
-                },
-                {
-                  "valor": "Continental_de_verano_calido_2",
-                  "etiqueta": "Continental verano cálido (2)"
-                },
-                {
-                  "valor": "Continental_seco_VF",
-                  "etiqueta": "Continental seco (VF)"
-                },
-                {
-                  "valor": "Continental_humedo_1",
-                  "etiqueta": "Continental húmedo (1)"
-                },
-                {
-                  "valor": "Continental_de_verano_calido_3",
-                  "etiqueta": "Continental verano cálido (3)"
-                },
-                {
-                  "valor": "Casquete_de_hielo",
-                  "etiqueta": "Casquete de hielo"
-                },
-                {
-                  "valor": "Tundra",
-                  "etiqueta": "Tundra"
-                }
-              ],
-              "es_fk": false,
-              "modelo_fk": null
-            },
-            {
-              "nombre": "cobertura_igbp",
-              "verbose_name": "cobertura IGBP",
-              "tipo": "Texto",
-              "tipo_raw": "CharField",
-              "requerido": false,
-              "max_length": 60,
-              "choices": [
-                {
-                  "valor": "Vegetacion_escasa_o_suelo_desnudo",
-                  "etiqueta": "Vegetación escasa o suelo desnudo"
-                },
-                {
-                  "valor": "Cultivos",
-                  "etiqueta": "Cultivos"
-                },
-                {
-                  "valor": "Matorrales_cerrados",
-                  "etiqueta": "Matorrales cerrados"
-                },
-                {
-                  "valor": "Mosaico_de_cultivos_y_vegetacion_natural",
-                  "etiqueta": "Mosaico de cultivos y vegetación natural"
-                },
-                {
-                  "valor": "Bosques_latifoliados_caducifolios",
-                  "etiqueta": "Bosques latifoliados caducifolios"
-                },
-                {
-                  "valor": "Bosques_de_coniferas_caducifolias",
-                  "etiqueta": "Bosques de coníferas caducifolias"
-                },
-                {
-                  "valor": "Bosques_latifoliados_siempreverdes",
-                  "etiqueta": "Bosques latifoliados siempreverdes"
-                },
-                {
-                  "valor": "Bosques_de_coniferas_siempreverdes",
-                  "etiqueta": "Bosques de coníferas siempreverdes"
-                },
-                {
-                  "valor": "Pastizales",
-                  "etiqueta": "Pastizales"
-                },
-                {
-                  "valor": "Bosques_mixtos",
-                  "etiqueta": "Bosques mixtos"
-                },
-                {
-                  "valor": "Matorrales_abiertos",
-                  "etiqueta": "Matorrales abiertos"
-                },
-                {
-                  "valor": "Sabanas",
-                  "etiqueta": "Sabanas"
-                },
-                {
-                  "valor": "Nieve_y_hielo",
-                  "etiqueta": "Nieve y hielo"
-                },
-                {
-                  "valor": "Areas_urbanas_y_construidas",
-                  "etiqueta": "Áreas urbanas y construidas"
-                },
-                {
-                  "valor": "Cuerpos_de_agua",
-                  "etiqueta": "Cuerpos de agua"
-                },
-                {
-                  "valor": "Humedales_permanentes",
-                  "etiqueta": "Humedales permanentes"
-                },
-                {
-                  "valor": "Sabanas_arboladas",
-                  "etiqueta": "Sabanas arboladas"
-                }
-              ],
               "es_fk": false,
               "modelo_fk": null
             }
@@ -1848,7 +1775,7 @@
           "verbose_name": "disturbio",
           "verbose_name_plural": "disturbios",
           "descripcion": "Evento de disturbio que afecta un sitio (fuego, sequía, pastoreo, …), con fechas y estado actual del ecosistema.",
-          "total_campos": 8,
+          "total_campos": 10,
           "campos": [
             {
               "nombre": "descripcion",
@@ -2015,6 +1942,49 @@
               ],
               "es_fk": false,
               "modelo_fk": null
+            },
+            {
+              "nombre": "estado_conservacion",
+              "verbose_name": "estado de conservación",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 20,
+              "choices": [
+                {
+                  "valor": "Natural",
+                  "etiqueta": "Natural (sin manejo humano significativo)"
+                },
+                {
+                  "valor": "Seminatural",
+                  "etiqueta": "Seminatural (manejo bajo, regeneración natural dominante)"
+                },
+                {
+                  "valor": "Manejado",
+                  "etiqueta": "Manejado (aprovechamiento, ganadería, agroforestería)"
+                },
+                {
+                  "valor": "Plantacion",
+                  "etiqueta": "Plantación (vegetación establecida y manejada)"
+                },
+                {
+                  "valor": "Artificial_Urbano",
+                  "etiqueta": "Artificial / Urbano (superficie no natural)"
+                }
+              ],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "proteccion_legal",
+              "verbose_name": "protección legal",
+              "tipo": "Texto largo",
+              "tipo_raw": "TextField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
             }
           ]
         }
@@ -2157,6 +2127,698 @@
             {
               "nombre": "protocolo",
               "verbose_name": "protocolo",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 255,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "nombre": "Carbono Orgánico del Suelo (COS)",
+      "icono": "🧫",
+      "entidades": [
+        {
+          "nombre": "SubmuestraSuelo",
+          "verbose_name": "submuestra de suelo",
+          "verbose_name_plural": "submuestras de suelo",
+          "descripcion": "Toma de suelo por intervalo de profundidad en una unidad de muestreo: carbono orgánico del suelo (COS) y densidad aparente.",
+          "total_campos": 14,
+          "campos": [
+            {
+              "nombre": "unidad_muestreo",
+              "verbose_name": "unidad de muestreo",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": true,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "UnidadMuestreo"
+            },
+            {
+              "nombre": "fecha",
+              "verbose_name": "fecha",
+              "tipo": "Fecha",
+              "tipo_raw": "DateField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "hora",
+              "verbose_name": "hora",
+              "tipo": "TimeField",
+              "tipo_raw": "TimeField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "barreno_vol",
+              "verbose_name": "barreno / volumen",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 80,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "profundidad_desde_cm",
+              "verbose_name": "profundidad desde (cm)",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "profundidad_hasta_cm",
+              "verbose_name": "profundidad hasta (cm)",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "densidad_aparente_g_cm3",
+              "verbose_name": "densidad aparente (g/cm³)",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "carbono_pct",
+              "verbose_name": "% carbono",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "soil_chem_c_org",
+              "verbose_name": "SOIL_CHEM_C_ORG",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "medida_error",
+              "verbose_name": "medida de error (SD;EE;U%)",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 80,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "metodologia_tipo_muestreo",
+              "verbose_name": "metodología: tipo de muestreo",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 255,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "metodologia_distancia_m",
+              "verbose_name": "metodología: distancia (m)",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "metodologia_azimut",
+              "verbose_name": "metodología: azimut (°)",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "metodologia_analisis",
+              "verbose_name": "metodología: método de análisis",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 255,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "nombre": "Biomasa",
+      "icono": "🌳",
+      "entidades": [
+        {
+          "nombre": "MuestraBiomasa",
+          "verbose_name": "muestra de biomasa",
+          "verbose_name_plural": "muestras de biomasa",
+          "descripcion": "Evento de medición de producción de biomasa aérea en una unidad de muestreo, con el agregado de carbono de la parcela.",
+          "total_campos": 8,
+          "campos": [
+            {
+              "nombre": "unidad_muestreo",
+              "verbose_name": "unidad de muestreo",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": true,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "UnidadMuestreo"
+            },
+            {
+              "nombre": "fecha",
+              "verbose_name": "fecha",
+              "tipo": "Fecha",
+              "tipo_raw": "DateField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "prod_biomasa_g",
+              "verbose_name": "producción de biomasa (g)",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "contenido_carbono",
+              "verbose_name": "contenido de carbono",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "prom_tonc_ha",
+              "verbose_name": "promedio (TonC/ha)",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "sd_tonc_ha",
+              "verbose_name": "desviación estándar (TonC/ha)",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "min_tonc_ha",
+              "verbose_name": "mínimo (TonC/ha)",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "max_tonc_ha",
+              "verbose_name": "máximo (TonC/ha)",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            }
+          ]
+        },
+        {
+          "nombre": "IndividuoArboreo",
+          "verbose_name": "individuo arbóreo",
+          "verbose_name_plural": "individuos arbóreos",
+          "descripcion": "Medición de un individuo arbóreo dentro de una muestra de biomasa (DAP, altura, especie).",
+          "total_campos": 17,
+          "campos": [
+            {
+              "nombre": "muestra",
+              "verbose_name": "muestra de biomasa",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": true,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "MuestraBiomasa"
+            },
+            {
+              "nombre": "tipo",
+              "verbose_name": "tipo",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 80,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "n_ind",
+              "verbose_name": "número de individuo",
+              "tipo": "PositiveIntegerField",
+              "tipo_raw": "PositiveIntegerField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "condicion",
+              "verbose_name": "condición",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 80,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "numero_fuste",
+              "verbose_name": "número de fuste",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 20,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "multiples",
+              "verbose_name": "múltiples",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 20,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "dap_1",
+              "verbose_name": "DAP 1 (cm)",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "dap_2",
+              "verbose_name": "DAP 2 (cm)",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "dap_analisis_cm",
+              "verbose_name": "DAP de análisis (cm)",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "equipo",
+              "verbose_name": "equipo",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 120,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "pom_m",
+              "verbose_name": "POM (m)",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "altura_fuste_m",
+              "verbose_name": "altura del fuste (m)",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "altura_total_m",
+              "verbose_name": "altura total (m)",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "diff_alturas",
+              "verbose_name": "diferencia de alturas (m)",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "familia",
+              "verbose_name": "familia",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 120,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "genero",
+              "verbose_name": "género",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 120,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "especie",
+              "verbose_name": "especie",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 160,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "nombre": "Materia Orgánica Muerta (MOM)",
+      "icono": "🍂",
+      "entidades": [
+        {
+          "nombre": "MuestraMOM",
+          "verbose_name": "muestra de materia orgánica muerta",
+          "verbose_name_plural": "muestras de materia orgánica muerta",
+          "descripcion": "Contenido de carbono en materia orgánica muerta (MOM) de una unidad de muestreo, por pool IPCC.",
+          "total_campos": 19,
+          "campos": [
+            {
+              "nombre": "unidad_muestreo",
+              "verbose_name": "unidad de muestreo",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": true,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "UnidadMuestreo"
+            },
+            {
+              "nombre": "fecha",
+              "verbose_name": "fecha",
+              "tipo": "Fecha",
+              "tipo_raw": "DateField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "carbono_mom_valor_reportado",
+              "verbose_name": "carbono MOM (valor reportado)",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "carbono_mom_tc_ha",
+              "verbose_name": "carbono MOM total (tC/ha)",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "error_mom",
+              "verbose_name": "medida de error MOM (SD;EE;U%)",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 80,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "carbono_amp_tm_tc_ha",
+              "verbose_name": "carbono AMP+TM (tC/ha)",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "error_amp_tm",
+              "verbose_name": "medida de error AMP_TM (SD;EE;U%)",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 80,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "carbono_dfm_tc_ha",
+              "verbose_name": "carbono DFM (tC/ha)",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "error_dfm",
+              "verbose_name": "medida de error DFM (SD;EE;U%)",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 80,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "carbono_dgm_tc_ha",
+              "verbose_name": "carbono DGM (tC/ha)",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "error_dgm",
+              "verbose_name": "medida de error DGM (SD;EE;U%)",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 80,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "carbono_hojarasca_g_m2",
+              "verbose_name": "carbono en hojarasca (g/m²)",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "carbono_hojarasca_tc_ha",
+              "verbose_name": "carbono en hojarasca (tC/ha)",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "error_hojarasca",
+              "verbose_name": "medida de error hojarasca (SD;EE;U%)",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 80,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "metodologia_muestreo_mom",
+              "verbose_name": "metodología: muestreo MOM",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 255,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "metodologia_muestreo_dfm_dgm",
+              "verbose_name": "metodología: muestreo DFM-DGM",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 255,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "metodologia_tamano",
+              "verbose_name": "metodología: tamaño",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 255,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "metodologia_amp_to",
+              "verbose_name": "metodología: AMP y TO",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 255,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "metodologia_hojarasca",
+              "verbose_name": "metodología: hojarasca",
               "tipo": "Texto",
               "tipo_raw": "CharField",
               "requerido": false,
@@ -2462,6 +3124,18 @@
           ],
           "datos_semilla": [
             {
+              "id": 5,
+              "codigo": "ch4_flux_micromol_m2_s",
+              "descripcion": "Flujo de CH4 (µmol m-2 s-1)",
+              "magnitud": "flujo"
+            },
+            {
+              "id": 4,
+              "codigo": "co2_flux_micromol_m2_s",
+              "descripcion": "Flujo de CO2 (µmol m-2 s-1)",
+              "magnitud": "flujo"
+            },
+            {
               "id": 1,
               "codigo": "g_m2_h",
               "descripcion": "gramos por metro cuadrado por hora",
@@ -2536,8 +3210,26 @@
               "descripcion": ""
             },
             {
+              "id": 7,
+              "modelo": "IFD",
+              "serial": "",
+              "descripcion": ""
+            },
+            {
+              "id": 6,
+              "modelo": "LICOR 8100",
+              "serial": "",
+              "descripcion": ""
+            },
+            {
               "id": 4,
               "modelo": "Licor 7810",
+              "serial": "",
+              "descripcion": ""
+            },
+            {
+              "id": 5,
+              "modelo": "Picarro",
               "serial": "",
               "descripcion": ""
             },
@@ -3708,7 +4400,7 @@
           "verbose_name": "mapeo de columna",
           "verbose_name_plural": "mapeos de columnas",
           "descripcion": "Mapeo de una columna del archivo cargado hacia un campo del modelo destino, con su transformación.",
-          "total_campos": 10,
+          "total_campos": 12,
           "campos": [
             {
               "nombre": "carga",
@@ -3783,6 +4475,10 @@
                   "etiqueta": "Expresión regular"
                 },
                 {
+                  "valor": "escala",
+                  "etiqueta": "Conversión de unidades (factor de escala)"
+                },
+                {
                   "valor": "constante",
                   "etiqueta": "Valor constante"
                 },
@@ -3828,6 +4524,17 @@
               "modelo_fk": null
             },
             {
+              "nombre": "factor_escala",
+              "verbose_name": "factor de escala",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
               "nombre": "estrategia_nulos",
               "verbose_name": "estrategia para datos faltantes",
               "tipo": "Texto",
@@ -3865,6 +4572,17 @@
               "choices": [],
               "es_fk": false,
               "modelo_fk": null
+            },
+            {
+              "nombre": "tipo_cobertura",
+              "verbose_name": "tipo de cobertura",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "TipoCobertura"
             }
           ]
         }

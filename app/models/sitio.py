@@ -4,7 +4,7 @@ from django.db import models
 
 from .base import TimestampedModel
 from .geo import SistemaReferencia, Vereda
-from .cobertura import Cobertura, Disturbio, Vegetacion
+from .cobertura import Disturbio, Vegetacion
 from .datos import FuenteDatos
 
 
@@ -46,6 +46,12 @@ class Sitio(TimestampedModel):
     PROPIEDAD_CHOICES = [
         ("publica", "Pública"),
         ("privada", "Privada"),
+    ]
+    TIPO_LOCALIZACION_CHOICES = [
+        ("exacta", "Localización exacta"),
+        ("vereda", "Aproximada a nivel de vereda (centroide DANE)"),
+        ("municipio", "Aproximada a nivel de municipio (centroide IGAC)"),
+        ("inferida", "Inferida (sin coordenadas ni vereda/municipio de referencia)"),
     ]
 
     codigo_metadatos = models.CharField(
@@ -93,11 +99,14 @@ class Sitio(TimestampedModel):
         "intervenido", default=False,
         help_text="Si el sitio ha sido intervenido/alterado por actividad humana.",
     )
+    tipo_localizacion = models.CharField(
+        "tipo de localización", max_length=12, choices=TIPO_LOCALIZACION_CHOICES, blank=True,
+        help_text="Precisión espacial con la que se dispone la ubicación del sitio.",
+    )
 
     vereda = models.ForeignKey(Vereda, on_delete=models.PROTECT, related_name="sitios", null=True, blank=True)
     disturbio = models.ForeignKey(Disturbio, on_delete=models.SET_NULL, related_name="sitios", null=True, blank=True)
     vegetacion = models.ForeignKey(Vegetacion, on_delete=models.SET_NULL, related_name="sitios", null=True, blank=True)
-    cobertura = models.ForeignKey(Cobertura, on_delete=models.SET_NULL, related_name="sitios", null=True, blank=True)
 
     class Meta:
         verbose_name = "sitio"
@@ -175,6 +184,14 @@ class UnidadExperimental(TimestampedModel):
 class UnidadMuestreo(TimestampedModel):
     """Lugar/objeto desde el cual se toma la muestra. Su tipo sale del catálogo."""
 
+    COMPARTIMENTO_CHOICES = [
+        ("biomasa_aerea", "Biomasa aérea"),
+        ("biomasa_subterranea", "Biomasa subterránea"),
+        ("carbono_organico_suelo", "Carbono orgánico del suelo"),
+        ("mom_detritos", "Materia orgánica muerta (detritos)"),
+        ("mom_hojarasca", "Materia orgánica muerta (hojarasca)"),
+    ]
+
     # Indexado: es el identificador natural de la unidad (p. ej. "3"), usado
     # para encontrar/crear la unidad correspondiente en cada fila del ETL.
     nombre = models.CharField(
@@ -200,6 +217,10 @@ class UnidadMuestreo(TimestampedModel):
     fecha_instalacion = models.DateField(
         "fecha instalación unidad de muestreo", null=True, blank=True,
         help_text="Fecha en la que se instaló o estableció la unidad de muestreo en campo.",
+    )
+    compartimento = models.CharField(
+        "compartimento", max_length=25, choices=COMPARTIMENTO_CHOICES, blank=True,
+        help_text="Reservorio de carbono que mide esta unidad de muestreo (biomasa, COS, materia orgánica muerta).",
     )
 
     class Meta:

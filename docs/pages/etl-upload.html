@@ -555,6 +555,7 @@
     totalFilas: 0,
     modelosDestino: {},  // { ModelName: [ {nombre, verbose_name, tipo_raw, choices, ...} ] }
     gruposModelo: {},    // { ModelName: { nombre, icono, orden } }
+    tiposCobertura: [],  // [ {id, codigo, nombre} ] — sistemas de clasificación para Cobertura.nombre
     mapeoValores: {},    // { colIdx: { "valor_origen": "valor_destino" } }
     mapeoSeleccion: {},  // { colIdx: { modelo, campo, sugerido? } }
     atributosManuales: [], // [ { modelo, campo, valor } ] — campos sin columna en la fuente, con valor fijo
@@ -980,6 +981,7 @@
     const data = await res.json();
     state.modelosDestino = data.modelos || {};
     state.gruposModelo = data.grupos || {};
+    state.tiposCobertura = data.tipos_cobertura || [];
   }
 
   // ── Sugerencia de mapeo por similitud de nombre ──────────────────────────
@@ -1122,6 +1124,7 @@
         valorRellenoManual: m.valor_relleno_manual || '',
         aplicarRegex: m.transformacion === 'regex',
         regexPatron: m.regex_patron || '',
+        tipoCobertura: m.tipo_cobertura || null,
       };
       extrasGuardados.forEach(e => {
         state.extrasDestino.push({
@@ -1130,6 +1133,7 @@
           campo: e.campo_destino,
           aplicarRegex: e.transformacion === 'regex',
           regexPatron: e.regex_patron || '',
+          tipoCobertura: e.tipo_cobertura || null,
         });
       });
       if (m.mapeo_valores && Object.keys(m.mapeo_valores).length) {
@@ -1901,6 +1905,32 @@
     };
     poblarCampos();
 
+    // Selector aparte para Cobertura.nombre: como un sitio puede tener
+    // varias filas de Cobertura (una por sistema de clasificación, ver
+    // MapeoColumna.tipo_cobertura), acá se elige a qué sistema corresponde
+    // el valor de ESTA columna (p. ej. la columna "Cobertura IPCC" → tipo
+    // IPCC). Solo tiene sentido cuando el destino es Cobertura.nombre.
+    const selTipoCobertura = document.createElement('select');
+    selTipoCobertura.dataset.idx = idx;
+    selTipoCobertura.classList.add('sel-tipo-cobertura');
+    selTipoCobertura.style.display = 'none';
+    selTipoCobertura.innerHTML = '<option value="">— sistema de clasificación —</option>' +
+      (state.tiposCobertura || []).map(t => `<option value="${t.id}">${escapeHtml(t.nombre)}</option>`).join('');
+
+    const actualizarTipoCoberturaVisibilidad = () => {
+      const mostrar = selModelo.value === 'Cobertura' && selCampo.value === 'nombre';
+      selTipoCobertura.style.display = mostrar ? '' : 'none';
+      selTipoCobertura.value = mostrar && seleccion.tipoCobertura ? String(seleccion.tipoCobertura) : '';
+    };
+    actualizarTipoCoberturaVisibilidad();
+
+    selTipoCobertura.addEventListener('change', () => {
+      state.mapeoSeleccion[idx] = {
+        ...state.mapeoSeleccion[idx],
+        tipoCobertura: selTipoCobertura.value ? Number(selTipoCobertura.value) : null,
+      };
+    });
+
     // Sub-panel de choices (se muestra/oculta dinámicamente)
     const choicesContainer = document.createElement('div');
     choicesContainer.dataset.idx = idx;
@@ -2040,7 +2070,7 @@
       state.mapeoSeleccion[idx] = {
         modelo: selModelo.value, campo: '',
         estrategiaNulos: seleccion.estrategiaNulos, valorRellenoManual: seleccion.valorRellenoManual,
-        aplicarRegex: false, regexPatron: '',
+        aplicarRegex: false, regexPatron: '', tipoCobertura: null,
       };
       renderMapeoRows();
     });
@@ -2050,8 +2080,10 @@
         modelo: selModelo.value, campo: selCampo.value,
         estrategiaNulos: seleccion.estrategiaNulos, valorRellenoManual: seleccion.valorRellenoManual,
         aplicarRegex: seleccion.aplicarRegex, regexPatron: seleccion.regexPatron,
+        tipoCobertura: seleccion.tipoCobertura,
       };
       infoDiv.querySelector('.mapeo-sugerido')?.remove();
+      actualizarTipoCoberturaVisibilidad();
       // Si se (des)asigna UnidadMuestreo.tipo o .unidad_experimental, los
       // vínculos con Parcela/Transecto o el mensaje de vínculo automático
       // pueden cambiar: se necesita un re-render completo del listado.
@@ -2115,6 +2147,7 @@
 
     destDiv.appendChild(selModelo);
     destDiv.appendChild(selCampo);
+    destDiv.appendChild(selTipoCobertura);
     if (esAutoVinculable(selModelo.value, selCampo.value)) {
       destDiv.appendChild(crearAvisoAutoVinculo());
     }
@@ -2300,6 +2333,22 @@
       renderMapeoRows();
     });
 
+    // Mismo selector de sistema de clasificación que en el destino principal
+    // (ver renderMapeoRow), para cuando Cobertura.nombre se alimenta de una
+    // columna que ya tiene otro destino principal.
+    const selTipoCoberturaExtra = document.createElement('select');
+    selTipoCoberturaExtra.style.display = (selModeloExtra.value === 'Cobertura' && selCampo.value === 'nombre') ? '' : 'none';
+    selTipoCoberturaExtra.innerHTML = '<option value="">— sistema de clasificación —</option>' +
+      (state.tiposCobertura || []).map(t =>
+        `<option value="${t.id}"${extra.tipoCobertura === t.id ? ' selected' : ''}>${escapeHtml(t.nombre)}</option>`
+      ).join('');
+    selTipoCoberturaExtra.addEventListener('change', () => {
+      state.extrasDestino[extraIdx] = {
+        ...state.extrasDestino[extraIdx],
+        tipoCobertura: selTipoCoberturaExtra.value ? Number(selTipoCoberturaExtra.value) : null,
+      };
+    });
+
     const linkRegex = document.createElement('button');
     linkRegex.type = 'button';
     linkRegex.style.cssText = 'border:none;background:none;color:var(--green);cursor:pointer;font-size:.76rem;font-weight:600;white-space:nowrap;';
@@ -2361,6 +2410,7 @@
 
     destDiv.appendChild(selModeloExtra);
     destDiv.appendChild(selCampo);
+    destDiv.appendChild(selTipoCoberturaExtra);
     if (esAutoVinculable(selModeloExtra.value, selCampo.value)) {
       destDiv.appendChild(crearAvisoAutoVinculo());
     }
@@ -2575,6 +2625,7 @@
         ),
         estrategia_nulos: seleccion.estrategiaNulos || 'dejar_null',
         valor_relleno_manual: seleccion.valorRellenoManual || '',
+        tipo_cobertura: (seleccion.modelo === 'Cobertura' && seleccion.campo === 'nombre') ? (seleccion.tipoCobertura || null) : null,
       };
     });
 
@@ -2592,6 +2643,7 @@
         mapeo_valores:   {},
         estrategia_nulos: 'dejar_null',
         valor_relleno_manual: '',
+        tipo_cobertura: (e.modelo === 'Cobertura' && e.campo === 'nombre') ? (e.tipoCobertura || null) : null,
       }));
 
     return manuales.concat(principales, extras);

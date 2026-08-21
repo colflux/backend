@@ -12,11 +12,11 @@ import pandas as pd
 
 from django.apps import apps
 from django.conf import settings
-from django.db import transaction
+from django.db import models, transaction
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
-from app.models import CargaArchivo, FuenteDatos, MapeoColumna, Proyecto
+from app.models import CargaArchivo, FuenteDatos, MapeoColumna, Proyecto, TipoCobertura
 
 from app.catalogo.generator import GRUPOS_CATALOGO, campo_to_catalogo, fk_choices
 
@@ -35,13 +35,15 @@ from app.catalogo.generator import GRUPOS_CATALOGO, campo_to_catalogo, fk_choice
 # - Excluye "Publicaciones": es metadato bibliográfico del proyecto, no
 #   datos fila por fila del archivo. Al quitarla, "Unidad Experimental"
 #   queda como primera sección real del wizard.
-# - Excluye temporalmente "Cobertura y Vegetación", "Suelo", "Torre EC y
-#   Flujos", "Proyecto" y "Usuarios, Roles y ETL": todavía no se está
-#   mapeando/importando esas entidades desde el ETL. Por ahora el wizard
-#   llega hasta "Muestras GEI". Quitar de esta lista cuando se retome cada
-#   una.
+# - Excluye temporalmente "Suelo", "Torre EC y Flujos", "Proyecto" y
+#   "Usuarios, Roles y ETL": todavía no se está mapeando/importando esas
+#   entidades desde el ETL. "Cobertura y Vegetación" se habilitó: Sitio ya
+#   tiene FK a Cobertura/Vegetacion/Disturbio y _orden_topologico() las
+#   ordena antes que Sitio por esa FK sin importar la posición de la sección
+#   en este listado, así que el auto-link entre modelos de la misma fila
+#   (ver _procesar_filas) funciona igual que con Unidad Muestreo→Parcela.
+#   Quitar de esta lista cuando se retome cada una.
 _GRUPOS_EXCLUIDOS_TEMPORAL = (
-    "Cobertura y Vegetación",
     "Suelo",
     "Torre EC y Flujos",
     "Proyecto",
@@ -92,6 +94,15 @@ for _grupo in GRUPOS_CATALOGO:
         SECCIONES_ETL.append({
             **_grupo,
             "entidades": [e for e in _grupo["entidades"] if e not in _EXCLUIDAS_MUESTRAS_GEI],
+        })
+    elif _grupo["nombre"] == "Cobertura y Vegetación":
+        # TipoCobertura no se muestra como sección propia: es un catálogo
+        # cerrado (CLC, IPCC, IGBP, …) que no se carga fila por fila, se
+        # selecciona por mapeo (ver MapeoColumna.tipo_cobertura) — mismo
+        # criterio que UnidadMuestreoTipo/UnidadMedida más arriba.
+        SECCIONES_ETL.append({
+            **_grupo,
+            "entidades": [e for e in _grupo["entidades"] if e != "TipoCobertura"],
         })
     else:
         SECCIONES_ETL.append(_grupo)
@@ -453,6 +464,14 @@ def campos_destino(request):
                     continue
                 if field.name in ("id", "created_at", "updated_at"):
                     continue
+                # Cobertura.sitio se auto-vincula al Sitio de la misma fila (igual
+                # que Parcela -> UnidadMuestreo) y Cobertura.tipo se resuelve
+                # aparte, desde el selector "tipo_cobertura" del mapeo (ver
+                # _procesar_fila_cobertura): no tiene sentido ofrecerlos como
+                # campo_destino normal, un solo MapeoColumna de Cobertura ya no
+                # produce una única fila por modelo/fila de origen.
+                if nombre == "Cobertura" and field.name in ("sitio", "tipo"):
+                    continue
                 campos.append(campo_to_catalogo(field, proyecto=proyecto, incluir_instancias_fk=True))
             if campos:
                 modelos[nombre] = campos
@@ -463,7 +482,16 @@ def campos_destino(request):
                     "orden_modelo": orden_modelo,
                 }
                 orden_modelo += 1
-    return JsonResponse({"modelos": modelos, "grupos": grupos}, json_dumps_params={"ensure_ascii": False})
+
+    # Para el selector "sistema de clasificación" que el wizard muestra junto
+    # a Cobertura.nombre (ver _procesar_fila_cobertura): se manda acá, junto
+    # con el resto de los metadatos de mapeo, para no agregar un fetch aparte.
+    tipos_cobertura = list(TipoCobertura.objects.values("id", "codigo", "nombre"))
+
+    return JsonResponse(
+        {"modelos": modelos, "grupos": grupos, "tipos_cobertura": tipos_cobertura},
+        json_dumps_params={"ensure_ascii": False},
+    )
 
 
 # Campos donde tiene sentido "¿ya existe esto en el proyecto?": ambos se
@@ -568,8 +596,9 @@ def mapeo_carga(request, fuente_id, carga_id):
         mapeos = list(
             carga.mapeos.values(
                 "columna_origen", "modelo_destino", "campo_destino",
-                "transformacion", "regex_patron", "mapeo_valores", "valor_constante",
-                "estrategia_nulos", "valor_relleno_manual",
+                "transformacion", "regex_patron", "factor_escala", "mapeo_valores", "valor_constante",
+                "estrategia_nulos", "valor_relleno_manual", "tipo_cobertura",
+                tipo_cobertura_nombre=models.F("tipo_cobertura__nombre"),
             )
         )
         return JsonResponse({
@@ -613,6 +642,28 @@ def mapeo_carga(request, fuente_id, carga_id):
                     continue
                 modelo_destino = item.get("modelo_destino", "")
                 campo_destino = item.get("campo_destino", "")
+                factor_escala_raw = item.get("factor_escala")
+                if factor_escala_raw in (None, ""):
+                    factor_escala = None
+                else:
+                    try:
+                        factor_escala = decimal.Decimal(str(factor_escala_raw))
+                    except decimal.InvalidOperation:
+                        return JsonResponse(
+                            {"error": f'factor_escala inválido para la columna "{columna_origen}": {factor_escala_raw!r}'},
+                            status=400,
+                        )
+                tipo_cobertura_raw = item.get("tipo_cobertura")
+                tipo_cobertura_id = None
+                if modelo_destino == "Cobertura" and not _es_vacio(tipo_cobertura_raw):
+                    try:
+                        tipo_cobertura_id = int(tipo_cobertura_raw)
+                    except (TypeError, ValueError):
+                        return JsonResponse(
+                            {"error": f'tipo_cobertura inválido para la columna "{columna_origen}": {tipo_cobertura_raw!r}'},
+                            status=400,
+                        )
+
                 MapeoColumna.objects.update_or_create(
                     carga=carga,
                     columna_origen=columna_origen,
@@ -621,12 +672,14 @@ def mapeo_carga(request, fuente_id, carga_id):
                     defaults={
                         "transformacion": item.get("transformacion", "directo"),
                         "regex_patron": item.get("regex_patron", ""),
+                        "factor_escala": factor_escala,
                         "mapeo_valores": item.get("mapeo_valores") or {},
                         "valor_constante": item.get("valor_constante", ""),
                         "estrategia_nulos": item.get("estrategia_nulos")
                         if item.get("estrategia_nulos") in dict(MapeoColumna.ESTRATEGIA_NULOS_CHOICES)
                         else "dejar_null",
                         "valor_relleno_manual": item.get("valor_relleno_manual", ""),
+                        "tipo_cobertura_id": tipo_cobertura_id,
                     },
                 )
                 enviados.add((columna_origen, modelo_destino, campo_destino))
@@ -678,6 +731,12 @@ def _es_vacio(val):
     if isinstance(val, float) and math.isnan(val):
         return True
     if isinstance(val, str) and val.strip() == "":
+        return True
+    # pandas representa una fecha/hora faltante como NaT (no como None ni
+    # NaN), p. ej. tras un pd.to_datetime(..., errors="coerce"). Sin este
+    # chequeo, un NaT se cuela como valor "real" y revienta más adelante en
+    # _coercionar_valor con "NaTType does not support utcoffset".
+    if pd.isna(val):
         return True
     return False
 
@@ -741,9 +800,9 @@ def _aplicar_estrategia_nulos(df, mapeos):
 
 
 def _resolver_valor_columna(val, mapeo):
-    """Aplica la transformación de la columna (regex) y/o la traducción de
-    mapeo_valores (origen -> destino) de una columna mapeada a un campo con
-    choices, igual que hace la UI antes de guardar."""
+    """Aplica la transformación de la columna (regex, escala) y/o la
+    traducción de mapeo_valores (origen -> destino) de una columna mapeada a
+    un campo con choices, igual que hace la UI antes de guardar."""
     if _es_vacio(val):
         return None
     if mapeo.transformacion == "regex" and mapeo.regex_patron:
@@ -759,6 +818,18 @@ def _resolver_valor_columna(val, mapeo):
         if not match:
             return None
         val = match.group(1) if match.lastindex else match.group(0)
+    if mapeo.transformacion == "escala" and mapeo.factor_escala is not None:
+        # Convierte unidades multiplicando por el factor (p. ej. 0.01 para
+        # centímetros -> metros). Acepta coma decimal (notación española)
+        # además de punto, igual que muchos de los archivos fuente reales.
+        texto = str(val).strip().replace(",", ".")
+        try:
+            val = float(texto) * float(mapeo.factor_escala)
+        except (ValueError, TypeError) as exc:
+            raise ValueError(
+                f'La columna "{mapeo.columna_origen}" tiene un valor no numérico ("{val}") '
+                f"y no se le puede aplicar el factor de escala."
+            ) from exc
     if mapeo.mapeo_valores:
         return mapeo.mapeo_valores.get(str(val), val)
     return val
@@ -793,7 +864,16 @@ def _validar_columna(df, mapeo):
 
     for idx, val_crudo in serie.items():
         fila = int(idx) + 2
-        val = _resolver_valor_columna(val_crudo, mapeo)
+        try:
+            val = _resolver_valor_columna(val_crudo, mapeo)
+        except ValueError as exc:
+            errores.append({
+                "fila": fila,
+                "valor": _to_python(val_crudo),
+                "tipo": "tipo_invalido",
+                "mensaje": str(exc),
+            })
+            continue
         py_val = _to_python(val)
 
         if val is None:
@@ -1287,6 +1367,19 @@ _CAMPOS_IDENTIDAD = {
     # casi nunca viene cargada hoy, así que la mayoría de las filas caen en
     # _MODELOS_EVENTO en vez de acá).
     "MuestraAmbiental": ("fecha", "hora", "fuente_datos"),
+    # Sin esto, get_or_create(**kwargs) usa TODOS los campos mapeados de
+    # Sitio como filtro: apenas una carga nueva mapea un campo que las
+    # cargas anteriores no mapeaban (p. ej. tipo_localizacion, o ahora
+    # Cobertura/Vegetacion/Disturbio vía Cobertura y Vegetación), deja de
+    # matchear el Sitio ya existente y crea uno duplicado -pasó dos veces
+    # en la práctica esta sesión (COS/Biomasa con tipo_localizacion), hubo
+    # que fusionarlos a mano-. Va `nombre` + coordenadas, no solo
+    # coordenadas: dos filas pueden compartir lat/lon pero representar el
+    # mismo punto físico usado por unidades experimentales distintas (dos
+    # "sitios" lógicos separados a propósito), así que las coordenadas
+    # solas no alcanzan como identidad -decisión explícita, no asumir
+    # fusión automática solo por coincidencia de coordenadas-.
+    "Sitio": ("nombre", "latitud", "longitud"),
 }
 
 # Modelos "evento": cada fila del archivo es una medición real distinta, no
@@ -1294,9 +1387,59 @@ _CAMPOS_IDENTIDAD = {
 # UnidadExperimental o Sitio). Se usa como respaldo de _CAMPOS_IDENTIDAD: si
 # el modelo no tiene una identidad completa en esta fila, _procesar_filas lo
 # crea siempre, sin get_or_create -ver el comentario donde se usa este set-.
-# MuestraGEI y SubmuestraGEI son candidatos obvios a agregar acá el día que el
-# ETL los importe (hoy no se crean desde el wizard).
-_MODELOS_EVENTO = {"MuestraAmbiental"}
+# MuestraGEI/SubmuestraGEI no lo necesitaron (siempre tienen un `valor` que
+# diferencia filas), pero MuestraMOM sí: la mayoría de sus columnas vienen
+# vacías en la fuente real (solo carbono en hojarasca suele traer dato), así
+# que varias filas de una misma UnidadMuestreo terminan con kwargs idénticos
+# y get_or_create() revienta con "get() returned more than one".
+_MODELOS_EVENTO = {"MuestraAmbiental", "MuestraMOM"}
+
+
+def _procesar_fila_cobertura(df, fila_idx, mapeos, instancias_fila, resumen_modelos, pks_por_modelo, detalle):
+    """Resuelve los mapeos de Cobertura para una fila: a diferencia de
+    _procesar_filas (que fusiona todos los mapeos de un modelo en un único
+    kwargs), acá cada MapeoColumna con campo_destino="nombre" produce su
+    propia fila de Cobertura, etiquetada con el `tipo_cobertura` fijo de ese
+    mapeo (ver comentario en MapeoColumna.tipo_cobertura). `sitio` siempre es
+    el Sitio ya resuelto para esta misma fila -no se mapea manualmente,
+    mismo criterio que Parcela -> UnidadMuestreo-."""
+    Cobertura = apps.get_model("app", "Cobertura")
+
+    sitio = instancias_fila.get("Sitio")
+    if sitio is None:
+        return
+
+    for mapeo in mapeos:
+        if mapeo.campo_destino != "nombre":
+            continue
+
+        if mapeo.transformacion == "constante":
+            valor = None if _es_vacio(mapeo.valor_constante) else mapeo.valor_constante
+        else:
+            val_crudo = df[mapeo.columna_origen].iloc[fila_idx]
+            try:
+                valor = _resolver_valor_columna(val_crudo, mapeo)
+            except ValueError:
+                continue
+
+        if _es_vacio(valor):
+            continue
+
+        obj, creado = Cobertura.objects.get_or_create(
+            sitio=sitio, tipo=mapeo.tipo_cobertura, nombre=str(valor),
+        )
+        resumen_modelos["Cobertura"]["creados" if creado else "reutilizados"] += 1
+        pks_por_modelo.setdefault("Cobertura", set()).add(obj.pk)
+
+        if detalle is not None:
+            bucket = detalle.setdefault("Cobertura", {})
+            if obj.pk not in bucket and len(bucket) < _PREVIEW_MAX_POR_MODELO:
+                bucket[obj.pk] = {
+                    "accion": "creado" if creado else "reutilizado",
+                    "campos": _representar_kwargs({
+                        "sitio": sitio, "tipo": mapeo.tipo_cobertura, "nombre": valor,
+                    }),
+                }
 
 
 def _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos, capturar_detalle=False):
@@ -1315,6 +1458,21 @@ def _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos, captur
         instancias_fila = {}
         for modelo in orden:
             modelo_cls = apps.get_model("app", modelo)
+
+            # Caso especial: a diferencia del resto de los modelos, una fila
+            # de origen puede traer varias columnas de Cobertura (CLC, IPCC,
+            # IGBP, Köppen, nombre local, Suelo IPCC), y cada una se vuelve
+            # una fila de Cobertura DISTINTA -no se fusionan en una sola
+            # instancia como hace el resto de este loop (ver
+            # `instancias_fila[modelo] = obj` más abajo, que solo guarda una
+            # por modelo por fila)-, todas ligadas al Sitio de esta fila.
+            if modelo == "Cobertura":
+                _procesar_fila_cobertura(
+                    df, fila_idx, mapeos_por_modelo.get(modelo, []),
+                    instancias_fila, resumen_modelos, pks_por_modelo, detalle,
+                )
+                continue
+
             kwargs = {}
             incompleto = False
 
@@ -1325,7 +1483,11 @@ def _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos, captur
                     valor = None if _es_vacio(mapeo.valor_constante) else mapeo.valor_constante
                 else:
                     val_crudo = df[mapeo.columna_origen].iloc[fila_idx]
-                    valor = _resolver_valor_columna(val_crudo, mapeo)
+                    try:
+                        valor = _resolver_valor_columna(val_crudo, mapeo)
+                    except ValueError:
+                        incompleto = True
+                        continue
 
                 if valor is None:
                     # "ignorar_fila": el usuario decidió explícitamente no
@@ -1413,7 +1575,24 @@ def _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos, captur
                 obj = modelo_cls.objects.create(**kwargs)
                 creado = True
             else:
-                obj, creado = modelo_cls.objects.get_or_create(**kwargs)
+                try:
+                    obj, creado = modelo_cls.objects.get_or_create(**kwargs)
+                except modelo_cls.MultipleObjectsReturned:
+                    # kwargs es un subconjunto parcial de los campos del
+                    # modelo (los que esta fila trae con valor real) para
+                    # modelos "perfil" sin identidad propia (Cobertura,
+                    # Disturbio, Vegetacion): si dos filas distintas ya
+                    # crearon variantes que coinciden en ese subconjunto
+                    # pero difieren en un campo que esta fila no trae -p.
+                    # ej. dos Disturbio con el mismo tipo/proteccion_legal
+                    # pero distinto estado_conservacion, y esta fila no
+                    # informa estado_conservacion-, el filtro parcial
+                    # matchea a más de uno. No hay forma de saber cuál es
+                    # "el correcto" con la información de esta fila, así
+                    # que se toma cualquiera de los que ya matchean en vez
+                    # de romper la carga entera por una fila ambigua.
+                    obj = modelo_cls.objects.filter(**kwargs).first()
+                    creado = False
 
             instancias_fila[modelo] = obj
             resumen_modelos[modelo]["creados" if creado else "reutilizados"] += 1
@@ -1703,6 +1882,7 @@ _VISTAS_DESNORMALIZADAS = {
             ("Equipo", ["muestra", "analizador"]),
             ("UnidadMuestreo", ["muestra", "unidad_muestreo"]),
             ("UnidadExperimental", ["muestra", "unidad_muestreo", "unidad_experimental"]),
+            ("Parcela", ["muestra", "unidad_muestreo", "parcela"]),
             ("Sitio", ["muestra", "unidad_muestreo", "sitio"]),
         ],
     },
@@ -1713,6 +1893,7 @@ _VISTAS_DESNORMALIZADAS = {
             ("UnidadMuestreo", []),
             ("UnidadExperimental", ["unidad_experimental"]),
             ("UnidadMuestreoTipo", ["unidad_experimental", "tipo"]),
+            ("Parcela", ["parcela"]),
             ("Sitio", ["sitio"]),
         ],
     },
@@ -1726,6 +1907,49 @@ _VISTAS_DESNORMALIZADAS = {
             ("Sitio", ["unidad_muestreo", "sitio"]),
         ],
     },
+    "mom": {
+        "modelo_base": "MuestraMOM",
+        "orden": ["unidad_muestreo__unidad_experimental__nombre", "fecha"],
+        "cadena": [
+            ("MuestraMOM", []),
+            ("UnidadMuestreo", ["unidad_muestreo"]),
+            ("UnidadExperimental", ["unidad_muestreo", "unidad_experimental"]),
+            ("Parcela", ["unidad_muestreo", "parcela"]),
+            ("Sitio", ["unidad_muestreo", "sitio"]),
+        ],
+    },
+    "cos": {
+        "modelo_base": "SubmuestraSuelo",
+        "orden": ["unidad_muestreo__unidad_experimental__nombre", "fecha", "profundidad_desde_cm"],
+        "cadena": [
+            ("SubmuestraSuelo", []),
+            ("UnidadMuestreo", ["unidad_muestreo"]),
+            ("UnidadExperimental", ["unidad_muestreo", "unidad_experimental"]),
+            ("Parcela", ["unidad_muestreo", "parcela"]),
+            ("Sitio", ["unidad_muestreo", "sitio"]),
+        ],
+    },
+    # Base "MuestraBiomasa", no "IndividuoArboreo": en los datos reales de
+    # IDEAM, IndividuoArboreo siempre queda vacío (la fuente no trae
+    # individuos arbóreos, solo el agregado de producción/carbono por
+    # parcela) — con IndividuoArboreo como base, la vista quedaba
+    # permanentemente "sin registros" pese a haber 646 MuestraBiomasa reales
+    # importadas. IndividuoArboreo es 1:N con MuestraBiomasa (reversa), no
+    # se puede aplanar como columnas de la misma fila con este mecanismo de
+    # `ruta` (solo sigue FKs hacia adelante); si algún día llega ese detalle,
+    # necesita su propia vista con IndividuoArboreo como base, análoga a
+    # submuestra_gei.
+    "biomasa": {
+        "modelo_base": "MuestraBiomasa",
+        "orden": ["unidad_muestreo__unidad_experimental__nombre", "fecha"],
+        "cadena": [
+            ("MuestraBiomasa", []),
+            ("UnidadMuestreo", ["unidad_muestreo"]),
+            ("UnidadExperimental", ["unidad_muestreo", "unidad_experimental"]),
+            ("Parcela", ["unidad_muestreo", "parcela"]),
+            ("Sitio", ["unidad_muestreo", "sitio"]),
+        ],
+    },
 }
 
 
@@ -1734,11 +1958,16 @@ def _select_related_de_cadena(cadena):
 
 
 def _campos_planos(modelo_cls):
-    """Campos propios de un modelo (sin FKs/relaciones ni id/timestamps),
-    listos para aplanar como columnas de la tabla desnormalizada."""
+    """Campos propios de un modelo (sin FKs/relaciones, geometría, ni id/timestamps),
+    listos para aplanar como columnas de la tabla desnormalizada.
+
+    No filtramos por `editable`: excluye campos calculados legítimos que sí
+    queremos mostrar (p. ej. `Parcela.area`). En cambio excluimos geometría
+    explícitamente (p. ej. `Sitio.geom`) — nunca se vuelca cruda a la tabla."""
     return [
         f for f in modelo_cls._meta.get_fields()
-        if hasattr(f, "column") and not f.is_relation and f.editable
+        if hasattr(f, "column") and not f.is_relation
+        and f.get_internal_type() not in ("PointField", "MultiPolygonField", "PolygonField", "GeometryField")
         and f.name not in ("id", "created_at", "updated_at")
     ]
 
@@ -1918,13 +2147,16 @@ def datos_proyecto(request, proyecto_id):
 
 
 # Hojas del Excel exportado: misma partición que las pestañas del front
-# (CO₂ / CH₄ / Unidad Muestreo-Experimental / Clima) en vez de una hoja
-# combinada por vista — ver docs/pages/etl-datos.html (TABS).
+# (CO₂ / CH₄ / Unidad Muestreo-Experimental / Clima / MOM / COS / Biomasa) en
+# vez de una hoja combinada por vista — ver docs/pages/etl-datos.html (TABS).
 _HOJAS_EXPORT = [
     {"nombre_vista": "submuestra_gei", "gas": "CO2", "hoja": "CO2 (detalle)"},
     {"nombre_vista": "submuestra_gei", "gas": "CH4", "hoja": "CH4 (detalle)"},
     {"nombre_vista": "unidad_muestreo", "gas": None, "hoja": "Unidad Muestreo-Experimental"},
     {"nombre_vista": "clima", "gas": None, "hoja": "Clima"},
+    {"nombre_vista": "mom", "gas": None, "hoja": "MOM"},
+    {"nombre_vista": "cos", "gas": None, "hoja": "COS"},
+    {"nombre_vista": "biomasa", "gas": None, "hoja": "Biomasa"},
 ]
 
 _TIPOS_DATO_LEGIBLES = {

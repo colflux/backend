@@ -151,6 +151,7 @@ class MapeoColumna(TimestampedModel):
         ("split", "Split"),
         ("fecha", "Parsear fecha"),
         ("regex", "Expresión regular"),
+        ("escala", "Conversión de unidades (factor de escala)"),
         ("constante", "Valor constante"),
         ("ignorar", "Ignorar"),
     ]
@@ -180,6 +181,12 @@ class MapeoColumna(TimestampedModel):
                    "grupo de captura se usa ese grupo; si no, se usa la coincidencia completa. Sin coincidencia, "
                    "el valor queda vacío. Ej: '^SWAMP_CO2_(.+?)_\\d+$' sobre 'SWAMP_CO2_S1_old_3' da 'S1_old'.",
     )
+    factor_escala = models.DecimalField(
+        "factor de escala", max_digits=20, decimal_places=10, null=True, blank=True,
+        help_text="Multiplica el valor de origen por este factor cuando la transformación es 'escala', para "
+                   "convertir unidades sin depender de que el archivo fuente ya venga en la unidad del campo "
+                   "destino (p. ej. 0.01 para pasar centímetros a metros). Solo aplica a campos numéricos.",
+    )
 
     ESTRATEGIA_NULOS_CHOICES = [
         ("dejar_null", "Dejar vacío"),
@@ -196,6 +203,13 @@ class MapeoColumna(TimestampedModel):
     valor_relleno_manual = models.CharField(
         "valor manual para nulos", max_length=500, blank=True, default="",
         help_text="Valor usado para las filas vacías de esta columna cuando estrategia_nulos es 'manual'.",
+    )
+    tipo_cobertura = models.ForeignKey(
+        "app.TipoCobertura", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="mapeos_columna", verbose_name="tipo de cobertura",
+        help_text="Solo aplica cuando modelo_destino es 'Cobertura': etiqueta con qué sistema de "
+                   "clasificación (CLC, IPCC, IGBP, …) se guarda el valor de esta columna, ya que un "
+                   "sitio puede tener varias filas de Cobertura (una por columna/sistema de origen).",
     )
 
     class Meta:

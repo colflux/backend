@@ -7,7 +7,7 @@ from .models import (
     MonitoreoParcela, MonitoreoSuelo, Municipio,
     Parcela, Proyecto, ProyectoInstitucion, ProyectoUsuario, Publicacion, PublicacionAutor,
     PublicacionSitio, Region, ResultadoPublicacion, Sitio,
-    SistemaReferencia, TorreEc, TorreFuenteEnergia, Transecto,
+    SistemaReferencia, TipoCobertura, TorreEc, TorreFuenteEnergia, Transecto,
     UnidadExperimental, UnidadMuestreo, UnidadMuestreoTipo, Vegetacion,
 )
 
@@ -35,11 +35,23 @@ class SistemaReferenciaAdmin(admin.ModelAdmin):
     list_display = ("nombre",)
 
 
+@admin.register(TipoCobertura)
+class TipoCoberturaAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "codigo")
+    search_fields = ("nombre", "codigo")
+
+
+class CoberturaInline(admin.TabularInline):
+    model = Cobertura
+    extra = 0
+
+
 @admin.register(Cobertura)
 class CoberturaAdmin(admin.ModelAdmin):
-    list_display = ("cobertura_nombre_comun", "cobertura_clc", "clima_koeppen")
-    list_filter = ("clima_koeppen",)
-    search_fields = ("cobertura_nombre_comun", "cobertura_clc")
+    list_display = ("sitio", "tipo", "nombre")
+    list_filter = ("tipo",)
+    search_fields = ("nombre", "sitio__nombre")
+    raw_id_fields = ("sitio",)
 
 
 @admin.register(Vegetacion)
@@ -59,7 +71,8 @@ class SitioAdmin(admin.ModelAdmin):
     list_display = ("nombre", "vereda", "latitud", "longitud", "uso_actual", "intervenido")
     list_filter = ("uso_actual", "propiedad_tierra", "pendiente")
     search_fields = ("nombre", "codigo_metadatos")
-    raw_id_fields = ("vereda", "disturbio", "vegetacion", "cobertura", "sistema_referencia")
+    raw_id_fields = ("vereda", "disturbio", "vegetacion", "sistema_referencia")
+    inlines = [CoberturaInline]
 
 
 @admin.register(UnidadMuestreoTipo)
