@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "docker compose up -d --build",
+            "timeout": 300,
+            "statusMessage": "Levantando servicios Docker (db + web)...",
+            "async": true
+          }
+        ]
+      }
+    ]
+  }
+}

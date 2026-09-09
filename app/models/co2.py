@@ -20,6 +20,10 @@ class UnidadMedida(TimestampedModel):
         "magnitud", max_length=60, blank=True,
         help_text="flujo, concentración, temperatura, …",
     )
+    simbolo = models.CharField(
+        "unidad del flujo", max_length=40, blank=True,
+        help_text="Símbolo corto para mostrar en las tablas de datos (ej. µmol m-2 s-1), en vez del código interno.",
+    )
 
     class Meta:
         verbose_name = "unidad de medida"
@@ -34,7 +38,7 @@ class Equipo(TimestampedModel):
     """Equipo analizador (picarro, EGM, Licor, …) con modelo y serial."""
 
     modelo = models.CharField(
-        "modelo", max_length=120, blank=True,
+        "analizador", max_length=120, blank=True,
         help_text="Modelo del equipo analizador (ej. Picarro G4301, LI-7810).",
     )
     serial = models.CharField(

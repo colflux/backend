@@ -5,6 +5,7 @@ import json
 import math
 import re
 import urllib.request
+from collections import defaultdict
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -1876,15 +1877,38 @@ _VISTAS_DESNORMALIZADAS = {
         "modelo_base": "SubmuestraGEI",
         "orden": ["fecha", "muestra_id", "n_toma"],
         "cadena": [
+            ("UnidadExperimental", ["muestra", "unidad_muestreo", "unidad_experimental"]),
+            ("Equipo", ["muestra", "analizador"]),
+            ("UnidadMuestreo", ["muestra", "unidad_muestreo"]),
             ("SubmuestraGEI", []),
             ("MuestraGEI", ["muestra"]),
             ("UnidadMedida", ["muestra", "unidad_medida"]),
-            ("Equipo", ["muestra", "analizador"]),
-            ("UnidadMuestreo", ["muestra", "unidad_muestreo"]),
-            ("UnidadExperimental", ["muestra", "unidad_muestreo", "unidad_experimental"]),
             ("Parcela", ["muestra", "unidad_muestreo", "parcela"]),
             ("Sitio", ["muestra", "unidad_muestreo", "sitio"]),
         ],
+        # Parcela y Sitio quedan en la cadena (se necesitan para el
+        # select_related y para el filtro por sitio_id del geoportal — ver
+        # `ruta_sitio` en `_preparar_vista_pks`), pero esta hoja ya no
+        # muestra su detalle: eso vive en la pestaña "Unidad
+        # Muestreo-Experimental". Solo se dejan `UnidadMuestreo.nombre` y
+        # `UnidadExperimental.nombre` al inicio como referencia para cruzar
+        # con esa otra hoja. `código`, `descripción` y `magnitud` de
+        # UnidadMedida se colapsan en `simbolo` ("unidad del flujo");
+        # `Equipo.serial`/`descripción` quedan fuera porque en los datos
+        # reales de IDEAM siempre están vacíos (ver revisar-datos-ideam.md).
+        "campos": {
+            "UnidadMuestreo": {"incluir": ["nombre"], "alias": {"nombre": "nombre unidad de muestreo"}},
+            "UnidadExperimental": {"incluir": ["nombre"], "alias": {"nombre": "nombre unidad experimental"}},
+            "UnidadMedida": {"incluir": ["simbolo"]},
+            "Equipo": {"incluir": ["modelo"]},
+            # n_toma: nunca llega poblado desde IDEAM (100% NULL, confirmado
+            # en CO2 y CH4) — se queda en el modelo (lo usa el orden interno
+            # y la regla de autollenado de horas) pero no aporta nada visible
+            # en esta hoja, así que no se muestra.
+            "SubmuestraGEI": {"excluir": ["n_toma"]},
+            "Parcela": {"incluir": []},
+            "Sitio": {"incluir": []},
+        },
     },
     "unidad_muestreo": {
         "modelo_base": "UnidadMuestreo",
@@ -1957,19 +1981,31 @@ def _select_related_de_cadena(cadena):
     return ["__".join(ruta) for _modelo, ruta in cadena if ruta]
 
 
-def _campos_planos(modelo_cls):
+def _campos_planos(modelo_cls, opciones=None):
     """Campos propios de un modelo (sin FKs/relaciones, geometría, ni id/timestamps),
     listos para aplanar como columnas de la tabla desnormalizada.
 
     No filtramos por `editable`: excluye campos calculados legítimos que sí
     queremos mostrar (p. ej. `Parcela.area`). En cambio excluimos geometría
-    explícitamente (p. ej. `Sitio.geom`) — nunca se vuelca cruda a la tabla."""
-    return [
+    explícitamente (p. ej. `Sitio.geom`) — nunca se vuelca cruda a la tabla.
+
+    `opciones` (de `vista["campos"][modelo_nombre]`) deja que una vista
+    recorte qué campos de un modelo se ven como columna sin sacarlo de la
+    cadena (sigue disponible para joins/filtros): `{"incluir": [...]}` es
+    allowlist explícita (`[]` = ninguno, útil para modelos que solo están en
+    la cadena por el join, p. ej. Sitio en `submuestra_gei`); `{"excluir": [...]}`
+    es denylist sobre el set por defecto."""
+    campos = [
         f for f in modelo_cls._meta.get_fields()
         if hasattr(f, "column") and not f.is_relation
         and f.get_internal_type() not in ("PointField", "MultiPolygonField", "PolygonField", "GeometryField")
         and f.name not in ("id", "created_at", "updated_at")
     ]
+    if opciones and "incluir" in opciones:
+        campos = [f for f in campos if f.name in opciones["incluir"]]
+    elif opciones and "excluir" in opciones:
+        campos = [f for f in campos if f.name not in opciones["excluir"]]
+    return campos
 
 
 def _resolver_ruta(obj, ruta):
@@ -2029,22 +2065,23 @@ def _preparar_vista_pks(pks, nombre_vista, filtros_raw, sitio_id=None):
 
     cadena = vista["cadena"]
     modelo_base = vista["modelo_base"]
+    campos_por_modelo = vista.get("campos", {})
 
     if not pks:
         return vista, None, None, None
 
     columnas = [
         {"clave": f"{modelo_nombre}.{f.name}", "modelo": modelo_nombre, "campo": f.name,
-         "verbose_name": str(f.verbose_name)}
+         "verbose_name": campos_por_modelo.get(modelo_nombre, {}).get("alias", {}).get(f.name, str(f.verbose_name))}
         for modelo_nombre, _ruta in cadena
-        for f in _campos_planos(apps.get_model("app", modelo_nombre))
+        for f in _campos_planos(apps.get_model("app", modelo_nombre), campos_por_modelo.get(modelo_nombre))
     ]
     # Mapa clave ("Modelo.campo") -> ruta ORM, para poder traducir los filtros
     # del usuario a filter(**{"ruta__campo__icontains": ...}).
     ruta_orm_por_clave = {}
     ruta_sitio = None
     for modelo_nombre, ruta in cadena:
-        for f in _campos_planos(apps.get_model("app", modelo_nombre)):
+        for f in _campos_planos(apps.get_model("app", modelo_nombre), campos_por_modelo.get(modelo_nombre)):
             ruta_orm_por_clave[f"{modelo_nombre}.{f.name}"] = ruta + [f.name]
         if modelo_nombre == "Sitio":
             ruta_sitio = ruta
@@ -2072,11 +2109,12 @@ def _preparar_vista_pks(pks, nombre_vista, filtros_raw, sitio_id=None):
     return vista, columnas, qs, None
 
 
-def _fila_desde_objeto(obj, cadena):
+def _fila_desde_objeto(obj, cadena, campos_por_modelo=None):
+    campos_por_modelo = campos_por_modelo or {}
     fila = {}
     for modelo_nombre, ruta in cadena:
         related_obj = obj if not ruta else _resolver_ruta(obj, ruta)
-        for f in _campos_planos(apps.get_model("app", modelo_nombre)):
+        for f in _campos_planos(apps.get_model("app", modelo_nombre), campos_por_modelo.get(modelo_nombre)):
             fila[f"{modelo_nombre}.{f.name}"] = _valor_campo_plano(related_obj, f)
     return fila
 
@@ -2099,7 +2137,8 @@ def _respuesta_datos_vista(request, vista, columnas, qs, advertencia_sin_datos):
 
     total = qs.count()
     cadena = vista["cadena"]
-    filas = [_fila_desde_objeto(obj, cadena) for obj in qs[offset:offset + limite]]
+    campos_por_modelo = vista.get("campos", {})
+    filas = [_fila_desde_objeto(obj, cadena, campos_por_modelo) for obj in qs[offset:offset + limite]]
 
     return JsonResponse({
         "total": total,
@@ -2175,35 +2214,39 @@ def _tipo_dato_legible(field):
 
 
 def _dataframe_diccionario_datos():
-    """Una fila por (entidad, atributo) de todos los modelos que aparecen en
-    alguna vista desnormalizada, para documentar lo que trae cada exportación."""
+    """Una fila por (entidad, atributo) realmente visible en alguna pestaña
+    del Excel — si una vista recorta los campos de un modelo (`campos` en
+    `_VISTAS_DESNORMALIZADAS`, p. ej. Sitio en `submuestra_gei` solo está
+    para el join/filtro y no aporta columnas), esa hoja no cuenta para esos
+    campos, y si un campo no queda visible en ninguna hoja, no aparece en el
+    diccionario."""
+    # hojas_por_campo[modelo_nombre][campo_nombre] = ["CO2 (detalle)", ...]
+    hojas_por_campo = defaultdict(lambda: defaultdict(list))
     modelos_vistos = []
     nombres_vistos = set()
-    for vista in _VISTAS_DESNORMALIZADAS.values():
-        for modelo_nombre, _ruta in vista["cadena"]:
+    for hoja_def in _HOJAS_EXPORT:
+        vista_def = _VISTAS_DESNORMALIZADAS[hoja_def["nombre_vista"]]
+        campos_por_modelo = vista_def.get("campos", {})
+        for modelo_nombre, _ruta in vista_def["cadena"]:
             if modelo_nombre not in nombres_vistos:
                 nombres_vistos.add(modelo_nombre)
                 modelos_vistos.append(modelo_nombre)
-
-    # Qué pestañas del Excel (_HOJAS_EXPORT) traen cada modelo, para que el
-    # diccionario diga en qué hoja(s) encontrar cada atributo. Un modelo
-    # puede aparecer en varias vistas (ej. Sitio está en las tres).
-    hojas_por_modelo = {modelo_nombre: [] for modelo_nombre in modelos_vistos}
-    for hoja_def in _HOJAS_EXPORT:
-        cadena_vista = _VISTAS_DESNORMALIZADAS[hoja_def["nombre_vista"]]["cadena"]
-        for modelo_nombre, _ruta in cadena_vista:
-            if hoja_def["hoja"] not in hojas_por_modelo[modelo_nombre]:
-                hojas_por_modelo[modelo_nombre].append(hoja_def["hoja"])
+            modelo_cls = apps.get_model("app", modelo_nombre)
+            for f in _campos_planos(modelo_cls, campos_por_modelo.get(modelo_nombre)):
+                if hoja_def["hoja"] not in hojas_por_campo[modelo_nombre][f.name]:
+                    hojas_por_campo[modelo_nombre][f.name].append(hoja_def["hoja"])
 
     filas = []
     for modelo_nombre in modelos_vistos:
         modelo_cls = apps.get_model("app", modelo_nombre)
         entidad = str(modelo_cls._meta.verbose_name).capitalize()
-        pestana = ", ".join(hojas_por_modelo[modelo_nombre])
         for f in _campos_planos(modelo_cls):
+            hojas = hojas_por_campo[modelo_nombre].get(f.name, [])
+            if not hojas:
+                continue
             valores_permitidos = ", ".join(str(label) for _valor, label in f.choices) if getattr(f, "choices", None) else ""
             filas.append({
-                "Pestaña": pestana,
+                "Pestaña": ", ".join(hojas),
                 "Entidad": entidad,
                 "Atributo": str(f.verbose_name),
                 "Descripción": str(f.help_text) if f.help_text else "",
@@ -2234,9 +2277,10 @@ def exportar_carga(request, fuente_id, carga_id):
         if error or qs is None:
             continue
         cadena = vista["cadena"]
+        campos_por_modelo = vista.get("campos", {})
         claves = [c["clave"] for c in columnas]
         encabezados = [c["verbose_name"] or c["campo"] for c in columnas]
-        filas = [_fila_desde_objeto(obj, cadena) for obj in qs.iterator()]
+        filas = [_fila_desde_objeto(obj, cadena, campos_por_modelo) for obj in qs.iterator()]
         df = pd.DataFrame([[fila[clave] for clave in claves] for fila in filas], columns=encabezados)
         hojas.append((hoja_def["hoja"][:31], df))
 
@@ -2275,9 +2319,10 @@ def exportar_proyecto(request, proyecto_id):
         if error or qs is None:
             continue
         cadena = vista["cadena"]
+        campos_por_modelo = vista.get("campos", {})
         claves = [c["clave"] for c in columnas]
         encabezados = [c["verbose_name"] or c["campo"] for c in columnas]
-        filas = [_fila_desde_objeto(obj, cadena) for obj in qs.iterator()]
+        filas = [_fila_desde_objeto(obj, cadena, campos_por_modelo) for obj in qs.iterator()]
         df = pd.DataFrame([[fila[clave] for clave in claves] for fila in filas], columns=encabezados)
         hojas.append((hoja_def["hoja"][:31], df))
 

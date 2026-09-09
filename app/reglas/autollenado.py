@@ -10,6 +10,7 @@ los valores guardados en `ReglaAutollenado.parametros` pisan a
 """
 
 import uuid
+from collections import defaultdict
 from datetime import datetime, time, timedelta
 
 from django.apps import apps
@@ -159,6 +160,50 @@ def _validar_hora_submuestra_gei():
     ]
 
 
+def _candidatos_colision_hora_inicio_final(parametros):
+    """SubmuestraGEI.hora ya tiene valor, pero Inicio y Final de la misma
+    MuestraGEI+fecha quedaron con la misma hora (debería haber
+    `incremento_minutos` de diferencia — ver comentario del equipo de datos
+    en la revisión de IDEAM: "debe haber un intervalo de 3 minutos entre
+    toma"). Una MuestraGEI se reutiliza en muchas fechas (~4 tomas por
+    sesión), así que el emparejamiento correcto NO es "el primer Inicio con
+    el primer Final de toda la muestra" sino por posición dentro de cada
+    (muestra, fecha): la campaña de IDEAM no trae `n_toma`, pero el orden de
+    inserción (id) sí conserva la secuencia real de captura, confirmado
+    contra los datos de IDEAM (pares id consecutivos alternan inicio/final).
+    Si en un grupo hay más Final que Inicio (o viceversa), los sobrantes sin
+    pareja no se tocan — no hay con qué compararlos con seguridad."""
+    incremento = int(parametros["incremento_minutos"])
+
+    todas = (
+        SubmuestraGEI.objects
+        .filter(hora__isnull=False, momento__in=("inicio", "final"))
+        .order_by("muestra_id", "fecha", "id")
+    )
+
+    grupos = defaultdict(lambda: {"inicio": [], "final": []})
+    for sub in todas:
+        grupos[(sub.muestra_id, sub.fecha)][sub.momento].append(sub)
+
+    candidatos = []
+    for (muestra_id, fecha), por_momento in grupos.items():
+        for inicio, final in zip(por_momento["inicio"], por_momento["final"]):
+            if inicio.hora != final.hora:
+                continue
+            valor_nuevo = (datetime.combine(datetime.min, inicio.hora) + timedelta(minutes=incremento)).time()
+            candidatos.append({
+                "objeto": final,
+                "valor_nuevo": valor_nuevo,
+                "contexto": {
+                    "muestra_id": muestra_id,
+                    "fecha": fecha.isoformat() if fecha else None,
+                    "hora_inicio": inicio.hora.strftime("%H:%M"),
+                    "hora_final_anterior": final.hora.strftime("%H:%M"),
+                },
+            })
+    return candidatos
+
+
 REGLAS = {
     "hora_submuestra_gei": {
         "nombre": "Hora de toma faltante",
@@ -180,6 +225,22 @@ REGLAS = {
         "calcular_candidatos": _candidatos_hora_submuestra_gei,
         "contar_pendientes": _contar_pendientes_hora_submuestra_gei,
         "validar_valores": _validar_hora_submuestra_gei,
+    },
+    "colision_hora_inicio_final": {
+        "nombre": "Colisión de hora entre Inicio y Final",
+        "descripcion": (
+            "Cuando la toma 'Inicio' y la toma 'Final' de la misma muestra y fecha quedaron con la misma "
+            "hora (debería haber un intervalo entre ellas, ej. 3 minutos), suma el incremento configurado a "
+            "la hora del Final. El emparejamiento Inicio/Final es por orden de captura dentro de cada "
+            "(muestra, fecha); si sobran Inicios o Finales sin pareja en ese grupo, no se tocan."
+        ),
+        "modelo_destino": "SubmuestraGEI",
+        "campo_destino": "hora",
+        "parametros_default": {"incremento_minutos": 3},
+        "parametros_schema": [
+            {"clave": "incremento_minutos", "etiqueta": "Incremento a sumar al Final cuando colisiona (minutos)", "tipo": "number"},
+        ],
+        "calcular_candidatos": _candidatos_colision_hora_inicio_final,
     },
 }
 

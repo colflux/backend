@@ -3086,7 +3086,7 @@
           "verbose_name": "unidad de medida",
           "verbose_name_plural": "unidades de medida",
           "descripcion": "Catálogo de unidades de medida (configurable, p. ej. co2_flux_micromol_m2_s).",
-          "total_campos": 3,
+          "total_campos": 4,
           "campos": [
             {
               "nombre": "codigo",
@@ -3120,6 +3120,17 @@
               "choices": [],
               "es_fk": false,
               "modelo_fk": null
+            },
+            {
+              "nombre": "simbolo",
+              "verbose_name": "unidad del flujo",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "max_length": 40,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
             }
           ],
           "datos_semilla": [
@@ -3127,31 +3138,36 @@
               "id": 5,
               "codigo": "ch4_flux_micromol_m2_s",
               "descripcion": "Flujo de CH4 (µmol m-2 s-1)",
-              "magnitud": "flujo"
+              "magnitud": "flujo",
+              "simbolo": "µmol m-2 s-1"
             },
             {
               "id": 4,
               "codigo": "co2_flux_micromol_m2_s",
               "descripcion": "Flujo de CO2 (µmol m-2 s-1)",
-              "magnitud": "flujo"
+              "magnitud": "flujo",
+              "simbolo": "µmol m-2 s-1"
             },
             {
               "id": 1,
               "codigo": "g_m2_h",
               "descripcion": "gramos por metro cuadrado por hora",
-              "magnitud": "flujo"
+              "magnitud": "flujo",
+              "simbolo": "g_m2_h"
             },
             {
               "id": 3,
               "codigo": "nmol_m2_s",
               "descripcion": "nanomoles por metro cuadrado por segundo",
-              "magnitud": "flujo"
+              "magnitud": "flujo",
+              "simbolo": "nmol_m2_s"
             },
             {
               "id": 2,
               "codigo": "umol_m2_s",
               "descripcion": "micromoles por metro cuadrado por segundo",
-              "magnitud": "flujo"
+              "magnitud": "flujo",
+              "simbolo": "umol_m2_s"
             }
           ]
         },
@@ -3164,7 +3180,7 @@
           "campos": [
             {
               "nombre": "modelo",
-              "verbose_name": "modelo",
+              "verbose_name": "analizador",
               "tipo": "Texto",
               "tipo_raw": "CharField",
               "requerido": false,
