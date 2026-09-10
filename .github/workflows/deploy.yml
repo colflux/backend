@@ -16,10 +16,13 @@ jobs:
           host: ${{ secrets.LIGHTSAIL_HOST }}
           username: ${{ secrets.LIGHTSAIL_USER }}
           key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          command_timeout: 20m
           script: |
-            cd ${{ secrets.LIGHTSAIL_APP_PATH }}
+            cd /home/ubuntu/colflux/backend
             git fetch origin main
             git checkout main
             git reset --hard origin/main
-            docker compose up -d --build
+            docker compose build
+            docker compose up -d --wait --wait-timeout 120
+            docker compose up -d
             docker image prune -f
