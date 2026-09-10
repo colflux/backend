@@ -3,6 +3,7 @@
   const inPages = location.pathname.includes('/pages/');
   const base    = inPages ? '' : 'pages/';
   const root    = inPages ? '../' : '';
+  const VERSION = '1.0.0';
 
   const NAV_LINKS = [
     { href: `${base}team.html`,                   label: 'Equipo',           id: 'team.html' },
@@ -32,7 +33,7 @@
     return `<footer>
   <div class="container">
     <div class="footer-inner">
-      <span>🌿 COLFLUX OE2 — Sistema de gestión de datos</span>
+      <span>🌿 COLFLUX OE2 — Sistema de gestión de datos · v${VERSION}</span>
       <div class="footer-links">
         <a href="https://github.com/colflux/backend" target="_blank">GitHub</a>
         <a href="${base}db.html">Base de datos</a>
