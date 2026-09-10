@@ -3,7 +3,7 @@
   const inPages = location.pathname.includes('/pages/');
   const base    = inPages ? '' : 'pages/';
   const root    = inPages ? '../' : '';
-  const VERSION = '1.0.0';
+  const VERSION = '1.0.1';
 
   const NAV_LINKS = [
     { href: `${base}team.html`,                   label: 'Equipo',           id: 'team.html' },
