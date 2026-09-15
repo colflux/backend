@@ -1,7 +1,7 @@
 services:
   web:
     build: .
-    command: sh -c "python manage.py migrate && python manage.py generate_catalogo && python manage.py collectstatic --noinput && gunicorn colflux.wsgi:application --bind 0.0.0.0:8000"
+    command: sh -c "python manage.py migrate && python manage.py create_admin_from_env && python manage.py generate_catalogo && python manage.py collectstatic --noinput && gunicorn colflux.wsgi:application --bind 0.0.0.0:8000"
     environment:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL debe estar seteada en .env — no hay fallback silencioso a la db local}
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-only-secret-key}
