@@ -19,7 +19,7 @@ services:
     build: .
     command: sh -c "python manage.py migrate && python manage.py generate_catalogo && python manage.py collectstatic --noinput && gunicorn colflux.wsgi:application --bind 0.0.0.0:8000"
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgres://ghg:ghg@db:5432/ghg}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL debe estar seteada en .env — no hay fallback silencioso a la db local}
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-only-secret-key}
       DJANGO_DEBUG: ${DJANGO_DEBUG:-1}
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0}

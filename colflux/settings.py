@@ -71,15 +71,15 @@ if not DATABASE_URL:
         "(ver docker-compose.yml) — no hay fallback a sqlite."
     )
 
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 db = urlparse(DATABASE_URL)
 DATABASES = {
     "default": {
         "ENGINE": "django.contrib.gis.db.backends.postgis",
         "NAME": db.path.lstrip("/"),
-        "USER": db.username,
-        "PASSWORD": db.password,
+        "USER": unquote(db.username) if db.username else db.username,
+        "PASSWORD": unquote(db.password) if db.password else db.password,
         "HOST": db.hostname,
         "PORT": db.port or 5432,
     }
