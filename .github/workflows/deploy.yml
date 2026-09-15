@@ -26,3 +26,23 @@ jobs:
             docker compose up -d --wait --wait-timeout 120
             docker compose up -d
             docker image prune -f
+
+      - name: Verificar que el backend responde tras el deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ${{ secrets.LIGHTSAIL_USER }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          command_timeout: 2m
+          script: |
+            for i in 1 2 3 4 5; do
+              code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:${WEB_PORT:-8001}/api/geo/sitios/)
+              if [ "$code" = "200" ]; then
+                echo "Smoke test OK ($code)"
+                exit 0
+              fi
+              echo "Intento $i: HTTP $code, reintentando..."
+              sleep 5
+            done
+            echo "Smoke test falló: el backend no respondió 200 tras el deploy"
+            exit 1

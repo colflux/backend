@@ -17,9 +17,15 @@ class Command(BaseCommand):
             return
 
         User = get_user_model()
-        if User.objects.filter(username=username).exists():
-            self.stdout.write(f"Admin user '{username}' already exists; skipping.")
+        user = User.objects.filter(username=username).first()
+        if user:
+            user.set_password(password)
+            user.email = email or user.email
+            user.is_superuser = True
+            user.is_staff = True
+            user.save()
+            self.stdout.write(self.style.SUCCESS(f"Admin user '{username}' actualizado (contraseña sincronizada con .env)."))
             return
 
         User.objects.create_superuser(username=username, email=email, password=password)
-        self.stdout.write(self.style.SUCCESS(f"Admin user '{username}' created."))
+        self.stdout.write(self.style.SUCCESS(f"Admin user '{username}' creado."))
