@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 from .base import TimestampedModel
@@ -38,6 +39,14 @@ class Usuario(TimestampedModel):
         through="UsuarioRol",
         related_name="usuarios",
         blank=True,
+    )
+    auth_user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="usuario",
+        verbose_name="cuenta de acceso",
     )
 
     class Meta:

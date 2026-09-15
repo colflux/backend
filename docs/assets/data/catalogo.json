@@ -4033,7 +4033,7 @@
           "verbose_name": "usuario",
           "verbose_name_plural": "usuarios",
           "descripcion": "Persona vinculada a la red: datos de contacto, institución y roles que desempeña.",
-          "total_campos": 6,
+          "total_campos": 7,
           "campos": [
             {
               "nombre": "nombre",
@@ -4089,6 +4089,17 @@
               "choices": [],
               "es_fk": true,
               "modelo_fk": "Institucion"
+            },
+            {
+              "nombre": "auth_user",
+              "verbose_name": "cuenta de acceso",
+              "tipo": "OneToOneField",
+              "tipo_raw": "OneToOneField",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
             },
             {
               "nombre": "roles",
