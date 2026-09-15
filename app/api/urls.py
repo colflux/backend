@@ -1,7 +1,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from app.api.auth.views import LoginView, LogoutView, MeView
+from app.api.auth.views import LoginView, LogoutView, MeView, RegistroView
 from app.api.dashboard.views import DashboardView, DataModelView, VisualizerView, chart_data
 from app.api.datos.views import FuenteDatosViewSet, fuentes_datos_api
 from app.api.etl.views import (
@@ -32,6 +32,7 @@ urlpatterns = [
     path("modelo-datos/", DataModelView.as_view(), name="data-model"),
     path("chart-data/", chart_data, name="chart-data"),
     path("api/auth/login/", LoginView.as_view(), name="auth-login"),
+    path("api/auth/registro/", RegistroView.as_view(), name="auth-registro"),
     path("api/auth/logout/", LogoutView.as_view(), name="auth-logout"),
     path("api/auth/me/", MeView.as_view(), name="auth-me"),
     path("api/fuentes-datos/", fuentes_datos_api, name="fuentes-datos-api"),
