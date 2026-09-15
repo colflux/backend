@@ -3,50 +3,34 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>COLFLUX</title>
+  <title>Proyecto COLFLUX</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Inter', sans-serif; color: #1a2236; background: #fff; line-height: 1.6; }
-
-    :root {
-      --green:   #18735d; --green-l: #e6f4f0; --green-d: #0d4f40;
-      --gray:    #64748b; --border:  #e2e8f0;
+    body {
+      font-family: 'Inter', sans-serif; color: #1a2236; background: #fff;
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      text-align: center; padding: 24px;
     }
-
-    /* ── Nav ── */
-    nav {
-      position: sticky; top: 0; z-index: 100;
-      background: rgba(255,255,255,.96); backdrop-filter: blur(8px);
-      border-bottom: 1px solid var(--border); padding: 12px 0;
+    h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); font-weight: 800; letter-spacing: -.02em; color: #0d4f40; margin-bottom: 12px; }
+    p { font-size: 1.05rem; color: #64748b; margin-bottom: 28px; }
+    a {
+      display: inline-block; background: #18735d; color: white; text-decoration: none;
+      font-weight: 700; padding: 12px 28px; border-radius: 8px; transition: background .2s;
     }
-    .nav-inner { display: flex; align-items: center; justify-content: space-between; max-width: 1140px; margin: 0 auto; padding: 0 24px; }
-    .nav-logo { font-weight: 800; font-size: 1rem; color: var(--green-d); text-decoration: none; display: flex; align-items: center; gap: 8px; }
-    .nav-links { display: flex; gap: 24px; list-style: none; }
-    .nav-links a { color: var(--gray); font-size: .85rem; font-weight: 500; text-decoration: none; transition: color .2s; }
-    .nav-links a:hover { color: var(--green); }
-    .nav-links a.active { color: var(--green); font-weight: 700; }
-    .nav-pill { background: var(--green-d); color: white; font-size: .75rem; font-weight: 700; padding: 5px 12px; border-radius: 20px; text-decoration: none; }
-    @media (max-width: 600px) { .nav-links { display: none; } }
-
-    .hero { min-height: calc(100vh - 100px); display: flex; align-items: center; justify-content: center; text-align: center; padding: 64px 24px; }
-    .hero h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); font-weight: 800; letter-spacing: -.02em; margin-bottom: 16px; color: #0d4f40; }
-    .hero p { font-size: 1.05rem; color: #64748b; max-width: 560px; margin: 0 auto; }
+    a:hover { background: #125845; }
   </style>
 </head>
 <body>
-
-<div id="app-nav"></div>
-
-<section class="hero">
   <div>
-    <h1>COLFLUX</h1>
-    <p>Plataforma para gestionar la información de carbono en el país.</p>
+    <h1>Proyecto COLFLUX</h1>
+    <p>Sistema de monitoreo de Gases de Efecto Invernadero. La interfaz de usuario vive en el frontend.</p>
+    <a id="frontend-link" href="http://localhost:3000">Ir a la aplicación →</a>
   </div>
-</section>
-
-<script src="assets/js/layout.js"></script>
-<script src="assets/js/role-guard.js"></script>
+  <script>
+    var isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
+    if (!isLocal) document.getElementById('frontend-link').href = 'http://44.213.47.34/';
+  </script>
 </body>
 </html>

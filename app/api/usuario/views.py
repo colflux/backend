@@ -1,4 +1,6 @@
 from rest_framework import status
+from rest_framework.authentication import TokenAuthentication
+from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 
 from app.api.base import DataPortalModelViewSet
@@ -6,7 +8,23 @@ from app.api.usuario.serializers import RolUsuarioSerializer, UsuarioSerializer
 from app.models import RolUsuario, Usuario
 
 
+class BloquearPasswordAnonima(BasePermission):
+    """Exige sesión autenticada para crear o cambiar la contraseña de acceso de un Usuario.
+
+    El resto de operaciones de UsuarioViewSet sigue abierto (AllowAny,
+    heredado de DataPortalModelViewSet) — solo se restringe el campo
+    `password`, que es lo único que habilita loguearse como ese usuario.
+    """
+
+    def has_permission(self, request, view):
+        if request.data.get("password"):
+            return bool(request.user and request.user.is_authenticated)
+        return True
+
+
 class UsuarioViewSet(DataPortalModelViewSet):
+    authentication_classes = [*DataPortalModelViewSet.authentication_classes, TokenAuthentication]
+    permission_classes = [*DataPortalModelViewSet.permission_classes, BloquearPasswordAnonima]
     queryset = Usuario.objects.select_related("institucion").prefetch_related("roles")
     serializer_class = UsuarioSerializer
 
