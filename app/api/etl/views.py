@@ -17,6 +17,7 @@ from django.db import models, transaction
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
+from app.api.permisos import requiere_nivel
 from app.models import CargaArchivo, FuenteDatos, MapeoColumna, Proyecto, TipoCobertura
 
 from app.catalogo.generator import GRUPOS_CATALOGO, campo_to_catalogo, fk_choices
@@ -300,6 +301,7 @@ def _resolver_ruta_fuente(fuente):
 
 
 @csrf_exempt
+@requiere_nivel("reportador")
 def archivo_fuente(request, fuente_id):
     if request.method != "POST":
         return JsonResponse({"error": "Método no permitido"}, status=405)
@@ -327,6 +329,7 @@ def archivo_fuente(request, fuente_id):
 
 
 @csrf_exempt
+@requiere_nivel("reportador")
 def upload_archivo(request, fuente_id):
     if request.method != "POST":
         return JsonResponse({"error": "Método no permitido"}, status=405)
@@ -587,6 +590,7 @@ def regex_sugerido(request):
 
 
 @csrf_exempt
+@requiere_nivel("reportador")
 def mapeo_carga(request, fuente_id, carga_id):
     try:
         carga = CargaArchivo.objects.get(pk=carga_id, fuente_id=fuente_id)
@@ -1182,6 +1186,7 @@ def _validar_unicidad_unidad_experimental(carga, df):
 
 
 @csrf_exempt
+@requiere_nivel("reportador")
 def validar_carga(request, fuente_id, carga_id):
     if request.method != "POST":
         return JsonResponse({"error": "Método no permitido"}, status=405)
@@ -1674,6 +1679,7 @@ def _validar_seccion(carga, df, mapeos):
 
 
 @csrf_exempt
+@requiere_nivel("reportador")
 def previsualizar_carga(request, fuente_id, carga_id):
     """Simula la importación de esta sección (mismo orden de creación/vínculo
     por FK que importar_carga) sin escribir nada permanente en la base, para
@@ -1765,6 +1771,7 @@ def previsualizar_carga(request, fuente_id, carga_id):
 
 
 @csrf_exempt
+@requiere_nivel("reportador")
 def importar_carga(request, fuente_id, carga_id):
     if request.method != "POST":
         return JsonResponse({"error": "Método no permitido"}, status=405)
@@ -2262,6 +2269,7 @@ def _agregar_hoja_diccionario_datos(writer):
     _dataframe_diccionario_datos().to_excel(writer, sheet_name="Diccionario de datos", index=False)
 
 
+@requiere_nivel("investigador")
 def exportar_carga(request, fuente_id, carga_id):
     """Descarga en un único Excel todos los datos importados por esta carga:
     una pestaña por cada pestaña del front (_HOJAS_EXPORT)."""
@@ -2305,6 +2313,7 @@ def exportar_carga(request, fuente_id, carga_id):
     return response
 
 
+@requiere_nivel("investigador")
 def exportar_proyecto(request, proyecto_id):
     """Descarga en un único Excel todos los datos importados del proyecto
     (todas sus cargas ya importadas combinadas): una pestaña por cada
