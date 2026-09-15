@@ -22,12 +22,6 @@ class UsuarioSerializer(serializers.ModelSerializer):
         allow_null=True,
     )
     institucion_nombre = serializers.CharField(source="institucion.nombre", read_only=True)
-    roles = serializers.SlugRelatedField(
-        many=True,
-        slug_field="codigo",
-        queryset=RolUsuario.objects.all(),
-        required=False,
-    )
     password = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
@@ -40,7 +34,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
             "correo_institucional",
             "institucion",
             "institucion_nombre",
-            "roles",
+            "nivel",
             "password",
         ]
 
@@ -87,7 +81,6 @@ class UsuarioSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
-        roles = validated_data.pop("roles", [])
         password = validated_data.pop("password", "")
         nombre = validated_data.pop("nombre")
         correo = validated_data.get("correo", "")
@@ -110,28 +103,16 @@ class UsuarioSerializer(serializers.ModelSerializer):
                 changed_fields.append("updated_at")
                 usuario.save(update_fields=changed_fields)
 
-        if not roles:
-            rol_reportador, _ = RolUsuario.objects.get_or_create(
-                codigo="reportador",
-                defaults={"nombre": "Reportador"},
-            )
-            roles = [rol_reportador]
-        usuario.roles.add(*roles)
-
         self._sincronizar_login(usuario, password)
         return usuario
 
     @transaction.atomic
     def update(self, instance, validated_data):
         password = validated_data.pop("password", "")
-        roles = validated_data.pop("roles", None)
 
         for field, value in validated_data.items():
             setattr(instance, field, value)
         instance.save()
-
-        if roles is not None:
-            instance.roles.set(roles)
 
         self._sincronizar_login(instance, password)
         return instance

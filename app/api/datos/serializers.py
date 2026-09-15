@@ -16,7 +16,7 @@ class FuenteDatosSerializer(serializers.ModelSerializer):
     responsable = serializers.CharField(read_only=True)
     responsable_id = serializers.PrimaryKeyRelatedField(read_only=True, source="reportador")
     responsable_id_write = serializers.PrimaryKeyRelatedField(
-        queryset=Usuario.objects.filter(roles__codigo="reportador").distinct(),
+        queryset=Usuario.objects.filter(nivel__in=["reportador", "admin"]),
         source="reportador",
         write_only=True,
         required=False,

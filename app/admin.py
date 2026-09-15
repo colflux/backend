@@ -2,7 +2,7 @@ from django.contrib import admin
 
 from .models import (
     Autor, CaracterizacionMuestreoSuelo, Cobertura,
-    FuenteDatos, Institucion, RolUsuario, Usuario, UsuarioRol,
+    FuenteDatos, Institucion, RolUsuario, Usuario,
     ConfiguracionSensorGas, Departamento, Disturbio, Equipo,
     MonitoreoParcela, MonitoreoSuelo, Municipio,
     Parcela, Proyecto, ProyectoInstitucion, ProyectoUsuario, Publicacion, PublicacionAutor,
@@ -203,16 +203,10 @@ class RolUsuarioAdmin(admin.ModelAdmin):
 
 @admin.register(Usuario)
 class UsuarioAdmin(admin.ModelAdmin):
-    list_display = ("nombre", "cargo", "correo_institucional", "correo", "institucion")
+    list_display = ("nombre", "cargo", "correo_institucional", "correo", "institucion", "nivel")
     search_fields = ("nombre", "correo_institucional", "institucion__nombre")
-    list_filter = ("institucion", "roles")
+    list_filter = ("institucion", "nivel")
     raw_id_fields = ("institucion",)
-
-
-@admin.register(UsuarioRol)
-class UsuarioRolAdmin(admin.ModelAdmin):
-    list_display = ("usuario", "rol")
-    raw_id_fields = ("usuario", "rol")
 
 
 @admin.register(FuenteDatos)

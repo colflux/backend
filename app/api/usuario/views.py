@@ -4,6 +4,7 @@ from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 
 from app.api.base import DataPortalModelViewSet
+from app.api.permisos import EscrituraRequiereAdmin
 from app.api.usuario.serializers import RolUsuarioSerializer, UsuarioSerializer
 from app.models import RolUsuario, Usuario
 
@@ -24,8 +25,8 @@ class BloquearPasswordAnonima(BasePermission):
 
 class UsuarioViewSet(DataPortalModelViewSet):
     authentication_classes = [*DataPortalModelViewSet.authentication_classes, TokenAuthentication]
-    permission_classes = [*DataPortalModelViewSet.permission_classes, BloquearPasswordAnonima]
-    queryset = Usuario.objects.select_related("institucion").prefetch_related("roles")
+    permission_classes = [*DataPortalModelViewSet.permission_classes, BloquearPasswordAnonima, EscrituraRequiereAdmin]
+    queryset = Usuario.objects.select_related("institucion")
     serializer_class = UsuarioSerializer
 
     def create(self, request, *args, **kwargs):
@@ -40,9 +41,11 @@ class UsuarioViewSet(DataPortalModelViewSet):
 
 class ReportadorViewSet(UsuarioViewSet):
     def get_queryset(self):
-        return super().get_queryset().filter(roles__codigo="reportador").distinct()
+        return super().get_queryset().filter(nivel__in=["reportador", "admin"])
 
 
 class RolUsuarioViewSet(DataPortalModelViewSet):
+    authentication_classes = [*DataPortalModelViewSet.authentication_classes, TokenAuthentication]
+    permission_classes = [*DataPortalModelViewSet.permission_classes, EscrituraRequiereAdmin]
     queryset = RolUsuario.objects.all()
     serializer_class = RolUsuarioSerializer

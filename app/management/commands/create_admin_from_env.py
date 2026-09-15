@@ -37,10 +37,16 @@ class Command(BaseCommand):
         if email:
             usuario, created = Usuario.objects.get_or_create(
                 auth_user=user,
-                defaults={"nombre": username, "correo": email},
+                defaults={"nombre": username, "correo": email, "nivel": "admin"},
             )
-            if not created and usuario.correo != email:
+            cambios = []
+            if usuario.correo != email:
                 usuario.correo = email
-                usuario.save(update_fields=["correo"])
+                cambios.append("correo")
+            if usuario.nivel != "admin":
+                usuario.nivel = "admin"
+                cambios.append("nivel")
+            if cambios:
+                usuario.save(update_fields=cambios)
             accion = "creado" if created else "ya existía"
-            self.stdout.write(self.style.SUCCESS(f"Usuario de dominio para '{username}' {accion} (correo: {email})."))
+            self.stdout.write(self.style.SUCCESS(f"Usuario de dominio para '{username}' {accion} (correo: {email}, nivel: admin)."))

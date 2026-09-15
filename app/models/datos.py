@@ -20,7 +20,19 @@ class RolUsuario(TimestampedModel):
 
 
 class Usuario(TimestampedModel):
-    """Persona vinculada a la red: datos de contacto, institución y roles que desempeña."""
+    """Persona vinculada a la red: datos de contacto, institución y nivel de acceso a la plataforma."""
+
+    # Jerarquía en cascada: cada nivel incluye todo lo que puede hacer el
+    # anterior. ciudadano = igual que un visitante sin cuenta (solo lectura
+    # pública); investigador = además puede descargar datos; reportador =
+    # además puede subir datos; admin = acceso total.
+    NIVELES_ACCESO = ("ciudadano", "investigador", "reportador", "admin")
+    NIVEL_CHOICES = [
+        ("ciudadano", "Ciudadano"),
+        ("investigador", "Investigador"),
+        ("reportador", "Reportador"),
+        ("admin", "Administrador"),
+    ]
 
     nombre = models.CharField("nombre", max_length=255)
     cargo = models.CharField("cargo", max_length=255, blank=True)
@@ -34,11 +46,8 @@ class Usuario(TimestampedModel):
         related_name="usuarios",
         verbose_name="institución",
     )
-    roles = models.ManyToManyField(
-        RolUsuario,
-        through="UsuarioRol",
-        related_name="usuarios",
-        blank=True,
+    nivel = models.CharField(
+        "nivel de acceso", max_length=20, choices=NIVEL_CHOICES, default="ciudadano",
     )
     auth_user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -57,20 +66,9 @@ class Usuario(TimestampedModel):
     def __str__(self):
         return self.nombre
 
-
-class UsuarioRol(models.Model):
-    """Relación entre un usuario y uno de sus roles."""
-
-    usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE)
-    rol = models.ForeignKey(RolUsuario, on_delete=models.CASCADE)
-
-    class Meta:
-        verbose_name = "usuario rol"
-        verbose_name_plural = "usuarios roles"
-        unique_together = [("usuario", "rol")]
-
-    def __str__(self):
-        return f"{self.usuario} — {self.rol}"
+    def tiene_nivel(self, minimo):
+        """True si este usuario tiene al menos el nivel `minimo` en la cascada."""
+        return self.NIVELES_ACCESO.index(self.nivel) >= self.NIVELES_ACCESO.index(minimo)
 
 
 class FuenteDatos(TimestampedModel):

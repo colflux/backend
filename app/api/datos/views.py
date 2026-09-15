@@ -1,13 +1,17 @@
 from django.http import JsonResponse
+from rest_framework.authentication import TokenAuthentication
 from rest_framework.exceptions import ValidationError
 
 from app.api.base import DataPortalModelViewSet
 from app.api.datos.serializers import FuenteDatosSerializer
+from app.api.permisos import EscrituraRequiereReportador
 from app.api.proyecto.serializers import ProyectoResumenSerializer
 from app.models import FuenteDatos, Proyecto
 
 
 class FuenteDatosViewSet(DataPortalModelViewSet):
+    authentication_classes = [*DataPortalModelViewSet.authentication_classes, TokenAuthentication]
+    permission_classes = [*DataPortalModelViewSet.permission_classes, EscrituraRequiereReportador]
     queryset = FuenteDatos.objects.select_related("proyecto", "reportador")
     serializer_class = FuenteDatosSerializer
 

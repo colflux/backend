@@ -77,7 +77,7 @@ GRUPOS_CATALOGO = [
     {
         "nombre": "Usuarios, Roles y ETL",
         "icono": "📂",
-        "entidades": ["Usuario", "RolUsuario", "UsuarioRol", "FuenteDatos", "CargaArchivo", "MapeoColumna"],
+        "entidades": ["Usuario", "RolUsuario", "FuenteDatos", "CargaArchivo", "MapeoColumna"],
     },
 ]
 
