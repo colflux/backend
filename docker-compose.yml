@@ -1,20 +1,4 @@
 services:
-  db:
-    image: postgis/postgis:16-3.4-alpine
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-ghg}
-      POSTGRES_USER: ${POSTGRES_USER:-ghg}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ghg}
-    ports:
-      - "${DB_PORT:-5432}:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ghg} -d ${POSTGRES_DB:-ghg}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   web:
     build: .
     command: sh -c "python manage.py migrate && python manage.py generate_catalogo && python manage.py collectstatic --noinput && gunicorn colflux.wsgi:application --bind 0.0.0.0:8000"
@@ -29,11 +13,5 @@ services:
       LOAD_SEED_DATA: ${LOAD_SEED_DATA:-}
     ports:
       - "${WEB_PORT:-8000}:8000"
-    depends_on:
-      db:
-        condition: service_healthy
     volumes:
       - .:/app
-
-volumes:
-  postgres_data:
