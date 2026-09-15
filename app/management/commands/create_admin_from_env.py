@@ -3,6 +3,8 @@ import os
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 
+from app.models import Usuario
+
 
 class Command(BaseCommand):
     help = "Create a Django superuser from environment variables if it does not exist."
@@ -25,7 +27,20 @@ class Command(BaseCommand):
             user.is_staff = True
             user.save()
             self.stdout.write(self.style.SUCCESS(f"Admin user '{username}' actualizado (contraseña sincronizada con .env)."))
-            return
+        else:
+            user = User.objects.create_superuser(username=username, email=email, password=password)
+            self.stdout.write(self.style.SUCCESS(f"Admin user '{username}' creado."))
 
-        User.objects.create_superuser(username=username, email=email, password=password)
-        self.stdout.write(self.style.SUCCESS(f"Admin user '{username}' creado."))
+        # También se vincula un `Usuario` de dominio con el mismo correo, para
+        # que esta cuenta pueda loguearse por /api/auth/login/ (login del
+        # frontend, que busca por correo, no por username — ver LoginView).
+        if email:
+            usuario, created = Usuario.objects.get_or_create(
+                auth_user=user,
+                defaults={"nombre": username, "correo": email},
+            )
+            if not created and usuario.correo != email:
+                usuario.correo = email
+                usuario.save(update_fields=["correo"])
+            accion = "creado" if created else "ya existía"
+            self.stdout.write(self.style.SUCCESS(f"Usuario de dominio para '{username}' {accion} (correo: {email})."))
