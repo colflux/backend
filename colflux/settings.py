@@ -115,5 +115,6 @@ REST_FRAMEWORK = {
     # API sigue sin throttling global, consistente con AllowAny en DataPortalModelViewSet.
     "DEFAULT_THROTTLE_RATES": {
         "login": "5/min",
+        "registro": "5/min",
     },
 }

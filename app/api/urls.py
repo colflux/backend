@@ -1,7 +1,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from app.api.auth.views import LoginView, LogoutView, MeView
+from app.api.auth.views import LoginView, LogoutView, MeView, RegistroView
 from app.api.dashboard.views import DashboardView, DataModelView, VisualizerView, chart_data
 from app.api.datos.views import FuenteDatosViewSet, fuentes_datos_api
 from app.api.etl.views import (
@@ -16,13 +16,14 @@ from app.api.reglas.views import (
     parametros_regla_autollenado, previsualizar_regla_autollenado, reglas_autollenado,
 )
 from app.api.reportador.views import ReportadorViewSet
-from app.api.usuario.views import RolUsuarioViewSet, UsuarioViewSet
+from app.api.usuario.views import RolUsuarioViewSet, SolicitudNivelViewSet, UsuarioViewSet
 
 router = DefaultRouter()
 router.register("api/fuentes-datos-crud", FuenteDatosViewSet, basename="fuentes-datos-crud")
 router.register("api/proyectos", ProyectoViewSet, basename="proyectos")
 router.register("api/usuarios", UsuarioViewSet, basename="usuarios")
 router.register("api/roles-usuario", RolUsuarioViewSet, basename="roles-usuario")
+router.register("api/solicitudes-nivel", SolicitudNivelViewSet, basename="solicitudes-nivel")
 router.register("api/responsables", ReportadorViewSet, basename="responsables")
 router.register("api/instituciones", InstitucionViewSet, basename="instituciones")
 
@@ -32,6 +33,7 @@ urlpatterns = [
     path("modelo-datos/", DataModelView.as_view(), name="data-model"),
     path("chart-data/", chart_data, name="chart-data"),
     path("api/auth/login/", LoginView.as_view(), name="auth-login"),
+    path("api/auth/registro/", RegistroView.as_view(), name="auth-registro"),
     path("api/auth/logout/", LogoutView.as_view(), name="auth-logout"),
     path("api/auth/me/", MeView.as_view(), name="auth-me"),
     path("api/fuentes-datos/", fuentes_datos_api, name="fuentes-datos-api"),
