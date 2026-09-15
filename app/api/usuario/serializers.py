@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.db import transaction
 
 from rest_framework import serializers
 
@@ -66,7 +67,15 @@ class UsuarioSerializer(serializers.ModelSerializer):
         User = get_user_model()
         auth_user = usuario.auth_user
         if auth_user is None:
-            auth_user, _ = User.objects.get_or_create(username=correo, defaults={"email": correo})
+            auth_user, creada = User.objects.get_or_create(username=correo, defaults={"email": correo})
+            if not creada:
+                # Ya existía una cuenta de acceso con este correo (por ejemplo un
+                # superusuario) y no está ligada a este Usuario todavía — no la
+                # reutilizamos silenciosamente, porque eso le pisaría la
+                # contraseña a una cuenta ajena.
+                raise serializers.ValidationError(
+                    {"password": "Ya existe una cuenta de acceso con este correo. Usa otro correo o contacta a un administrador."}
+                )
             usuario.auth_user = auth_user
             usuario.save(update_fields=["auth_user", "updated_at"])
         elif auth_user.username != correo:
@@ -76,6 +85,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
         auth_user.set_password(password)
         auth_user.save()
 
+    @transaction.atomic
     def create(self, validated_data):
         roles = validated_data.pop("roles", [])
         password = validated_data.pop("password", "")
@@ -111,6 +121,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
         self._sincronizar_login(usuario, password)
         return usuario
 
+    @transaction.atomic
     def update(self, instance, validated_data):
         password = validated_data.pop("password", "")
         roles = validated_data.pop("roles", None)

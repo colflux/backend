@@ -98,3 +98,12 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
 CORS_ALLOW_ALL_ORIGINS = True  # el prototipo en docs consume esta API desde otro origen
+
+# ── DRF ───────────────────────────────────────────────────────────────────────
+REST_FRAMEWORK = {
+    # Solo limita el scope "login" (fuerza bruta de contraseña); el resto de la
+    # API sigue sin throttling global, consistente con AllowAny en DataPortalModelViewSet.
+    "DEFAULT_THROTTLE_RATES": {
+        "login": "5/min",
+    },
+}
