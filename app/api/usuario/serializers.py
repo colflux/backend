@@ -3,13 +3,33 @@ from django.db import transaction
 
 from rest_framework import serializers
 
-from app.models import Institucion, RolUsuario, Usuario
+from app.models import Institucion, RolUsuario, SolicitudNivel, Usuario
 
 
 class RolUsuarioSerializer(serializers.ModelSerializer):
     class Meta:
         model = RolUsuario
         fields = ["id", "codigo", "nombre"]
+
+
+class SolicitudNivelSerializer(serializers.ModelSerializer):
+    usuario_nombre = serializers.CharField(source="usuario.nombre", read_only=True)
+    nivel_actual = serializers.CharField(source="usuario.nivel", read_only=True)
+
+    class Meta:
+        model = SolicitudNivel
+        fields = [
+            "id",
+            "usuario",
+            "usuario_nombre",
+            "nivel_actual",
+            "nivel_solicitado",
+            "motivo",
+            "estado",
+            "resuelta_por",
+            "created_at",
+        ]
+        read_only_fields = ["usuario", "resuelta_por", "created_at"]
 
 
 class UsuarioSerializer(serializers.ModelSerializer):

@@ -26,7 +26,7 @@ from .co2 import (
 
 from .publicacion import Autor, Publicacion, PublicacionAutor, PublicacionSitio, PublicacionType, ResultadoPublicacion
 
-from .datos import CargaArchivo, FuenteDatos, MapeoColumna, RolUsuario, Usuario
+from .datos import CargaArchivo, FuenteDatos, MapeoColumna, RolUsuario, SolicitudNivel, Usuario
 
 from .reglas import AplicacionRegla, ReglaAutollenado
 

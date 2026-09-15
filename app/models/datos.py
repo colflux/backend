@@ -71,6 +71,46 @@ class Usuario(TimestampedModel):
         return self.NIVELES_ACCESO.index(self.nivel) >= self.NIVELES_ACCESO.index(minimo)
 
 
+class SolicitudNivel(TimestampedModel):
+    """Pedido de un usuario para subir su nivel de acceso, que un admin aprueba o rechaza.
+
+    Aprobarla actualiza `Usuario.nivel` al nivel solicitado; rechazarla solo
+    cambia el estado. Un usuario solo puede tener una solicitud `pendiente`
+    a la vez (se valida en la vista, no acá).
+    """
+
+    NIVELES_SOLICITABLES = [n for n in Usuario.NIVELES_ACCESO if n != "ciudadano"]
+    NIVEL_CHOICES = [c for c in Usuario.NIVEL_CHOICES if c[0] != "ciudadano"]
+    ESTADO_CHOICES = [
+        ("pendiente", "Pendiente"),
+        ("aprobada", "Aprobada"),
+        ("rechazada", "Rechazada"),
+    ]
+
+    usuario = models.ForeignKey(
+        Usuario, on_delete=models.CASCADE, related_name="solicitudes_nivel", verbose_name="usuario",
+    )
+    nivel_solicitado = models.CharField("nivel solicitado", max_length=20, choices=NIVEL_CHOICES)
+    motivo = models.TextField("motivo", blank=True)
+    estado = models.CharField("estado", max_length=20, choices=ESTADO_CHOICES, default="pendiente")
+    resuelta_por = models.ForeignKey(
+        Usuario,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="solicitudes_resueltas",
+        verbose_name="resuelta por",
+    )
+
+    class Meta:
+        verbose_name = "solicitud de nivel"
+        verbose_name_plural = "solicitudes de nivel"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.usuario.nombre} → {self.nivel_solicitado} ({self.estado})"
+
+
 class FuenteDatos(TimestampedModel):
     """Fuente de datos reportada a un proyecto (archivo Excel/CSV, shapefile, API, …) y su estado de procesamiento."""
 

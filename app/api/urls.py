@@ -16,13 +16,14 @@ from app.api.reglas.views import (
     parametros_regla_autollenado, previsualizar_regla_autollenado, reglas_autollenado,
 )
 from app.api.reportador.views import ReportadorViewSet
-from app.api.usuario.views import RolUsuarioViewSet, UsuarioViewSet
+from app.api.usuario.views import RolUsuarioViewSet, SolicitudNivelViewSet, UsuarioViewSet
 
 router = DefaultRouter()
 router.register("api/fuentes-datos-crud", FuenteDatosViewSet, basename="fuentes-datos-crud")
 router.register("api/proyectos", ProyectoViewSet, basename="proyectos")
 router.register("api/usuarios", UsuarioViewSet, basename="usuarios")
 router.register("api/roles-usuario", RolUsuarioViewSet, basename="roles-usuario")
+router.register("api/solicitudes-nivel", SolicitudNivelViewSet, basename="solicitudes-nivel")
 router.register("api/responsables", ReportadorViewSet, basename="responsables")
 router.register("api/instituciones", InstitucionViewSet, basename="instituciones")
 

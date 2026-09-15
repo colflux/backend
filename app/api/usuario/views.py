@@ -1,12 +1,13 @@
-from rest_framework import status
+from rest_framework import mixins, status, viewsets
 from rest_framework.authentication import TokenAuthentication
-from rest_framework.permissions import BasePermission
+from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 
 from app.api.base import DataPortalModelViewSet
 from app.api.permisos import EscrituraRequiereAdmin
-from app.api.usuario.serializers import RolUsuarioSerializer, UsuarioSerializer
-from app.models import RolUsuario, Usuario
+from app.api.usuario.serializers import RolUsuarioSerializer, SolicitudNivelSerializer, UsuarioSerializer
+from app.models import RolUsuario, SolicitudNivel, Usuario
 
 
 class BloquearPasswordAnonima(BasePermission):
@@ -49,3 +50,54 @@ class RolUsuarioViewSet(DataPortalModelViewSet):
     permission_classes = [*DataPortalModelViewSet.permission_classes, EscrituraRequiereAdmin]
     queryset = RolUsuario.objects.all()
     serializer_class = RolUsuarioSerializer
+
+
+class SolicitudNivelViewSet(
+    mixins.CreateModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.ListModelMixin,
+    mixins.UpdateModelMixin,
+    viewsets.GenericViewSet,
+):
+    """Solicitudes de un usuario para subir su nivel de acceso, revisadas por un admin.
+
+    Cualquier usuario autenticado crea y ve sus propias solicitudes; solo un
+    admin ve todas y puede resolverlas (cambiar `estado`), lo que además
+    actualiza `Usuario.nivel` si queda `aprobada`. No hay `destroy`: una
+    solicitud resuelta queda como historial.
+    """
+
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+    serializer_class = SolicitudNivelSerializer
+
+    def _usuario_actual(self):
+        usuario = getattr(self.request.user, "usuario", None)
+        if usuario is None:
+            raise PermissionDenied("Esta cuenta no tiene un usuario asociado.")
+        return usuario
+
+    def get_queryset(self):
+        usuario = self._usuario_actual()
+        queryset = SolicitudNivel.objects.select_related("usuario", "resuelta_por")
+        if usuario.tiene_nivel("admin"):
+            return queryset
+        return queryset.filter(usuario=usuario)
+
+    def perform_create(self, serializer):
+        usuario = self._usuario_actual()
+        if SolicitudNivel.objects.filter(usuario=usuario, estado="pendiente").exists():
+            raise ValidationError("Ya tienes una solicitud pendiente de resolver.")
+        nivel_solicitado = serializer.validated_data.get("nivel_solicitado")
+        if usuario.tiene_nivel(nivel_solicitado):
+            raise ValidationError({"nivel_solicitado": "Ese nivel no es superior al que ya tienes."})
+        serializer.save(usuario=usuario, estado="pendiente")
+
+    def perform_update(self, serializer):
+        usuario = self._usuario_actual()
+        if not usuario.tiene_nivel("admin"):
+            raise PermissionDenied("Solo un administrador puede resolver solicitudes.")
+        instancia = serializer.save(resuelta_por=usuario)
+        if instancia.estado == "aprobada":
+            instancia.usuario.nivel = instancia.nivel_solicitado
+            instancia.usuario.save(update_fields=["nivel", "updated_at"])
