@@ -1,5 +1,4 @@
 from django.urls import include, path
-from django.views.generic import RedirectView
 from rest_framework.routers import DefaultRouter
 
 from app.api.auth.views import LoginView, LogoutView, MeView
@@ -29,8 +28,6 @@ router.register("api/instituciones", InstitucionViewSet, basename="instituciones
 
 urlpatterns = [
     path("", DashboardView.as_view(), name="dashboard"),
-    path("emisiones/", RedirectView.as_view(url="/docs/pages/data.html", permanent=False), name="emission-list"),
-    path("emisiones/crear/", RedirectView.as_view(url="/docs/pages/etl-upload.html", permanent=False), name="emission-create"),
     path("visualizador/", VisualizerView.as_view(), name="visualizer"),
     path("modelo-datos/", DataModelView.as_view(), name="data-model"),
     path("chart-data/", chart_data, name="chart-data"),

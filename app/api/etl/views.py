@@ -2187,7 +2187,7 @@ def datos_proyecto(request, proyecto_id):
 
 # Hojas del Excel exportado: misma partición que las pestañas del front
 # (CO₂ / CH₄ / Unidad Muestreo-Experimental / Clima / MOM / COS / Biomasa) en
-# vez de una hoja combinada por vista — ver docs/pages/etl-datos.html (TABS).
+# vez de una hoja combinada por vista — ver DatosTabs.tsx (TABS) en el frontend React.
 _HOJAS_EXPORT = [
     {"nombre_vista": "submuestra_gei", "gas": "CO2", "hoja": "CO2 (detalle)"},
     {"nombre_vista": "submuestra_gei", "gas": "CH4", "hoja": "CH4 (detalle)"},

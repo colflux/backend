@@ -1,10 +1,11 @@
 import json
 
 from django.apps import apps
+from django.conf import settings
 from django.http import JsonResponse
 from django.views.generic import TemplateView
 
-from app.models import CargaArchivo, FuenteDatos, Proyecto, Sitio, Usuario
+from app.models import FuenteDatos, Proyecto, Sitio, Usuario
 
 
 class DashboardView(TemplateView):
@@ -12,12 +13,8 @@ class DashboardView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["sitio_count"] = Sitio.objects.count()
-        context["proyecto_count"] = Proyecto.objects.count()
-        context["fuente_count"] = FuenteDatos.objects.count()
-        context["carga_count"] = CargaArchivo.objects.count()
-        context["latest_sources"] = FuenteDatos.objects.select_related("proyecto", "reportador")[:5]
-        context["docs_data_url"] = "/docs/pages/data.html"
+        context["frontend_url"] = settings.FRONTEND_URL
+        context["backend_version"] = settings.BACKEND_VERSION
         return context
 
 

@@ -8,6 +8,16 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-only-secret-key")
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
 ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,0.0.0.0").split(",")
 
+# URL pública del frontend React (colflux/frontend) — a donde apunta este
+# backend cuando redirige/enlaza hacia la app, ya que el backend dejó de
+# servir UI propia (ver retiro de docs/pages).
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+
+# Versión del backend, mostrada en la página raíz ("/") junto al enlace al
+# frontend. Se bumpea a mano en cada release, igual que el VERSION del
+# prototipo en docs/assets/js/layout.js.
+BACKEND_VERSION = "1.1.0"
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
