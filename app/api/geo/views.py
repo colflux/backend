@@ -14,7 +14,12 @@ def sitios_geojson(request):
     metadata: un resumen agregado (todos los gases, campos *_co2 por
     compatibilidad hacia atrás) y uno desagregado por gas en
     "resumen_por_gas" (CO2/CH4/N2O). Pensado para consumirse directo desde
-    un cliente Leaflet (L.geoJSON(url))."""
+    un cliente Leaflet (L.geoJSON(url)).
+
+    Los campos "ultima_medicion_co2" y la ultima medicion de cada gas en
+    "resumen_por_gas" toman la lectura de mayor fecha; ante empate (varias
+    lecturas el mismo dia) se resuelve por el id mayor, para que el
+    resultado sea estable entre ejecuciones."""
     sitios = (
         Sitio.objects
         .select_related("vereda", "vereda__municipio", "vereda__municipio__departamento")
@@ -29,38 +34,46 @@ def sitios_geojson(request):
     # una por sitio). Se acumula tanto el resumen agregado (todos los gases,
     # para no romper clientes que ya consumen total_muestras_co2 /
     # ultima_medicion_co2) como el resumen desagregado por gas.
-    def _actualizar(resumen, sub):
-        resumen["total_muestras"] += 1
-        if resumen["primera_fecha"] is None or sub.fecha < resumen["primera_fecha"]:
-            resumen["primera_fecha"] = sub.fecha
-        if resumen["ultima_fecha"] is None or sub.fecha >= resumen["ultima_fecha"]:
-            resumen["ultima_fecha"] = sub.fecha
-            resumen["ultimo_valor"] = float(sub.valor) if sub.valor is not None else None
-            resumen["ultima_unidad"] = sub.muestra.unidad_medida.codigo if sub.muestra.unidad_medida_id else None
+    SITIO = "muestra__unidad_muestreo__sitio_id"
+    base = SubmuestraGEI.objects.exclude(fecha=None).exclude(**{SITIO: None})
 
-    resumen_por_sitio = {}
+    # Conteo y rango de fechas por sitio, agregados en la base.
+    resumen_por_sitio = {
+        fila[SITIO]: {
+            "total_muestras": fila["total"],
+            "primera_fecha": fila["desde"],
+            "ultima_fecha": fila["hasta"],
+            "ultimo_valor": None,
+            "ultima_unidad": None,
+        }
+        for fila in base.values(SITIO).annotate(total=Count("id"), desde=Min("fecha"), hasta=Max("fecha"))
+    }
+
+    # Ultima medicion por sitio con DISTINCT ON; ante empate de fecha gana el
+    # id mayor, para que el resultado sea estable entre ejecuciones.
+    for fila in base.order_by(SITIO, "-fecha", "-id").distinct(SITIO).values(SITIO, "valor", "muestra__unidad_medida__codigo"):
+        r = resumen_por_sitio.get(fila[SITIO])
+        if r is not None:
+            r["ultimo_valor"] = float(fila["valor"]) if fila["valor"] is not None else None
+            r["ultima_unidad"] = fila["muestra__unidad_medida__codigo"]
+
+    con_gas = base.exclude(muestra__gas="").exclude(muestra__gas=None)
+
     resumen_por_sitio_y_gas = {}
-    submuestras = (
-        SubmuestraGEI.objects
-        .exclude(fecha=None)
-        .select_related("muestra__unidad_muestreo", "muestra__unidad_medida")
-        .order_by("fecha")
-    )
-    for sub in submuestras:
-        sitio_id = sub.muestra.unidad_muestreo_id and sub.muestra.unidad_muestreo.sitio_id
-        if sitio_id is None:
-            continue
-        gas = sub.muestra.gas or None
+    for fila in con_gas.values(SITIO, "muestra__gas").annotate(total=Count("id"), desde=Min("fecha"), hasta=Max("fecha")):
+        resumen_por_sitio_y_gas.setdefault(fila[SITIO], {})[fila["muestra__gas"]] = {
+            "total_muestras": fila["total"],
+            "primera_fecha": fila["desde"],
+            "ultima_fecha": fila["hasta"],
+            "ultimo_valor": None,
+            "ultima_unidad": None,
+        }
 
-        _actualizar(resumen_por_sitio.setdefault(sitio_id, {
-            "total_muestras": 0, "primera_fecha": None, "ultima_fecha": None,
-            "ultimo_valor": None, "ultima_unidad": None,
-        }), sub)
-        if gas is not None:
-            _actualizar(resumen_por_sitio_y_gas.setdefault(sitio_id, {}).setdefault(gas, {
-                "total_muestras": 0, "primera_fecha": None, "ultima_fecha": None,
-                "ultimo_valor": None, "ultima_unidad": None,
-            }), sub)
+    for fila in con_gas.order_by(SITIO, "muestra__gas", "-fecha", "-id").distinct(SITIO, "muestra__gas").values(SITIO, "muestra__gas", "valor", "muestra__unidad_medida__codigo"):
+        r = resumen_por_sitio_y_gas.get(fila[SITIO], {}).get(fila["muestra__gas"])
+        if r is not None:
+            r["ultimo_valor"] = float(fila["valor"]) if fila["valor"] is not None else None
+            r["ultima_unidad"] = fila["muestra__unidad_medida__codigo"]
 
     features = []
     for sitio in sitios:
