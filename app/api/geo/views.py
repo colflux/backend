@@ -195,30 +195,38 @@ def series_co2(request):
     if region_id:
         qs = qs.filter(muestra__unidad_muestreo__sitio__vereda__municipio__departamento__region_id=region_id)
 
-    resultados = []
-    for sub in qs:
-        um = sub.muestra.unidad_muestreo
-        sitio = um.sitio if um else None
-        ue = um.unidad_experimental if um else None
-        vereda = sitio.vereda if sitio and sitio.vereda_id else None
-        municipio = vereda.municipio if vereda and vereda.municipio_id else None
-        resultados.append({
-            "fecha": sub.fecha.isoformat(),
-            "valor": float(sub.valor) if sub.valor is not None else None,
-            "unidad": sub.muestra.unidad_medida.codigo if sub.muestra.unidad_medida_id else None,
-            "gas": sub.muestra.gas or None,
-            "sitio_id": sitio.pk if sitio else None,
-            "sitio_nombre": sitio.nombre if sitio else None,
-            "vereda_id": vereda.pk if vereda else None,
-            "vereda": vereda.nombre if vereda else None,
-            "departamento_id": municipio.departamento_id if municipio and municipio.departamento_id else None,
-            "departamento": (
-                municipio.departamento.nombre
-                if municipio and municipio.departamento_id else None
-            ),
-            "proyecto_id": ue.proyecto_id if ue else None,
-            "proyecto_nombre": ue.proyecto.nombre if ue and ue.proyecto_id else None,
-        })
+    campos = qs.values(
+        "fecha",
+        "valor",
+        "muestra__unidad_medida__codigo",
+        "muestra__gas",
+        "muestra__unidad_muestreo__sitio_id",
+        "muestra__unidad_muestreo__sitio__nombre",
+        "muestra__unidad_muestreo__sitio__vereda_id",
+        "muestra__unidad_muestreo__sitio__vereda__nombre",
+        "muestra__unidad_muestreo__sitio__vereda__municipio__departamento_id",
+        "muestra__unidad_muestreo__sitio__vereda__municipio__departamento__nombre",
+        "muestra__unidad_muestreo__unidad_experimental__proyecto_id",
+        "muestra__unidad_muestreo__unidad_experimental__proyecto__nombre",
+    )
+
+    resultados = [
+        {
+            "fecha": f["fecha"].isoformat(),
+            "valor": float(f["valor"]) if f["valor"] is not None else None,
+            "unidad": f["muestra__unidad_medida__codigo"],
+            "gas": f["muestra__gas"] or None,
+            "sitio_id": f["muestra__unidad_muestreo__sitio_id"],
+            "sitio_nombre": f["muestra__unidad_muestreo__sitio__nombre"],
+            "vereda_id": f["muestra__unidad_muestreo__sitio__vereda_id"],
+            "vereda": f["muestra__unidad_muestreo__sitio__vereda__nombre"],
+            "departamento_id": f["muestra__unidad_muestreo__sitio__vereda__municipio__departamento_id"],
+            "departamento": f["muestra__unidad_muestreo__sitio__vereda__municipio__departamento__nombre"],
+            "proyecto_id": f["muestra__unidad_muestreo__unidad_experimental__proyecto_id"],
+            "proyecto_nombre": f["muestra__unidad_muestreo__unidad_experimental__proyecto__nombre"],
+        }
+        for f in campos
+    ]
 
     return JsonResponse({"count": len(resultados), "resultados": resultados})
 
