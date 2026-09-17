@@ -283,6 +283,10 @@ def resumen_geografico(request):
     if region_id:
         qs = qs.filter(muestra__unidad_muestreo__sitio__vereda__municipio__departamento__region_id=region_id)
 
+    sitio_id = request.GET.get("sitio")
+    if sitio_id:
+        qs = qs.filter(muestra__unidad_muestreo__sitio_id=sitio_id)
+
     grupos = {}
     for sub in qs:
         um = sub.muestra.unidad_muestreo
