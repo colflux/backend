@@ -3,6 +3,7 @@
     {
       "nombre": "Publicaciones",
       "icono": "📄",
+      "color": "#475569",
       "entidades": [
         {
           "nombre": "PublicacionType",
@@ -350,6 +351,7 @@
     {
       "nombre": "Geografía",
       "icono": "🗺️",
+      "color": "#ff6f61",
       "entidades": [
         {
           "nombre": "Region",
@@ -1184,6 +1186,7 @@
     {
       "nombre": "Unidad de Muestreo y Experimental",
       "icono": "📍",
+      "color": "#7c3aed",
       "entidades": [
         {
           "nombre": "UnidadMuestreoTipo",
@@ -1544,6 +1547,7 @@
     {
       "nombre": "Cobertura y Vegetación",
       "icono": "🌿",
+      "color": "#0f8139",
       "entidades": [
         {
           "nombre": "TipoCobertura",
@@ -1993,6 +1997,7 @@
     {
       "nombre": "Suelo",
       "icono": "🪨",
+      "color": "#e69138",
       "entidades": [
         {
           "nombre": "CaracterizacionMuestreoSuelo",
@@ -2142,6 +2147,7 @@
     {
       "nombre": "Carbono Orgánico del Suelo (COS)",
       "icono": "🧫",
+      "color": "#e69138",
       "entidades": [
         {
           "nombre": "SubmuestraSuelo",
@@ -2311,6 +2317,7 @@
     {
       "nombre": "Biomasa",
       "icono": "🌳",
+      "color": "#88bb72",
       "entidades": [
         {
           "nombre": "MuestraBiomasa",
@@ -2610,6 +2617,7 @@
     {
       "nombre": "Materia Orgánica Muerta (MOM)",
       "icono": "🍂",
+      "color": "#c36c2d",
       "entidades": [
         {
           "nombre": "MuestraMOM",
@@ -2834,6 +2842,7 @@
     {
       "nombre": "Torre EC y Flujos",
       "icono": "📡",
+      "color": "#3c78d8",
       "entidades": [
         {
           "nombre": "TorreEc",
@@ -3080,6 +3089,7 @@
     {
       "nombre": "Muestras GEI",
       "icono": "🫧",
+      "color": "#3c78d8",
       "entidades": [
         {
           "nombre": "UnidadMedida",
@@ -3135,14 +3145,14 @@
           ],
           "datos_semilla": [
             {
-              "id": 5,
+              "id": 4,
               "codigo": "ch4_flux_micromol_m2_s",
               "descripcion": "Flujo de CH4 (µmol m-2 s-1)",
               "magnitud": "flujo",
               "simbolo": "µmol m-2 s-1"
             },
             {
-              "id": 4,
+              "id": 5,
               "codigo": "co2_flux_micromol_m2_s",
               "descripcion": "Flujo de CO2 (µmol m-2 s-1)",
               "magnitud": "flujo",
@@ -3226,14 +3236,8 @@
               "descripcion": ""
             },
             {
-              "id": 7,
+              "id": 5,
               "modelo": "IFD",
-              "serial": "",
-              "descripcion": ""
-            },
-            {
-              "id": 6,
-              "modelo": "LICOR 8100",
               "serial": "",
               "descripcion": ""
             },
@@ -3244,7 +3248,13 @@
               "descripcion": ""
             },
             {
-              "id": 5,
+              "id": 6,
+              "modelo": "LICOR 8100",
+              "serial": "",
+              "descripcion": ""
+            },
+            {
+              "id": 7,
               "modelo": "Picarro",
               "serial": "",
               "descripcion": ""
@@ -3711,6 +3721,7 @@
     {
       "nombre": "Proyecto",
       "icono": "🗂️",
+      "color": "#333faf",
       "entidades": [
         {
           "nombre": "Proyecto",
@@ -4027,12 +4038,13 @@
     {
       "nombre": "Usuarios, Roles y ETL",
       "icono": "📂",
+      "color": "#ffd966",
       "entidades": [
         {
           "nombre": "Usuario",
           "verbose_name": "usuario",
           "verbose_name_plural": "usuarios",
-          "descripcion": "Persona vinculada a la red: datos de contacto, institución y roles que desempeña.",
+          "descripcion": "Persona vinculada a la red: datos de contacto, institución y nivel de acceso a la plataforma.",
           "total_campos": 7,
           "campos": [
             {
@@ -4091,21 +4103,38 @@
               "modelo_fk": "Institucion"
             },
             {
-              "nombre": "auth_user",
-              "verbose_name": "cuenta de acceso",
-              "tipo": "OneToOneField",
-              "tipo_raw": "OneToOneField",
-              "requerido": false,
-              "max_length": null,
-              "choices": [],
+              "nombre": "nivel",
+              "verbose_name": "nivel de acceso",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": true,
+              "max_length": 20,
+              "choices": [
+                {
+                  "valor": "ciudadano",
+                  "etiqueta": "Ciudadano"
+                },
+                {
+                  "valor": "investigador",
+                  "etiqueta": "Investigador"
+                },
+                {
+                  "valor": "reportador",
+                  "etiqueta": "Reportador"
+                },
+                {
+                  "valor": "admin",
+                  "etiqueta": "Administrador"
+                }
+              ],
               "es_fk": false,
               "modelo_fk": null
             },
             {
-              "nombre": "roles",
-              "verbose_name": "roles",
-              "tipo": "ManyToManyField",
-              "tipo_raw": "ManyToManyField",
+              "nombre": "auth_user",
+              "verbose_name": "cuenta de acceso",
+              "tipo": "OneToOneField",
+              "tipo_raw": "OneToOneField",
               "requerido": false,
               "max_length": null,
               "choices": [],
@@ -4142,37 +4171,6 @@
               "choices": [],
               "es_fk": false,
               "modelo_fk": null
-            }
-          ]
-        },
-        {
-          "nombre": "UsuarioRol",
-          "verbose_name": "usuario rol",
-          "verbose_name_plural": "usuarios roles",
-          "descripcion": "Relación entre un usuario y uno de sus roles.",
-          "total_campos": 2,
-          "campos": [
-            {
-              "nombre": "usuario",
-              "verbose_name": "usuario",
-              "tipo": "FK (relación)",
-              "tipo_raw": "ForeignKey",
-              "requerido": true,
-              "max_length": null,
-              "choices": [],
-              "es_fk": true,
-              "modelo_fk": "Usuario"
-            },
-            {
-              "nombre": "rol",
-              "verbose_name": "rol",
-              "tipo": "FK (relación)",
-              "tipo_raw": "ForeignKey",
-              "requerido": true,
-              "max_length": null,
-              "choices": [],
-              "es_fk": true,
-              "modelo_fk": "RolUsuario"
             }
           ]
         },
