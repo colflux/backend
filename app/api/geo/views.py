@@ -1,9 +1,10 @@
 import json
 
+from django.db.models import Avg, Count, Max, Min
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 
-from app.models import Sitio, SubmuestraGEI
+from app.models import Departamento, Municipio, Region, Sitio, SubmuestraGEI, Vereda
 
 
 @require_GET
@@ -13,7 +14,12 @@ def sitios_geojson(request):
     metadata: un resumen agregado (todos los gases, campos *_co2 por
     compatibilidad hacia atrás) y uno desagregado por gas en
     "resumen_por_gas" (CO2/CH4/N2O). Pensado para consumirse directo desde
-    un cliente Leaflet (L.geoJSON(url))."""
+    un cliente Leaflet (L.geoJSON(url)).
+
+    Los campos "ultima_medicion_co2" y la ultima medicion de cada gas en
+    "resumen_por_gas" toman la lectura de mayor fecha; ante empate (varias
+    lecturas el mismo dia) se resuelve por el id mayor, para que el
+    resultado sea estable entre ejecuciones."""
     sitios = (
         Sitio.objects
         .select_related("vereda", "vereda__municipio", "vereda__municipio__departamento")
@@ -28,38 +34,46 @@ def sitios_geojson(request):
     # una por sitio). Se acumula tanto el resumen agregado (todos los gases,
     # para no romper clientes que ya consumen total_muestras_co2 /
     # ultima_medicion_co2) como el resumen desagregado por gas.
-    def _actualizar(resumen, sub):
-        resumen["total_muestras"] += 1
-        if resumen["primera_fecha"] is None or sub.fecha < resumen["primera_fecha"]:
-            resumen["primera_fecha"] = sub.fecha
-        if resumen["ultima_fecha"] is None or sub.fecha >= resumen["ultima_fecha"]:
-            resumen["ultima_fecha"] = sub.fecha
-            resumen["ultimo_valor"] = float(sub.valor) if sub.valor is not None else None
-            resumen["ultima_unidad"] = sub.muestra.unidad_medida.codigo if sub.muestra.unidad_medida_id else None
+    SITIO = "muestra__unidad_muestreo__sitio_id"
+    base = SubmuestraGEI.objects.exclude(fecha=None).exclude(**{SITIO: None})
 
-    resumen_por_sitio = {}
+    # Conteo y rango de fechas por sitio, agregados en la base.
+    resumen_por_sitio = {
+        fila[SITIO]: {
+            "total_muestras": fila["total"],
+            "primera_fecha": fila["desde"],
+            "ultima_fecha": fila["hasta"],
+            "ultimo_valor": None,
+            "ultima_unidad": None,
+        }
+        for fila in base.values(SITIO).annotate(total=Count("id"), desde=Min("fecha"), hasta=Max("fecha"))
+    }
+
+    # Ultima medicion por sitio con DISTINCT ON; ante empate de fecha gana el
+    # id mayor, para que el resultado sea estable entre ejecuciones.
+    for fila in base.order_by(SITIO, "-fecha", "-id").distinct(SITIO).values(SITIO, "valor", "muestra__unidad_medida__codigo"):
+        r = resumen_por_sitio.get(fila[SITIO])
+        if r is not None:
+            r["ultimo_valor"] = float(fila["valor"]) if fila["valor"] is not None else None
+            r["ultima_unidad"] = fila["muestra__unidad_medida__codigo"]
+
+    con_gas = base.exclude(muestra__gas="").exclude(muestra__gas=None)
+
     resumen_por_sitio_y_gas = {}
-    submuestras = (
-        SubmuestraGEI.objects
-        .exclude(fecha=None)
-        .select_related("muestra__unidad_muestreo", "muestra__unidad_medida")
-        .order_by("fecha")
-    )
-    for sub in submuestras:
-        sitio_id = sub.muestra.unidad_muestreo_id and sub.muestra.unidad_muestreo.sitio_id
-        if sitio_id is None:
-            continue
-        gas = sub.muestra.gas or None
+    for fila in con_gas.values(SITIO, "muestra__gas").annotate(total=Count("id"), desde=Min("fecha"), hasta=Max("fecha")):
+        resumen_por_sitio_y_gas.setdefault(fila[SITIO], {})[fila["muestra__gas"]] = {
+            "total_muestras": fila["total"],
+            "primera_fecha": fila["desde"],
+            "ultima_fecha": fila["hasta"],
+            "ultimo_valor": None,
+            "ultima_unidad": None,
+        }
 
-        _actualizar(resumen_por_sitio.setdefault(sitio_id, {
-            "total_muestras": 0, "primera_fecha": None, "ultima_fecha": None,
-            "ultimo_valor": None, "ultima_unidad": None,
-        }), sub)
-        if gas is not None:
-            _actualizar(resumen_por_sitio_y_gas.setdefault(sitio_id, {}).setdefault(gas, {
-                "total_muestras": 0, "primera_fecha": None, "ultima_fecha": None,
-                "ultimo_valor": None, "ultima_unidad": None,
-            }), sub)
+    for fila in con_gas.order_by(SITIO, "muestra__gas", "-fecha", "-id").distinct(SITIO, "muestra__gas").values(SITIO, "muestra__gas", "valor", "muestra__unidad_medida__codigo"):
+        r = resumen_por_sitio_y_gas.get(fila[SITIO], {}).get(fila["muestra__gas"])
+        if r is not None:
+            r["ultimo_valor"] = float(fila["valor"]) if fila["valor"] is not None else None
+            r["ultima_unidad"] = fila["muestra__unidad_medida__codigo"]
 
     features = []
     for sitio in sitios:
@@ -194,30 +208,38 @@ def series_co2(request):
     if region_id:
         qs = qs.filter(muestra__unidad_muestreo__sitio__vereda__municipio__departamento__region_id=region_id)
 
-    resultados = []
-    for sub in qs:
-        um = sub.muestra.unidad_muestreo
-        sitio = um.sitio if um else None
-        ue = um.unidad_experimental if um else None
-        vereda = sitio.vereda if sitio and sitio.vereda_id else None
-        municipio = vereda.municipio if vereda and vereda.municipio_id else None
-        resultados.append({
-            "fecha": sub.fecha.isoformat(),
-            "valor": float(sub.valor) if sub.valor is not None else None,
-            "unidad": sub.muestra.unidad_medida.codigo if sub.muestra.unidad_medida_id else None,
-            "gas": sub.muestra.gas or None,
-            "sitio_id": sitio.pk if sitio else None,
-            "sitio_nombre": sitio.nombre if sitio else None,
-            "vereda_id": vereda.pk if vereda else None,
-            "vereda": vereda.nombre if vereda else None,
-            "departamento_id": municipio.departamento_id if municipio and municipio.departamento_id else None,
-            "departamento": (
-                municipio.departamento.nombre
-                if municipio and municipio.departamento_id else None
-            ),
-            "proyecto_id": ue.proyecto_id if ue else None,
-            "proyecto_nombre": ue.proyecto.nombre if ue and ue.proyecto_id else None,
-        })
+    campos = qs.values(
+        "fecha",
+        "valor",
+        "muestra__unidad_medida__codigo",
+        "muestra__gas",
+        "muestra__unidad_muestreo__sitio_id",
+        "muestra__unidad_muestreo__sitio__nombre",
+        "muestra__unidad_muestreo__sitio__vereda_id",
+        "muestra__unidad_muestreo__sitio__vereda__nombre",
+        "muestra__unidad_muestreo__sitio__vereda__municipio__departamento_id",
+        "muestra__unidad_muestreo__sitio__vereda__municipio__departamento__nombre",
+        "muestra__unidad_muestreo__unidad_experimental__proyecto_id",
+        "muestra__unidad_muestreo__unidad_experimental__proyecto__nombre",
+    )
+
+    resultados = [
+        {
+            "fecha": f["fecha"].isoformat(),
+            "valor": float(f["valor"]) if f["valor"] is not None else None,
+            "unidad": f["muestra__unidad_medida__codigo"],
+            "gas": f["muestra__gas"] or None,
+            "sitio_id": f["muestra__unidad_muestreo__sitio_id"],
+            "sitio_nombre": f["muestra__unidad_muestreo__sitio__nombre"],
+            "vereda_id": f["muestra__unidad_muestreo__sitio__vereda_id"],
+            "vereda": f["muestra__unidad_muestreo__sitio__vereda__nombre"],
+            "departamento_id": f["muestra__unidad_muestreo__sitio__vereda__municipio__departamento_id"],
+            "departamento": f["muestra__unidad_muestreo__sitio__vereda__municipio__departamento__nombre"],
+            "proyecto_id": f["muestra__unidad_muestreo__unidad_experimental__proyecto_id"],
+            "proyecto_nombre": f["muestra__unidad_muestreo__unidad_experimental__proyecto__nombre"],
+        }
+        for f in campos
+    ]
 
     return JsonResponse({"count": len(resultados), "resultados": resultados})
 
@@ -234,7 +256,13 @@ def resumen_geografico(request):
     "region" no tiene geometría propia en el modelo (solo departamento,
     municipio, vereda y sitio la tienen): sus features salen con
     geometry=null y una lista "departamentos" con los departamentos que la
-    componen, para que el cliente los dibuje/resalte."""
+    componen, para que el cliente los dibuje/resalte.
+
+    "ultima_medicion" es la lectura de mayor fecha del grupo; ante empate de
+    fecha (lo habitual: varias lecturas y varios gases el mismo dia) se toma
+    la de mayor id, para que el resultado sea estable entre ejecuciones. Si
+    no se filtra por gas, esa lectura puede ser de cualquiera de los tres,
+    con su propia unidad."""
     nivel = request.GET.get("nivel", "departamento")
     if nivel not in ("departamento", "municipio", "vereda", "region", "sitio"):
         return JsonResponse(
@@ -283,25 +311,77 @@ def resumen_geografico(request):
     if region_id:
         qs = qs.filter(muestra__unidad_muestreo__sitio__vereda__municipio__departamento__region_id=region_id)
 
-    grupos = {}
-    for sub in qs:
-        um = sub.muestra.unidad_muestreo
-        sitio = um.sitio if um else None
-        if sitio is None:
-            continue
-        vereda = sitio.vereda if sitio.vereda_id else None
-        municipio = vereda.municipio if vereda and vereda.municipio_id else None
-        departamento = municipio.departamento if municipio and municipio.departamento_id else None
+    sitio_id = request.GET.get("sitio")
+    if sitio_id:
+        qs = qs.filter(muestra__unidad_muestreo__sitio_id=sitio_id)
 
-        if nivel != "sitio" and vereda is None:
-            # departamento/municipio/vereda/region no se pueden agregar sin
-            # saber a qué vereda pertenece el sitio.
+    CAMPO_POR_NIVEL = {
+        "sitio": "muestra__unidad_muestreo__sitio",
+        "vereda": "muestra__unidad_muestreo__sitio__vereda",
+        "municipio": "muestra__unidad_muestreo__sitio__vereda__municipio",
+        "departamento": "muestra__unidad_muestreo__sitio__vereda__municipio__departamento",
+        "region": "muestra__unidad_muestreo__sitio__vereda__municipio__departamento__region",
+    }
+    campo = CAMPO_POR_NIVEL[nivel]
+    campo_id = campo + "_id"
+    campo_dep = "muestra__unidad_muestreo__sitio__vereda__municipio__departamento"
+
+    # Agregar en la base en vez de materializar cada medicion en Python: una
+    # consulta con GROUP BY devuelve una fila por grupo, no una por medicion.
+    base = qs.exclude(**{campo_id: None})
+    excluidos = qs.count() - base.count()
+
+    agregados = list(
+        base.values(campo_id).annotate(
+            total_muestras=Count("id"),
+            promedio=Avg("valor"),
+            minimo=Min("valor"),
+            maximo=Max("valor"),
+            primera_fecha=Min("fecha"),
+            ultima_fecha=Max("fecha"),
+        )
+    )
+    claves = [fila[campo_id] for fila in agregados]
+
+    # Ultima medicion por grupo con DISTINCT ON de Postgres: una sola consulta
+    # en vez de recorrer todas las filas comparando fechas.
+    ultimas = {
+        fila[campo_id]: fila
+        for fila in base.filter(**{campo_id + "__in": claves})
+        .order_by(campo_id, "-fecha", "-id")
+        .distinct(campo_id)
+        .values(campo_id, "fecha", "valor", "muestra__unidad_medida__codigo")
+    }
+
+    if nivel == "sitio":
+        objetos = {o.pk: o for o in Sitio.objects.filter(pk__in=claves).select_related("vereda__municipio__departamento")}
+    elif nivel == "vereda":
+        objetos = {o.pk: o for o in Vereda.objects.filter(pk__in=claves).select_related("municipio__departamento")}
+    elif nivel == "municipio":
+        objetos = {o.pk: o for o in Municipio.objects.filter(pk__in=claves).select_related("departamento")}
+    elif nivel == "departamento":
+        objetos = {o.pk: o for o in Departamento.objects.filter(pk__in=claves).select_related("region")}
+    else:
+        objetos = {o.pk: o for o in Region.objects.filter(pk__in=claves)}
+
+    departamentos_por_region = {}
+    if nivel == "region":
+        for fila in base.filter(**{campo_id + "__in": claves}).values(campo_id, campo_dep + "_id", campo_dep + "__nombre").distinct():
+            departamentos_por_region.setdefault(fila[campo_id], {})[fila[campo_dep + "_id"]] = fila[campo_dep + "__nombre"]
+
+    features = []
+    for fila in agregados:
+        clave = fila[campo_id]
+        obj = objetos.get(clave)
+        if obj is None:
             continue
 
         if nivel == "sitio":
-            clave, nombre, geom = sitio.pk, sitio.nombre, {
-                "type": "Point", "coordinates": [float(sitio.longitud), float(sitio.latitud)],
-            }
+            vereda = obj.vereda if obj.vereda_id else None
+            municipio = vereda.municipio if vereda and vereda.municipio_id else None
+            departamento = municipio.departamento if municipio and municipio.departamento_id else None
+            nombre = obj.nombre
+            geom = {"type": "Point", "coordinates": [float(obj.longitud), float(obj.latitud)]}
             extra = {
                 "vereda_id": vereda.pk if vereda else None,
                 "vereda": vereda.nombre if vereda else None,
@@ -311,7 +391,9 @@ def resumen_geografico(request):
                 "departamento": departamento.nombre if departamento else None,
             }
         elif nivel == "vereda":
-            clave, nombre, geom = vereda.pk, vereda.nombre, vereda.geom
+            municipio = obj.municipio if obj.municipio_id else None
+            departamento = municipio.departamento if municipio and municipio.departamento_id else None
+            nombre, geom = obj.nombre, obj.geom
             extra = {
                 "municipio_id": municipio.pk if municipio else None,
                 "municipio": municipio.nombre if municipio else None,
@@ -319,70 +401,55 @@ def resumen_geografico(request):
                 "departamento": departamento.nombre if departamento else None,
             }
         elif nivel == "municipio":
-            clave, nombre, geom = municipio.pk, municipio.nombre, municipio.geom
+            departamento = obj.departamento if obj.departamento_id else None
+            nombre, geom = obj.nombre, obj.geom
             extra = {
                 "departamento_id": departamento.pk if departamento else None,
                 "departamento": departamento.nombre if departamento else None,
             }
-        elif nivel == "region":
-            if departamento is None or departamento.region_id is None:
-                continue
-            region = departamento.region
-            clave, nombre, geom = region.pk, region.get_nombre_display(), None
-            extra = {}
-        else:  # departamento
-            if departamento is None:
-                continue
-            clave, nombre, geom = departamento.pk, departamento.nombre, departamento.geom
+        elif nivel == "departamento":
+            nombre, geom = obj.nombre, obj.geom
             extra = {
-                "region_id": departamento.region_id,
-                "region": departamento.region.get_nombre_display() if departamento.region_id else None,
+                "region_id": obj.region_id,
+                "region": obj.region.get_nombre_display() if obj.region_id else None,
             }
+        else:
+            nombre, geom = obj.get_nombre_display(), None
+            extra = {}
 
-        g = grupos.setdefault(clave, {
-            "nombre": nombre, "geom": geom, "extra": extra, "total_muestras": 0,
-            "valores": [], "primera_fecha": None, "ultima_fecha": None,
-            "ultimo_valor": None, "ultima_unidad": None, "departamentos": {},
-        })
-        g["total_muestras"] += 1
-        if sub.valor is not None:
-            g["valores"].append(float(sub.valor))
-        if g["primera_fecha"] is None or sub.fecha < g["primera_fecha"]:
-            g["primera_fecha"] = sub.fecha
-        if g["ultima_fecha"] is None or sub.fecha >= g["ultima_fecha"]:
-            g["ultima_fecha"] = sub.fecha
-            g["ultimo_valor"] = float(sub.valor) if sub.valor is not None else None
-            g["ultima_unidad"] = sub.muestra.unidad_medida.codigo if sub.muestra.unidad_medida_id else None
-        if nivel == "region" and departamento is not None:
-            g["departamentos"][departamento.pk] = departamento.nombre
-
-    features = []
-    for clave, g in grupos.items():
-        valores = g["valores"]
+        ultima = ultimas.get(clave)
         properties = {
             "id": clave,
-            "nombre": g["nombre"],
-            "total_muestras": g["total_muestras"],
-            "promedio": sum(valores) / len(valores) if valores else None,
-            "minimo": min(valores) if valores else None,
-            "maximo": max(valores) if valores else None,
+            "nombre": nombre,
+            "total_muestras": fila["total_muestras"],
+            "promedio": float(fila["promedio"]) if fila["promedio"] is not None else None,
+            "minimo": float(fila["minimo"]) if fila["minimo"] is not None else None,
+            "maximo": float(fila["maximo"]) if fila["maximo"] is not None else None,
             "rango_fechas": {
-                "desde": g["primera_fecha"].isoformat() if g["primera_fecha"] else None,
-                "hasta": g["ultima_fecha"].isoformat() if g["ultima_fecha"] else None,
+                "desde": fila["primera_fecha"].isoformat() if fila["primera_fecha"] else None,
+                "hasta": fila["ultima_fecha"].isoformat() if fila["ultima_fecha"] else None,
             },
             "ultima_medicion": (
-                {"fecha": g["ultima_fecha"].isoformat(), "valor": g["ultimo_valor"], "unidad": g["ultima_unidad"]}
-                if g["ultima_fecha"] else None
+                {
+                    "fecha": ultima["fecha"].isoformat(),
+                    "valor": float(ultima["valor"]) if ultima["valor"] is not None else None,
+                    "unidad": ultima["muestra__unidad_medida__codigo"],
+                }
+                if ultima and ultima["fecha"] else None
             ),
-            **g["extra"],
+            **extra,
         }
         if nivel == "region":
             properties["departamentos"] = [
-                {"id": pk, "nombre": nom} for pk, nom in sorted(g["departamentos"].items(), key=lambda x: x[1])
+                {"id": pk, "nombre": nom}
+                for pk, nom in sorted(departamentos_por_region.get(clave, {}).items(), key=lambda x: x[1])
             ]
 
-        geom = g["geom"]
         geometry = json.loads(geom.geojson) if hasattr(geom, "geojson") else geom
         features.append({"type": "Feature", "geometry": geometry, "properties": properties})
 
-    return JsonResponse({"type": "FeatureCollection", "features": features})
+    return JsonResponse({
+        "type": "FeatureCollection",
+        "features": features,
+        "excluidos": excluidos,
+    })
