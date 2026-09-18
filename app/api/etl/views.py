@@ -20,7 +20,7 @@ from django.views.decorators.csrf import csrf_exempt
 from app.api.permisos import requiere_nivel
 from app.models import CargaArchivo, FuenteDatos, MapeoColumna, Proyecto, TipoCobertura
 
-from app.catalogo.generator import GRUPOS_CATALOGO, campo_to_catalogo, fk_choices
+from app.catalogo.generator import COLOR_POR_MODELO, GRUPOS_CATALOGO, campo_to_catalogo, fk_choices
 
 # El wizard del ETL usa su propio agrupamiento de secciones, más fino que
 # GRUPOS_CATALOGO (que sigue usándose tal cual para el catálogo de
@@ -1879,6 +1879,23 @@ def importar_carga(request, fuente_id, carga_id):
 # (equipo → gas → unidad habitual) es solo catálogo de referencia, no la
 # fuente de este dato. `fecha` sí es propia de cada SubmuestraGEI (cada toma
 # puede caer en un día distinto, p. ej. cobija nocturna cruzando medianoche).
+# Compartido por las hojas de metodología (MOM, COS, Biomasa): unidad
+# experimental, unidad muestral y coordenadas primero, como referencia para
+# cruzar con la hoja "Unidad Muestreo-Experimental" (que ya trae el detalle
+# completo del sitio y la unidad); acá solo se repiten esos datos de
+# contexto, no todo Sitio/UnidadExperimental/Parcela — el resto de columnas
+# de cada hoja es la medición propia de esa metodología.
+_CAMPOS_METODOLOGIA = {
+    "UnidadMuestreo": {"alias": {"nombre": "nombre unidad de muestreo"}},
+    "UnidadExperimental": {"incluir": ["nombre"], "alias": {"nombre": "nombre unidad experimental"}},
+    "Parcela": {"alias": {"descripcion": "descripción parcela"}},
+    "Sitio": {"incluir": ["latitud", "longitud"]},
+}
+_ORDEN_COLUMNAS_METODOLOGIA = [
+    "UnidadExperimental.nombre", "UnidadMuestreo.nombre", "Sitio.latitud", "Sitio.longitud",
+]
+
+
 _VISTAS_DESNORMALIZADAS = {
     "submuestra_gei": {
         "modelo_base": "SubmuestraGEI",
@@ -1914,8 +1931,13 @@ _VISTAS_DESNORMALIZADAS = {
             # en esta hoja, así que no se muestra.
             "SubmuestraGEI": {"excluir": ["n_toma"]},
             "Parcela": {"incluir": []},
-            "Sitio": {"incluir": []},
+            "Sitio": {"incluir": ["latitud", "longitud"]},
         },
+        # Unidad experimental, unidad muestral y coordenadas primero, como
+        # en el resto de hojas de metodología (MOM/COS/Biomasa) — el resto
+        # de columnas de esta hoja (analizador, fecha, hora, condición de
+        # luz, valor del flujo, ...) queda después, en su orden natural.
+        "orden_columnas": _ORDEN_COLUMNAS_METODOLOGIA,
     },
     "unidad_muestreo": {
         "modelo_base": "UnidadMuestreo",
@@ -1926,6 +1948,30 @@ _VISTAS_DESNORMALIZADAS = {
             ("UnidadMuestreoTipo", ["unidad_experimental", "tipo"]),
             ("Parcela", ["parcela"]),
             ("Sitio", ["sitio"]),
+        ],
+        # Cadena de 5 modelos, cada uno con su propio "nombre"/"descripción":
+        # sin alias, el Excel exportado mostraba 4 columnas "nombre" y 2
+        # "descripción" indistinguibles entre sí.
+        "campos": {
+            "UnidadMuestreo": {"alias": {"nombre": "nombre unidad de muestreo"}},
+            "UnidadExperimental": {"alias": {
+                "nombre": "nombre unidad experimental",
+                "descripcion": "descripción unidad experimental",
+            }},
+            "UnidadMuestreoTipo": {"alias": {"nombre": "tipo de unidad de muestreo"}},
+            "Parcela": {"alias": {"descripcion": "descripción parcela"}},
+            "Sitio": {"alias": {"nombre": "nombre sitio"}},
+        },
+        # Orden pedido para esta pestaña/hoja (distinto del orden natural de
+        # la cadena, que agrupa todo por modelo): primero identificar la
+        # unidad experimental y la unidad de muestreo, luego cuándo se
+        # instaló y de qué tipo es; el resto de columnas queda después, en
+        # su orden natural.
+        "orden_columnas": [
+            "UnidadExperimental.nombre",
+            "UnidadMuestreo.nombre",
+            "UnidadMuestreo.fecha_instalacion",
+            "UnidadMuestreoTipo.nombre",
         ],
     },
     "clima": {
@@ -1948,6 +1994,8 @@ _VISTAS_DESNORMALIZADAS = {
             ("Parcela", ["unidad_muestreo", "parcela"]),
             ("Sitio", ["unidad_muestreo", "sitio"]),
         ],
+        "campos": _CAMPOS_METODOLOGIA,
+        "orden_columnas": _ORDEN_COLUMNAS_METODOLOGIA,
     },
     "cos": {
         "modelo_base": "SubmuestraSuelo",
@@ -1959,6 +2007,8 @@ _VISTAS_DESNORMALIZADAS = {
             ("Parcela", ["unidad_muestreo", "parcela"]),
             ("Sitio", ["unidad_muestreo", "sitio"]),
         ],
+        "campos": _CAMPOS_METODOLOGIA,
+        "orden_columnas": _ORDEN_COLUMNAS_METODOLOGIA,
     },
     # Base "MuestraBiomasa", no "IndividuoArboreo": en los datos reales de
     # IDEAM, IndividuoArboreo siempre queda vacío (la fuente no trae
@@ -1980,6 +2030,8 @@ _VISTAS_DESNORMALIZADAS = {
             ("Parcela", ["unidad_muestreo", "parcela"]),
             ("Sitio", ["unidad_muestreo", "sitio"]),
         ],
+        "campos": _CAMPOS_METODOLOGIA,
+        "orden_columnas": _ORDEN_COLUMNAS_METODOLOGIA,
     },
 }
 
@@ -2063,6 +2115,36 @@ def _preparar_vista_proyecto(proyecto_id, nombre_vista, filtros_raw, sitio_id=No
     return _preparar_vista_pks(sorted(pks), nombre_vista, filtros_raw, sitio_id=sitio_id)
 
 
+def _reordenar_columnas(columnas, orden_prioridad):
+    """Antepone las columnas listadas en `orden_prioridad` (una lista de
+    claves "Modelo.campo", en el orden deseado) y deja el resto de columnas
+    después, en su orden original."""
+    por_clave = {c["clave"]: c for c in columnas}
+    primero = [por_clave[clave] for clave in orden_prioridad if clave in por_clave]
+    resto = [c for c in columnas if c["clave"] not in orden_prioridad]
+    return primero + resto
+
+
+def _columnas_de_vista(vista):
+    """Columnas de una vista (clave, modelo, campo, verbose_name/alias), en
+    el mismo orden en el que se ven en la página/Excel — incluye el alias y
+    el `orden_columnas` de la vista. No depende de datos: solo mira la
+    definición de la vista, así que también la usa el diccionario de datos
+    para saber en qué orden documentar cada atributo."""
+    cadena = vista["cadena"]
+    campos_por_modelo = vista.get("campos", {})
+    columnas = [
+        {"clave": f"{modelo_nombre}.{f.name}", "modelo": modelo_nombre, "campo": f.name,
+         "verbose_name": campos_por_modelo.get(modelo_nombre, {}).get("alias", {}).get(f.name, str(f.verbose_name))}
+        for modelo_nombre, _ruta in cadena
+        for f in _campos_planos(apps.get_model("app", modelo_nombre), campos_por_modelo.get(modelo_nombre))
+    ]
+    orden_columnas = vista.get("orden_columnas")
+    if orden_columnas:
+        columnas = _reordenar_columnas(columnas, orden_columnas)
+    return columnas
+
+
 def _preparar_vista_pks(pks, nombre_vista, filtros_raw, sitio_id=None):
     """Resuelve vista + queryset filtrado/ordenado a partir de una lista de
     pks del modelo base ya calculada (por una carga o por un proyecto)."""
@@ -2077,12 +2159,7 @@ def _preparar_vista_pks(pks, nombre_vista, filtros_raw, sitio_id=None):
     if not pks:
         return vista, None, None, None
 
-    columnas = [
-        {"clave": f"{modelo_nombre}.{f.name}", "modelo": modelo_nombre, "campo": f.name,
-         "verbose_name": campos_por_modelo.get(modelo_nombre, {}).get("alias", {}).get(f.name, str(f.verbose_name))}
-        for modelo_nombre, _ruta in cadena
-        for f in _campos_planos(apps.get_model("app", modelo_nombre), campos_por_modelo.get(modelo_nombre))
-    ]
+    columnas = _columnas_de_vista(vista)
     # Mapa clave ("Modelo.campo") -> ruta ORM, para poder traducir los filtros
     # del usuario a filter(**{"ruta__campo__icontains": ...}).
     ruta_orm_por_clave = {}
@@ -2192,13 +2269,15 @@ def datos_proyecto(request, proyecto_id):
     )
 
 
-# Hojas del Excel exportado: misma partición que las pestañas del front
-# (CO₂ / CH₄ / Unidad Muestreo-Experimental / Clima / MOM / COS / Biomasa) en
-# vez de una hoja combinada por vista — ver DatosTabs.tsx (TABS) en el frontend React.
+# Hojas del Excel exportado: misma partición y orden que las pestañas del
+# front (Unidad Muestreo-Experimental / CO₂ / CH₄ / Clima / MOM / COS /
+# Biomasa) en vez de una hoja combinada por vista — ver DatosTabs.tsx (TABS)
+# en el frontend React. Unidad Muestreo-Experimental va primero: es la que
+# define el contexto (dónde/qué unidad) del resto de hojas.
 _HOJAS_EXPORT = [
+    {"nombre_vista": "unidad_muestreo", "gas": None, "hoja": "Unidad Muestreo-Experimental"},
     {"nombre_vista": "submuestra_gei", "gas": "CO2", "hoja": "CO2 (detalle)"},
     {"nombre_vista": "submuestra_gei", "gas": "CH4", "hoja": "CH4 (detalle)"},
-    {"nombre_vista": "unidad_muestreo", "gas": None, "hoja": "Unidad Muestreo-Experimental"},
     {"nombre_vista": "clima", "gas": None, "hoja": "Clima"},
     {"nombre_vista": "mom", "gas": None, "hoja": "MOM"},
     {"nombre_vista": "cos", "gas": None, "hoja": "COS"},
@@ -2220,53 +2299,101 @@ def _tipo_dato_legible(field):
     return _TIPOS_DATO_LEGIBLES.get(field.get_internal_type(), field.get_internal_type())
 
 
-def _dataframe_diccionario_datos():
-    """Una fila por (entidad, atributo) realmente visible en alguna pestaña
-    del Excel — si una vista recorta los campos de un modelo (`campos` en
-    `_VISTAS_DESNORMALIZADAS`, p. ej. Sitio en `submuestra_gei` solo está
-    para el join/filtro y no aporta columnas), esa hoja no cuenta para esos
-    campos, y si un campo no queda visible en ninguna hoja, no aparece en el
-    diccionario."""
-    # hojas_por_campo[modelo_nombre][campo_nombre] = ["CO2 (detalle)", ...]
-    hojas_por_campo = defaultdict(lambda: defaultdict(list))
-    modelos_vistos = []
-    nombres_vistos = set()
-    for hoja_def in _HOJAS_EXPORT:
-        vista_def = _VISTAS_DESNORMALIZADAS[hoja_def["nombre_vista"]]
-        campos_por_modelo = vista_def.get("campos", {})
-        for modelo_nombre, _ruta in vista_def["cadena"]:
-            if modelo_nombre not in nombres_vistos:
-                nombres_vistos.add(modelo_nombre)
-                modelos_vistos.append(modelo_nombre)
-            modelo_cls = apps.get_model("app", modelo_nombre)
-            for f in _campos_planos(modelo_cls, campos_por_modelo.get(modelo_nombre)):
-                if hoja_def["hoja"] not in hojas_por_campo[modelo_nombre][f.name]:
-                    hojas_por_campo[modelo_nombre][f.name].append(hoja_def["hoja"])
+def _dataframe_diccionario_datos(hojas):
+    """Una fila por cada columna real de cada hoja del Excel que se está
+    generando en esta descarga — recibe `hojas` (la misma lista
+    `[(nombre_hoja, df, columnas), ...]` que ya se armó en
+    `exportar_carga`/`exportar_proyecto`, después de saltarse las hojas sin
+    datos y de `_quitar_columnas_vacias`), no la metadata estática de todas
+    las vistas posibles: si esta descarga no trae ninguna fila para "Clima"
+    (por eso no se agrega esa hoja), o si una columna quedó vacía y se
+    descartó, el diccionario tampoco los menciona.
 
+    No se deduplica entre hojas: si un atributo aparece en varias (ej.
+    "nombre unidad experimental" en Unidad Muestreo-Experimental, CO2 y
+    CH4), sale una fila por cada una — así cada pestaña queda completa por
+    sí sola en el diccionario, sin tener que ir a buscar el resto de sus
+    atributos en el bloque de otra pestaña. Las filas quedan en el mismo
+    orden en que aparecen las columnas en el Excel: hoja por hoja (en el
+    orden en que se agregaron a `hojas`), y dentro de cada hoja en el orden
+    real de sus columnas. "Campo" usa el texto literal del encabezado que
+    sale en la hoja (el alias ya aplicado, ej. "nombre unidad
+    experimental"), no el nombre base del campo en Django (que sería
+    "nombre" para varios modelos distintos). Devuelve (dataframe,
+    colores_por_fila): la primera columna del dataframe queda vacía a
+    propósito, para pintarla después según la categoría del atributo (ver
+    `_colorear_columna_categoria`)."""
     filas = []
-    for modelo_nombre in modelos_vistos:
-        modelo_cls = apps.get_model("app", modelo_nombre)
-        entidad = str(modelo_cls._meta.verbose_name).capitalize()
-        for f in _campos_planos(modelo_cls):
-            hojas = hojas_por_campo[modelo_nombre].get(f.name, [])
-            if not hojas:
-                continue
+    colores = []
+    for nombre_hoja, _df, columnas in hojas:
+        for columna in columnas:
+            modelo_nombre, campo_nombre = columna["modelo"], columna["campo"]
+            modelo_cls = apps.get_model("app", modelo_nombre)
+            f = modelo_cls._meta.get_field(campo_nombre)
             valores_permitidos = ", ".join(str(label) for _valor, label in f.choices) if getattr(f, "choices", None) else ""
             filas.append({
-                "Pestaña": ", ".join(hojas),
-                "Entidad": entidad,
-                "Atributo": str(f.verbose_name),
-                "Descripción": str(f.help_text) if f.help_text else "",
-                "Valores permitidos (si aplica)": valores_permitidos,
+                "": "",
+                "Pestaña": nombre_hoja,
+                "Campo": columna["verbose_name"] or columna["campo"],
                 "Tipo de dato": _tipo_dato_legible(f),
+                "Descripción": str(f.help_text) if f.help_text else "",
+                "Entidad.atributo (Modelo de Datos COLFLUX)": f"{modelo_nombre}.{campo_nombre}",
+                "Valores permitidos (si aplica)": valores_permitidos,
             })
+            colores.append(COLOR_POR_MODELO.get(modelo_nombre))
 
-    df = pd.DataFrame(filas, columns=["Pestaña", "Entidad", "Atributo", "Descripción", "Valores permitidos (si aplica)", "Tipo de dato"])
-    return df.sort_values("Entidad", kind="stable")
+    df = pd.DataFrame(filas, columns=[
+        "", "Pestaña", "Campo", "Tipo de dato", "Descripción",
+        "Entidad.atributo (Modelo de Datos COLFLUX)", "Valores permitidos (si aplica)",
+    ])
+    return df, colores
 
 
-def _agregar_hoja_diccionario_datos(writer):
-    _dataframe_diccionario_datos().to_excel(writer, sheet_name="Diccionario de datos", index=False)
+def _colorear_columna_categoria(worksheet, colores):
+    """Pinta la primera columna (vacía) de `worksheet`, fila por fila, según
+    el color de categoría de esa fila — ver `_colorear_encabezados` para el
+    equivalente por columna en las otras hojas."""
+    from openpyxl.styles import PatternFill
+
+    for idx, color in enumerate(colores, start=2):  # fila 1 es el encabezado
+        if not color:
+            continue
+        celda = worksheet.cell(row=idx, column=1)
+        celda.fill = PatternFill(start_color=color.lstrip("#"), end_color=color.lstrip("#"), fill_type="solid")
+
+
+def _agregar_hoja_diccionario_datos(writer, hojas):
+    df, colores = _dataframe_diccionario_datos(hojas)
+    df.to_excel(writer, sheet_name="Diccionario de datos", index=False)
+    _colorear_columna_categoria(writer.sheets["Diccionario de datos"], colores)
+
+
+def _quitar_columnas_vacias(df, columnas):
+    """Descarta las columnas que no tienen ningún valor en todo el archivo
+    exportado (None/NaN o cadena vacía en todas las filas) — solo aplica a
+    la descarga: la vista paginada de la página sí las deja, porque una
+    columna puede estar vacía en la página actual y tener datos en otra."""
+    vacia = df.isna() | (df.astype(str).apply(lambda s: s.str.strip()) == "")
+    mantener = ~vacia.all(axis=0)
+    df = df.loc[:, mantener]
+    columnas = [c for c, keep in zip(columnas, mantener) if keep]
+    return df, columnas
+
+
+def _colorear_encabezados(worksheet, columnas):
+    """Pinta la fila de encabezados de `worksheet` según la categoría
+    (`COLOR_POR_MODELO`, derivada de GRUPOS_CATALOGO) del modelo de cada
+    columna — mismo color que usa el diagrama ERD de /db para esa
+    categoría."""
+    from openpyxl.styles import Font, PatternFill
+
+    for idx, columna in enumerate(columnas, start=1):
+        color = COLOR_POR_MODELO.get(columna["modelo"])
+        if not color:
+            continue
+        celda = worksheet.cell(row=1, column=idx)
+        celda.fill = PatternFill(start_color=color.lstrip("#"), end_color=color.lstrip("#"), fill_type="solid")
+        celda.font = Font(color="FFFFFF", bold=True)
 
 
 @requiere_nivel("investigador")
@@ -2290,7 +2417,8 @@ def exportar_carga(request, fuente_id, carga_id):
         encabezados = [c["verbose_name"] or c["campo"] for c in columnas]
         filas = [_fila_desde_objeto(obj, cadena, campos_por_modelo) for obj in qs.iterator()]
         df = pd.DataFrame([[fila[clave] for clave in claves] for fila in filas], columns=encabezados)
-        hojas.append((hoja_def["hoja"][:31], df))
+        df, columnas = _quitar_columnas_vacias(df, columnas)
+        hojas.append((hoja_def["hoja"][:31], df, columnas))
 
     # openpyxl exige al menos una hoja visible: si no hay datos, ni siquiera
     # se abre el ExcelWriter (si no, revienta con IndexError al cerrarlo sin
@@ -2300,9 +2428,10 @@ def exportar_carga(request, fuente_id, carga_id):
 
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-        for nombre_hoja, df in hojas:
+        for nombre_hoja, df, columnas in hojas:
             df.to_excel(writer, sheet_name=nombre_hoja, index=False)
-        _agregar_hoja_diccionario_datos(writer)
+            _colorear_encabezados(writer.sheets[nombre_hoja], columnas)
+        _agregar_hoja_diccionario_datos(writer, hojas)
 
     buffer.seek(0)
     response = HttpResponse(
@@ -2333,16 +2462,18 @@ def exportar_proyecto(request, proyecto_id):
         encabezados = [c["verbose_name"] or c["campo"] for c in columnas]
         filas = [_fila_desde_objeto(obj, cadena, campos_por_modelo) for obj in qs.iterator()]
         df = pd.DataFrame([[fila[clave] for clave in claves] for fila in filas], columns=encabezados)
-        hojas.append((hoja_def["hoja"][:31], df))
+        df, columnas = _quitar_columnas_vacias(df, columnas)
+        hojas.append((hoja_def["hoja"][:31], df, columnas))
 
     if not hojas:
         return JsonResponse({"error": "Este proyecto todavía no tiene datos importados."}, status=404)
 
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-        for nombre_hoja, df in hojas:
+        for nombre_hoja, df, columnas in hojas:
             df.to_excel(writer, sheet_name=nombre_hoja, index=False)
-        _agregar_hoja_diccionario_datos(writer)
+            _colorear_encabezados(writer.sheets[nombre_hoja], columnas)
+        _agregar_hoja_diccionario_datos(writer, hojas)
 
     buffer.seek(0)
     response = HttpResponse(

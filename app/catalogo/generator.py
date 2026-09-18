@@ -3,20 +3,33 @@ import json
 from django.apps import apps
 
 
+# "color" es la fuente única de verdad para el color de cada categoría: la
+# usan tanto el diagrama ERD del frontend (/db, vía catalogo.json) como el
+# Excel exportado (app/api/etl/views.py, ver COLOR_POR_MODELO más abajo).
+# Definida a mano por Viviana — incluye 2 pares con el mismo color a
+# propósito (Suelo/COS en naranja; Torre EC y Flujos/Muestras GEI en azul):
+# esos no chocan porque Suelo y Torre EC y Flujos no aparecen en el Excel
+# hoy. Geografía y "Unidad de Muestreo y Experimental" sí chocan en la hoja
+# real ("Unidad Muestreo-Experimental" tiene columnas de ambas categorías),
+# así que se les puso colores distintos: Geografía en rojo camarón/coral,
+# "Unidad de Muestreo y Experimental" en violeta.
 GRUPOS_CATALOGO = [
     {
         "nombre": "Publicaciones",
         "icono": "📄",
+        "color": "#475569",
         "entidades": ["PublicacionType", "Publicacion", "Autor"],
     },
     {
         "nombre": "Geografía",
         "icono": "🗺️",
+        "color": "#ff6f61",  # rojo camarón / coral — distinto de Unidad de Muestreo y Experimental
         "entidades": ["Region", "Departamento", "Municipio", "Sitio"],
     },
     {
         "nombre": "Unidad de Muestreo y Experimental",
         "icono": "📍",
+        "color": "#7c3aed",  # violeta
         "entidades": ["UnidadMuestreoTipo", "UnidadMuestreo", "UnidadExperimental", "Parcela", "Transecto"],
     },
     # Nota: el ETL (app/api/etl/views.py) usa su propio SECCIONES_ETL, que
@@ -28,11 +41,13 @@ GRUPOS_CATALOGO = [
     {
         "nombre": "Cobertura y Vegetación",
         "icono": "🌿",
+        "color": "#0f8139",
         "entidades": ["TipoCobertura", "Cobertura", "Vegetacion", "Disturbio"],
     },
     {
         "nombre": "Suelo",
         "icono": "🪨",
+        "color": "#e69138",
         "entidades": ["CaracterizacionMuestreoSuelo", "MonitoreoSuelo"],
     },
     {
@@ -44,26 +59,31 @@ GRUPOS_CATALOGO = [
         # cargarse fila por fila igual que MuestraGEI/SubmuestraGEI.
         "nombre": "Carbono Orgánico del Suelo (COS)",
         "icono": "🧫",
+        "color": "#e69138",
         "entidades": ["SubmuestraSuelo"],
     },
     {
         "nombre": "Biomasa",
         "icono": "🌳",
+        "color": "#88bb72",
         "entidades": ["MuestraBiomasa", "IndividuoArboreo"],
     },
     {
         "nombre": "Materia Orgánica Muerta (MOM)",
         "icono": "🍂",
+        "color": "#c36c2d",
         "entidades": ["MuestraMOM"],
     },
     {
         "nombre": "Torre EC y Flujos",
         "icono": "📡",
+        "color": "#3c78d8",
         "entidades": ["TorreEc", "ConfiguracionSensorGas"],
     },
     {
         "nombre": "Muestras GEI",
         "icono": "🫧",
+        "color": "#3c78d8",
         "entidades": [
             "UnidadMedida", "Equipo", "TipoMuestra",
             "MuestraAmbiental", "MuestraGEI", "SubmuestraGEI",
@@ -72,14 +92,25 @@ GRUPOS_CATALOGO = [
     {
         "nombre": "Proyecto",
         "icono": "🗂️",
+        "color": "#333faf",
         "entidades": ["Proyecto", "Institucion", "ProyectoInstitucion", "ProyectoUsuario"],
     },
     {
         "nombre": "Usuarios, Roles y ETL",
         "icono": "📂",
+        "color": "#ffd966",
         "entidades": ["Usuario", "RolUsuario", "FuenteDatos", "CargaArchivo", "MapeoColumna"],
     },
 ]
+
+# Modelo -> color de su categoría, para colorear encabezados en el Excel
+# exportado (ver app/api/etl/views.py). Se deriva de GRUPOS_CATALOGO en vez
+# de duplicar la asignación.
+COLOR_POR_MODELO = {
+    nombre_modelo: grupo["color"]
+    for grupo in GRUPOS_CATALOGO
+    for nombre_modelo in grupo["entidades"]
+}
 
 ENTIDADES_SEMILLA = {
     "PublicacionType",
@@ -253,6 +284,7 @@ def generar_catalogo_data():
         grupos.append({
             "nombre": grupo["nombre"],
             "icono": grupo["icono"],
+            "color": grupo["color"],
             "entidades": entidades,
         })
 
