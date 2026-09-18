@@ -1,14 +1,14 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from app.api.auth.views import LoginView, LogoutView, MeView, RegistroView
+from app.api.auth.views import ForgotPasswordView, LoginView, LogoutView, MeView, RegistroView, ResetPasswordView
 from app.api.dashboard.views import DashboardView, DataModelView, VisualizerView, chart_data
 from app.api.datos.views import FuenteDatosViewSet, fuentes_datos_api
 from app.api.etl.views import (
     archivo_fuente, campos_destino, datos_carga, datos_proyecto, exportar_carga, exportar_proyecto, importar_carga,
     mapeo_carga, previsualizar_carga, regex_sugerido, upload_archivo, validar_carga, verificar_existencia,
 )
-from app.api.geo.views import resumen_geografico, series_co2, sitios_geojson
+from app.api.geo.views import resumen_categorico, resumen_geografico, series_co2, sitios_geojson, tendencia_instalacion
 from app.api.institucion.views import InstitucionViewSet
 from app.api.proyecto.views import ProyectoViewSet
 from app.api.reglas.views import (
@@ -16,6 +16,9 @@ from app.api.reglas.views import (
     parametros_regla_autollenado, previsualizar_regla_autollenado, reglas_autollenado,
 )
 from app.api.reportador.views import ReportadorViewSet
+from app.api.reportes.views import (
+    biomasa_por_taxon, biomasa_produccion, cos_por_profundidad, mom_tendencia,
+)
 from app.api.usuario.views import RolUsuarioViewSet, SolicitudNivelViewSet, UsuarioViewSet
 
 router = DefaultRouter()
@@ -36,6 +39,8 @@ urlpatterns = [
     path("api/auth/registro/", RegistroView.as_view(), name="auth-registro"),
     path("api/auth/logout/", LogoutView.as_view(), name="auth-logout"),
     path("api/auth/me/", MeView.as_view(), name="auth-me"),
+    path("api/auth/forgot-password/", ForgotPasswordView.as_view(), name="auth-forgot-password"),
+    path("api/auth/reset-password/", ResetPasswordView.as_view(), name="auth-reset-password"),
     path("api/fuentes-datos/", fuentes_datos_api, name="fuentes-datos-api"),
     path("api/fuentes-datos/crear/", FuenteDatosViewSet.as_view({"post": "create"}), name="fuentes-datos-crear"),
     path("api/fuentes-datos/<int:fuente_id>/upload/", upload_archivo, name="fuentes-datos-upload"),
@@ -62,5 +67,11 @@ urlpatterns = [
     path("api/geo/sitios/", sitios_geojson, name="geo-sitios"),
     path("api/geo/series/", series_co2, name="geo-series"),
     path("api/geo/resumen/", resumen_geografico, name="geo-resumen"),
+    path("api/geo/resumen-categorico/", resumen_categorico, name="geo-resumen-categorico"),
+    path("api/geo/tendencia-instalacion/", tendencia_instalacion, name="geo-tendencia-instalacion"),
+    path("api/reportes/biomasa/", biomasa_por_taxon, name="reportes-biomasa"),
+    path("api/reportes/biomasa/produccion/", biomasa_produccion, name="reportes-biomasa-produccion"),
+    path("api/reportes/cos/", cos_por_profundidad, name="reportes-cos"),
+    path("api/reportes/mom/", mom_tendencia, name="reportes-mom"),
     path("", include(router.urls)),
 ]
