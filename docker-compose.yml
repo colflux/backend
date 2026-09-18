@@ -1,7 +1,11 @@
 services:
   web:
     build: .
-    command: sh -c "python manage.py migrate && python manage.py create_admin_from_env && python manage.py generate_catalogo && python manage.py collectstatic --noinput && (python manage.py check_usuarios_huerfanos || true) && gunicorn colflux.wsgi:application --bind 0.0.0.0:8000"
+    # --workers 4 --timeout 60: por defecto gunicorn corre con 1 worker sync
+    # y timeout de 30s — con la RDS remota (latencia de red por query) y las
+    # ~15 peticiones concurrentes que dispara el dashboard del geoportal, un
+    # solo worker se satura y se reinicia a medio proceso.
+    command: sh -c "python manage.py migrate && python manage.py create_admin_from_env && python manage.py generate_catalogo && python manage.py collectstatic --noinput && (python manage.py check_usuarios_huerfanos || true) && gunicorn colflux.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 60"
     environment:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL debe estar seteada en .env — no hay fallback silencioso a la db local}
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-only-secret-key}

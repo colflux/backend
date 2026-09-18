@@ -1,10 +1,13 @@
 import json
 
-from django.db.models import Avg, Count, Max, Min
+from django.db.models import Avg, Count, Max, Min, OuterRef, Subquery
+from django.db.models.functions import TruncMonth, TruncYear
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 
-from app.models import Departamento, Municipio, Region, Sitio, SubmuestraGEI, Vereda
+from app.models import (
+    Cobertura, Departamento, Disturbio, Municipio, Region, Sitio, SubmuestraGEI, UnidadMuestreo, Vereda,
+)
 
 
 @require_GET
@@ -244,41 +247,9 @@ def series_co2(request):
     return JsonResponse({"count": len(resultados), "resultados": resultados})
 
 
-@require_GET
-def resumen_geografico(request):
-    """Resumen agregado (conteo, promedio, mínimo, máximo, última medición)
-    de SubmuestraGEI, agrupado por un nivel geográfico: ?nivel=departamento
-    (default), municipio, vereda, region o sitio. Acepta los mismos filtros
-    que /api/geo/series/ (gas, desde, hasta, proyecto, departamento,
-    municipio, vereda, región) para acotar antes de agregar. Pensado para
-    mapas tipo choropleth y tarjetas de resumen del geoportal.
-
-    "region" no tiene geometría propia en el modelo (solo departamento,
-    municipio, vereda y sitio la tienen): sus features salen con
-    geometry=null y una lista "departamentos" con los departamentos que la
-    componen, para que el cliente los dibuje/resalte.
-
-    "ultima_medicion" es la lectura de mayor fecha del grupo; ante empate de
-    fecha (lo habitual: varias lecturas y varios gases el mismo dia) se toma
-    la de mayor id, para que el resultado sea estable entre ejecuciones. Si
-    no se filtra por gas, esa lectura puede ser de cualquiera de los tres,
-    con su propia unidad."""
-    nivel = request.GET.get("nivel", "departamento")
-    if nivel not in ("departamento", "municipio", "vereda", "region", "sitio"):
-        return JsonResponse(
-            {"error": "nivel debe ser uno de: departamento, municipio, vereda, region, sitio"}, status=400,
-        )
-
-    qs = (
-        SubmuestraGEI.objects
-        .exclude(fecha=None)
-        .select_related(
-            "muestra__unidad_medida",
-            "muestra__unidad_muestreo__sitio__vereda__municipio__departamento__region",
-            "muestra__unidad_muestreo__unidad_experimental__proyecto",
-        )
-    )
-
+def _aplicar_filtros_comunes(qs, request):
+    """Filtros de fecha/gas/ubicación que comparten resumen_geografico,
+    resumen_categorico y (parcialmente) series_co2."""
     gas = request.GET.get("gas")
     if gas:
         qs = qs.filter(muestra__gas=gas.upper())
@@ -314,6 +285,45 @@ def resumen_geografico(request):
     sitio_id = request.GET.get("sitio")
     if sitio_id:
         qs = qs.filter(muestra__unidad_muestreo__sitio_id=sitio_id)
+
+    return qs
+
+
+@require_GET
+def resumen_geografico(request):
+    """Resumen agregado (conteo, promedio, mínimo, máximo, última medición)
+    de SubmuestraGEI, agrupado por un nivel geográfico: ?nivel=departamento
+    (default), municipio, vereda, region o sitio. Acepta los mismos filtros
+    que /api/geo/series/ (gas, desde, hasta, proyecto, departamento,
+    municipio, vereda, región) para acotar antes de agregar. Pensado para
+    mapas tipo choropleth y tarjetas de resumen del geoportal.
+
+    "region" no tiene geometría propia en el modelo (solo departamento,
+    municipio, vereda y sitio la tienen): sus features salen con
+    geometry=null y una lista "departamentos" con los departamentos que la
+    componen, para que el cliente los dibuje/resalte.
+
+    "ultima_medicion" es la lectura de mayor fecha del grupo; ante empate de
+    fecha (lo habitual: varias lecturas y varios gases el mismo dia) se toma
+    la de mayor id, para que el resultado sea estable entre ejecuciones. Si
+    no se filtra por gas, esa lectura puede ser de cualquiera de los tres,
+    con su propia unidad."""
+    nivel = request.GET.get("nivel", "departamento")
+    if nivel not in ("departamento", "municipio", "vereda", "region", "sitio"):
+        return JsonResponse(
+            {"error": "nivel debe ser uno de: departamento, municipio, vereda, region, sitio"}, status=400,
+        )
+
+    qs = (
+        SubmuestraGEI.objects
+        .exclude(fecha=None)
+        .select_related(
+            "muestra__unidad_medida",
+            "muestra__unidad_muestreo__sitio__vereda__municipio__departamento__region",
+            "muestra__unidad_muestreo__unidad_experimental__proyecto",
+        )
+    )
+    qs = _aplicar_filtros_comunes(qs, request)
 
     CAMPO_POR_NIVEL = {
         "sitio": "muestra__unidad_muestreo__sitio",
@@ -453,3 +463,160 @@ def resumen_geografico(request):
         "features": features,
         "excluidos": excluidos,
     })
+
+
+_DIMENSIONES_CATEGORICAS = ("proyecto", "ecosistema", "estado_conservacion", "analizador", "condicion_luz")
+
+_CONDICION_LUZ_LABELS = dict(SubmuestraGEI.CONDICION_LUZ_CHOICES)
+_ESTADO_CONSERVACION_LABELS = dict(Disturbio.ESTADO_CONSERVACION_CHOICES)
+
+# Config por dimensión: campo por el que se agrupa. "ecosistema" no es un
+# campo directo -se anota vía Subquery antes de agregar-.
+_CAMPO_ID_POR_DIMENSION = {
+    "proyecto": "muestra__unidad_muestreo__unidad_experimental__proyecto_id",
+    "analizador": "muestra__analizador_id",
+    "condicion_luz": "condicion_luz",
+    "estado_conservacion": "muestra__unidad_muestreo__sitio__disturbio__estado_conservacion",
+    "ecosistema": "ecosistema",
+}
+
+
+@require_GET
+def resumen_categorico(request):
+    """Resumen agregado (conteo, promedio, mínimo, máximo, última medición)
+    de SubmuestraGEI, agrupado por una dimensión no geográfica:
+    ?dimension=proyecto|ecosistema|estado_conservacion|analizador|condicion_luz.
+    Acepta los mismos filtros que /api/geo/resumen/ (gas, desde, hasta,
+    proyecto, departamento, municipio, vereda, región, sitio). Igual que
+    resumen_geografico, agrega en la base de datos (GROUP BY), no en Python.
+
+    "ecosistema" usa la primera Cobertura reportada del sitio (ordenada por
+    tipo de clasificación y nombre, vía Subquery) como aproximación: un
+    sitio puede tener varias filas de Cobertura -una por sistema de
+    clasificación CLC/IPCC/IGBP/etc., o duplicados en conflicto entre
+    fuentes- y no hay un campo de vigencia para elegir "la" cobertura
+    vigente. A validar con el equipo si hace falta un criterio más preciso."""
+    dimension = request.GET.get("dimension")
+    if dimension not in _DIMENSIONES_CATEGORICAS:
+        return JsonResponse(
+            {"error": f"dimension debe ser uno de: {', '.join(_DIMENSIONES_CATEGORICAS)}"}, status=400,
+        )
+
+    qs = SubmuestraGEI.objects.exclude(fecha=None).select_related("muestra__unidad_medida")
+    qs = _aplicar_filtros_comunes(qs, request)
+
+    campo_id = _CAMPO_ID_POR_DIMENSION[dimension]
+
+    if dimension == "ecosistema":
+        cobertura_sub = (
+            Cobertura.objects
+            .filter(sitio_id=OuterRef("muestra__unidad_muestreo__sitio_id"))
+            .order_by("tipo_id", "nombre")
+            .values("nombre")[:1]
+        )
+        qs = qs.annotate(ecosistema=Subquery(cobertura_sub))
+
+    base = qs.exclude(**{campo_id: None})
+    if dimension in ("condicion_luz", "estado_conservacion"):
+        base = base.exclude(**{campo_id: ""})
+
+    agregados = list(
+        base.values(campo_id).annotate(
+            total_muestras=Count("id"),
+            promedio=Avg("valor"),
+            minimo=Min("valor"),
+            maximo=Max("valor"),
+            primera_fecha=Min("fecha"),
+            ultima_fecha=Max("fecha"),
+        )
+    )
+    claves = [fila[campo_id] for fila in agregados]
+
+    ultimas = {
+        fila[campo_id]: fila
+        for fila in base.filter(**{campo_id + "__in": claves})
+        .order_by(campo_id, "-fecha", "-id")
+        .distinct(campo_id)
+        .values(campo_id, "fecha", "valor", "muestra__unidad_medida__codigo")
+    }
+
+    # Nombres legibles por clave, según la dimensión.
+    if dimension == "proyecto":
+        nombres = dict(
+            base.filter(**{campo_id + "__in": claves})
+            .values_list(campo_id, "muestra__unidad_muestreo__unidad_experimental__proyecto__nombre")
+            .distinct()
+        )
+    elif dimension == "analizador":
+        nombres = dict(
+            base.filter(**{campo_id + "__in": claves})
+            .values_list(campo_id, "muestra__analizador__modelo")
+            .distinct()
+        )
+    elif dimension == "condicion_luz":
+        nombres = {clave: _CONDICION_LUZ_LABELS.get(clave, clave) for clave in claves}
+    elif dimension == "estado_conservacion":
+        nombres = {clave: _ESTADO_CONSERVACION_LABELS.get(clave, clave) for clave in claves}
+    else:  # ecosistema
+        nombres = {clave: clave for clave in claves}
+
+    resultados = []
+    for fila in agregados:
+        clave = fila[campo_id]
+        ultima = ultimas.get(clave)
+        resultados.append({
+            "id": clave,
+            "nombre": nombres.get(clave) or str(clave),
+            "total_muestras": fila["total_muestras"],
+            "promedio": float(fila["promedio"]) if fila["promedio"] is not None else None,
+            "minimo": float(fila["minimo"]) if fila["minimo"] is not None else None,
+            "maximo": float(fila["maximo"]) if fila["maximo"] is not None else None,
+            "rango_fechas": {
+                "desde": fila["primera_fecha"].isoformat() if fila["primera_fecha"] else None,
+                "hasta": fila["ultima_fecha"].isoformat() if fila["ultima_fecha"] else None,
+            },
+            "ultima_medicion": (
+                {
+                    "fecha": ultima["fecha"].isoformat(),
+                    "valor": float(ultima["valor"]) if ultima["valor"] is not None else None,
+                    "unidad": ultima["muestra__unidad_medida__codigo"],
+                }
+                if ultima and ultima["fecha"] else None
+            ),
+        })
+
+    resultados.sort(key=lambda r: r["total_muestras"], reverse=True)
+
+    return JsonResponse({"dimension": dimension, "resultados": resultados})
+
+
+@require_GET
+def tendencia_instalacion(request):
+    """Conteo de UnidadMuestreo por fecha de instalación, agrupado por mes
+    (default) o año: ?agrupar=mes|anio. Filtro opcional ?proyecto=. Agregado
+    en la base de datos (TruncMonth/TruncYear + Count), no en Python: el
+    volumen de unidades de muestreo es independiente del de submuestras."""
+    agrupar = request.GET.get("agrupar", "mes")
+    if agrupar not in ("mes", "anio"):
+        return JsonResponse({"error": "agrupar debe ser mes o anio"}, status=400)
+
+    qs = UnidadMuestreo.objects.exclude(fecha_instalacion=None)
+
+    proyecto_id = request.GET.get("proyecto")
+    if proyecto_id:
+        qs = qs.filter(unidad_experimental__proyecto_id=proyecto_id)
+
+    trunc = TruncMonth("fecha_instalacion") if agrupar == "mes" else TruncYear("fecha_instalacion")
+    filas = (
+        qs.annotate(periodo=trunc)
+        .values("periodo")
+        .annotate(total=Count("id"))
+        .order_by("periodo")
+    )
+
+    resultados = [
+        {"periodo": fila["periodo"].isoformat(), "total": fila["total"]}
+        for fila in filas
+    ]
+
+    return JsonResponse({"agrupar": agrupar, "resultados": resultados})
