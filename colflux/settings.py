@@ -82,6 +82,7 @@ DATABASES = {
         "PASSWORD": unquote(db.password) if db.password else db.password,
         "HOST": db.hostname,
         "PORT": db.port or 5432,
+        "OPTIONS": {"sslmode": "require"},
     }
 }
 

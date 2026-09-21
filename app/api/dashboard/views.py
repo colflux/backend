@@ -2,10 +2,11 @@ import json
 
 from django.apps import apps
 from django.conf import settings
+from django.db.models import Max
 from django.http import JsonResponse
 from django.views.generic import TemplateView
 
-from app.models import FuenteDatos, Proyecto, Sitio, Usuario
+from app.models import FuenteDatos, Proyecto, Sitio, SubmuestraGEI, Usuario
 
 
 class DashboardView(TemplateView):
@@ -66,6 +67,9 @@ class DataModelView(TemplateView):
 
 
 def chart_data(request):
+    ultima_medicion = SubmuestraGEI.objects.exclude(fecha=None).aggregate(Max("fecha"))[
+        "fecha__max"
+    ]
     return JsonResponse(
         {
             "by_year": [],
@@ -76,6 +80,10 @@ def chart_data(request):
                 {"label": "Fuentes", "value": FuenteDatos.objects.count()},
                 {"label": "Usuarios", "value": Usuario.objects.count()},
             ],
+            "total_sitios": Sitio.objects.count(),
+            "total_mediciones": SubmuestraGEI.objects.count(),
+            "total_usuarios": Usuario.objects.count(),
+            "ultima_medicion": ultima_medicion.isoformat() if ultima_medicion else None,
         },
         json_dumps_params={"ensure_ascii": False},
     )
