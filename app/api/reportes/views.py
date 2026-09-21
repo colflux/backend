@@ -72,6 +72,10 @@ def biomasa_produccion(request):
     if proyecto_id:
         qs = qs.filter(unidad_muestreo__unidad_experimental__proyecto_id=proyecto_id)
 
+    sitio_id = request.GET.get("sitio")
+    if sitio_id:
+        qs = qs.filter(unidad_muestreo__sitio_id=sitio_id)
+
     campos = qs.values(
         "fecha",
         "prod_biomasa_g",
@@ -120,6 +124,10 @@ def cos_por_profundidad(request):
     proyecto_id = request.GET.get("proyecto")
     if proyecto_id:
         qs = qs.filter(unidad_muestreo__unidad_experimental__proyecto_id=proyecto_id)
+
+    sitio_id = request.GET.get("sitio")
+    if sitio_id:
+        qs = qs.filter(unidad_muestreo__sitio_id=sitio_id)
 
     grupos = {}
     for sub in qs.only("profundidad_desde_cm", "carbono_pct"):
