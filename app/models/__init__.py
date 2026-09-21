@@ -26,7 +26,7 @@ from .co2 import (
 
 from .publicacion import Autor, Publicacion, PublicacionAutor, PublicacionSitio, PublicacionType, ResultadoPublicacion
 
-from .datos import CargaArchivo, FuenteDatos, MapeoColumna, RolUsuario, SolicitudNivel, Usuario
+from .datos import CargaArchivo, FuenteDatos, MapeoColumna, PasswordResetToken, RolUsuario, SolicitudNivel, Usuario
 
 from .reglas import AplicacionRegla, ReglaAutollenado
 
@@ -79,6 +79,7 @@ __all__ = [
     # Gestión de datos
     "Usuario",
     "RolUsuario",
+    "PasswordResetToken",
     "FuenteDatos",
     "CargaArchivo",
     "MapeoColumna",
