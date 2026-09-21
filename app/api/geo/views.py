@@ -6,23 +6,115 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 
 from app.models import (
-    Cobertura, Departamento, Disturbio, Municipio, Region, Sitio, SubmuestraGEI, UnidadMuestreo, Vereda,
+    Cobertura, Departamento, Disturbio, Municipio, MuestraBiomasa, Region, Sitio, SubmuestraGEI, SubmuestraSuelo,
+    UnidadMuestreo, Vereda,
 )
+
+# Config por categoría de dato: qué modelo agregar y por qué cadena de FKs
+# llegar a sitio/proyecto, para que resumen_geografico y sitios_geojson
+# puedan tratar flujos/biomasa/cos de forma genérica. "campo_unidad" es un
+# campo de la base (solo existe para flujos, vía UnidadMedida); las otras
+# categorías no tienen unidad configurable en el modelo, así que se fija en
+# "unidad_fija". "filtro_gas" solo aplica a flujos -biomasa y COS no
+# distinguen gas-.
+_CATEGORIA_CONFIG = {
+    "flujos": {
+        "modelo": SubmuestraGEI,
+        "prefijo_sitio": "muestra__unidad_muestreo__sitio",
+        "prefijo_proyecto": "muestra__unidad_muestreo__unidad_experimental__proyecto",
+        "campo_valor": "valor",
+        "campo_unidad": "muestra__unidad_medida__codigo",
+        "unidad_fija": None,
+        "filtro_gas": "muestra__gas",
+        # False: se preserva el comportamiento histórico de resumen_geografico,
+        # que no excluye por adelantado las filas con valor nulo (afecta
+        # total_muestras/excluidos) — Avg/Min/Max ya las ignoran igual.
+        "excluir_valor_nulo": False,
+    },
+    "biomasa": {
+        "modelo": MuestraBiomasa,
+        "prefijo_sitio": "unidad_muestreo__sitio",
+        "prefijo_proyecto": "unidad_muestreo__unidad_experimental__proyecto",
+        "campo_valor": "prom_tonc_ha",
+        "campo_unidad": None,
+        "unidad_fija": "tonc_ha",
+        "filtro_gas": None,
+        "excluir_valor_nulo": True,
+    },
+    "cos": {
+        "modelo": SubmuestraSuelo,
+        "prefijo_sitio": "unidad_muestreo__sitio",
+        "prefijo_proyecto": "unidad_muestreo__unidad_experimental__proyecto",
+        "campo_valor": "carbono_pct",
+        "campo_unidad": None,
+        "unidad_fija": "pct",
+        "filtro_gas": None,
+        # SubmuestraSuelo mezcla filas de COS (carbono_pct) y de densidad
+        # aparente (densidad_aparente_g_cm3) en la misma tabla: sin este
+        # exclude, "cos" contaría también filas que no son de COS.
+        "excluir_valor_nulo": True,
+    },
+}
+
+
+def _resumen_por_sitio_generico(queryset, campo_sitio, campo_valor):
+    """Conteo, rango de fechas y última medición por sitio, para cualquier
+    queryset de mediciones con "fecha" y un campo de valor propio (usado
+    para biomasa y COS en sitios_geojson, análogo al bloque de flujos que
+    ya traía su propia versión hecha a mano)."""
+    resumen = {
+        fila[campo_sitio]: {
+            "total_muestras": fila["total"],
+            "primera_fecha": fila["desde"],
+            "ultima_fecha": fila["hasta"],
+            "ultimo_valor": None,
+        }
+        for fila in queryset.values(campo_sitio).annotate(total=Count("id"), desde=Min("fecha"), hasta=Max("fecha"))
+    }
+    for fila in (
+        queryset.order_by(campo_sitio, "-fecha", "-id").distinct(campo_sitio).values(campo_sitio, campo_valor)
+    ):
+        r = resumen.get(fila[campo_sitio])
+        if r is not None:
+            r["ultimo_valor"] = float(fila[campo_valor]) if fila[campo_valor] is not None else None
+    return resumen
+
+
+def _formatear_resumen_simple(resumen, unidad):
+    """Da forma de {total_muestras, rango_fechas, ultima_medicion} a una
+    entrada de _resumen_por_sitio_generico (o None si el sitio no tiene
+    mediciones de esa categoría)."""
+    if not resumen:
+        return None
+    return {
+        "total_muestras": resumen["total_muestras"],
+        "rango_fechas": {
+            "desde": resumen["primera_fecha"].isoformat() if resumen["primera_fecha"] else None,
+            "hasta": resumen["ultima_fecha"].isoformat() if resumen["ultima_fecha"] else None,
+        },
+        "ultima_medicion": (
+            {"fecha": resumen["ultima_fecha"].isoformat(), "valor": resumen["ultimo_valor"], "unidad": unidad}
+            if resumen["ultima_fecha"] else None
+        ),
+    }
 
 
 @require_GET
 def sitios_geojson(request):
     """GeoJSON (FeatureCollection) de los Sitio georreferenciados, con sus
     unidades de muestreo, proyecto(s) y un resumen de sus mediciones como
-    metadata: un resumen agregado (todos los gases, campos *_co2 por
-    compatibilidad hacia atrás) y uno desagregado por gas en
-    "resumen_por_gas" (CO2/CH4/N2O). Pensado para consumirse directo desde
-    un cliente Leaflet (L.geoJSON(url)).
+    metadata: un resumen agregado de flujos (todos los gases, campos *_co2
+    por compatibilidad hacia atrás), uno desagregado por gas en
+    "resumen_por_gas" (CO2/CH4/N2O), y uno por cada otra categoría de dato en
+    "resumen_biomasa" y "resumen_cos" (ninguna de las dos se desagrega más:
+    a diferencia de flujos, no tienen un sub-filtro como el gas). Pensado
+    para consumirse directo desde un cliente Leaflet (L.geoJSON(url)).
 
-    Los campos "ultima_medicion_co2" y la ultima medicion de cada gas en
-    "resumen_por_gas" toman la lectura de mayor fecha; ante empate (varias
-    lecturas el mismo dia) se resuelve por el id mayor, para que el
-    resultado sea estable entre ejecuciones."""
+    Los campos "ultima_medicion_co2", la ultima medicion de cada gas en
+    "resumen_por_gas" y las de "resumen_biomasa"/"resumen_cos" toman la
+    lectura de mayor fecha; ante empate (varias lecturas el mismo dia) se
+    resuelve por el id mayor, para que el resultado sea estable entre
+    ejecuciones."""
     sitios = (
         Sitio.objects
         .select_related("vereda", "vereda__municipio", "vereda__municipio__departamento")
@@ -77,6 +169,17 @@ def sitios_geojson(request):
         if r is not None:
             r["ultimo_valor"] = float(fila["valor"]) if fila["valor"] is not None else None
             r["ultima_unidad"] = fila["muestra__unidad_medida__codigo"]
+
+    resumen_biomasa_por_sitio = _resumen_por_sitio_generico(
+        MuestraBiomasa.objects.exclude(fecha=None).exclude(unidad_muestreo__sitio_id=None),
+        "unidad_muestreo__sitio_id",
+        "prom_tonc_ha",
+    )
+    resumen_cos_por_sitio = _resumen_por_sitio_generico(
+        SubmuestraSuelo.objects.exclude(fecha=None).exclude(carbono_pct=None).exclude(unidad_muestreo__sitio_id=None),
+        "unidad_muestreo__sitio_id",
+        "carbono_pct",
+    )
 
     features = []
     for sitio in sitios:
@@ -144,6 +247,11 @@ def sitios_geojson(request):
                     }
                     for gas, r in resumen_gases.items()
                 },
+                # Resumen de las otras categorías de dato (sin sub-filtro
+                # propio, a diferencia de flujos/gas). None si el sitio no
+                # tiene mediciones de esa categoría.
+                "resumen_biomasa": _formatear_resumen_simple(resumen_biomasa_por_sitio.get(sitio.pk), "tonc_ha"),
+                "resumen_cos": _formatear_resumen_simple(resumen_cos_por_sitio.get(sitio.pk), "pct"),
             },
         })
 
@@ -247,12 +355,20 @@ def series_co2(request):
     return JsonResponse({"count": len(resultados), "resultados": resultados})
 
 
-def _aplicar_filtros_comunes(qs, request):
+def _aplicar_filtros_comunes(qs, request, categoria="flujos"):
     """Filtros de fecha/gas/ubicación que comparten resumen_geografico,
-    resumen_categorico y (parcialmente) series_co2."""
-    gas = request.GET.get("gas")
-    if gas:
-        qs = qs.filter(muestra__gas=gas.upper())
+    resumen_categorico y (parcialmente) series_co2. "categoria" decide de
+    qué modelo -y por lo tanto qué cadena de FKs hasta sitio/proyecto- se
+    trata (ver _CATEGORIA_CONFIG); el filtro de gas solo aplica cuando la
+    categoría lo soporta (hoy, solo flujos)."""
+    config = _CATEGORIA_CONFIG[categoria]
+    prefijo_sitio = config["prefijo_sitio"]
+    prefijo_proyecto = config["prefijo_proyecto"]
+
+    if config["filtro_gas"]:
+        gas = request.GET.get("gas")
+        if gas:
+            qs = qs.filter(**{config["filtro_gas"]: gas.upper()})
 
     desde = request.GET.get("desde")
     if desde:
@@ -264,27 +380,27 @@ def _aplicar_filtros_comunes(qs, request):
 
     proyecto_id = request.GET.get("proyecto")
     if proyecto_id:
-        qs = qs.filter(muestra__unidad_muestreo__unidad_experimental__proyecto_id=proyecto_id)
+        qs = qs.filter(**{f"{prefijo_proyecto}_id": proyecto_id})
 
     vereda_id = request.GET.get("vereda")
     if vereda_id:
-        qs = qs.filter(muestra__unidad_muestreo__sitio__vereda_id=vereda_id)
+        qs = qs.filter(**{f"{prefijo_sitio}__vereda_id": vereda_id})
 
     municipio_id = request.GET.get("municipio")
     if municipio_id:
-        qs = qs.filter(muestra__unidad_muestreo__sitio__vereda__municipio_id=municipio_id)
+        qs = qs.filter(**{f"{prefijo_sitio}__vereda__municipio_id": municipio_id})
 
     departamento_id = request.GET.get("departamento")
     if departamento_id:
-        qs = qs.filter(muestra__unidad_muestreo__sitio__vereda__municipio__departamento_id=departamento_id)
+        qs = qs.filter(**{f"{prefijo_sitio}__vereda__municipio__departamento_id": departamento_id})
 
     region_id = request.GET.get("region")
     if region_id:
-        qs = qs.filter(muestra__unidad_muestreo__sitio__vereda__municipio__departamento__region_id=region_id)
+        qs = qs.filter(**{f"{prefijo_sitio}__vereda__municipio__departamento__region_id": region_id})
 
     sitio_id = request.GET.get("sitio")
     if sitio_id:
-        qs = qs.filter(muestra__unidad_muestreo__sitio_id=sitio_id)
+        qs = qs.filter(**{f"{prefijo_sitio}_id": sitio_id})
 
     return qs
 
@@ -292,11 +408,13 @@ def _aplicar_filtros_comunes(qs, request):
 @require_GET
 def resumen_geografico(request):
     """Resumen agregado (conteo, promedio, mínimo, máximo, última medición)
-    de SubmuestraGEI, agrupado por un nivel geográfico: ?nivel=departamento
-    (default), municipio, vereda, region o sitio. Acepta los mismos filtros
-    que /api/geo/series/ (gas, desde, hasta, proyecto, departamento,
-    municipio, vereda, región) para acotar antes de agregar. Pensado para
-    mapas tipo choropleth y tarjetas de resumen del geoportal.
+    de una categoría de dato (?categoria=flujos -default, SubmuestraGEI-,
+    biomasa -MuestraBiomasa- o cos -SubmuestraSuelo-), agrupado por un nivel
+    geográfico: ?nivel=departamento (default), municipio, vereda, region o
+    sitio. Acepta los mismos filtros que /api/geo/series/ (gas -solo aplica
+    a flujos-, desde, hasta, proyecto, departamento, municipio, vereda,
+    región) para acotar antes de agregar. Pensado para mapas tipo
+    choropleth y tarjetas de resumen del geoportal.
 
     "region" no tiene geometría propia en el modelo (solo departamento,
     municipio, vereda y sitio la tienen): sus features salen con
@@ -304,37 +422,44 @@ def resumen_geografico(request):
     componen, para que el cliente los dibuje/resalte.
 
     "ultima_medicion" es la lectura de mayor fecha del grupo; ante empate de
-    fecha (lo habitual: varias lecturas y varios gases el mismo dia) se toma
-    la de mayor id, para que el resultado sea estable entre ejecuciones. Si
-    no se filtra por gas, esa lectura puede ser de cualquiera de los tres,
-    con su propia unidad."""
+    fecha (lo habitual: varias lecturas el mismo dia -y, para flujos sin
+    filtro de gas, de varios gases-) se toma la de mayor id, para que el
+    resultado sea estable entre ejecuciones."""
     nivel = request.GET.get("nivel", "departamento")
     if nivel not in ("departamento", "municipio", "vereda", "region", "sitio"):
         return JsonResponse(
             {"error": "nivel debe ser uno de: departamento, municipio, vereda, region, sitio"}, status=400,
         )
 
-    qs = (
-        SubmuestraGEI.objects
-        .exclude(fecha=None)
-        .select_related(
-            "muestra__unidad_medida",
-            "muestra__unidad_muestreo__sitio__vereda__municipio__departamento__region",
-            "muestra__unidad_muestreo__unidad_experimental__proyecto",
+    categoria = request.GET.get("categoria", "flujos")
+    if categoria not in _CATEGORIA_CONFIG:
+        return JsonResponse(
+            {"error": f"categoria debe ser una de: {', '.join(_CATEGORIA_CONFIG)}"}, status=400,
         )
-    )
-    qs = _aplicar_filtros_comunes(qs, request)
+    config = _CATEGORIA_CONFIG[categoria]
+    prefijo_sitio = config["prefijo_sitio"]
+    campo_valor = config["campo_valor"]
+
+    qs = config["modelo"].objects.exclude(fecha=None)
+    if config["excluir_valor_nulo"]:
+        qs = qs.exclude(**{campo_valor: None})
+    select_related = [f"{prefijo_sitio}__vereda__municipio__departamento__region", config["prefijo_proyecto"]]
+    if config["campo_unidad"]:
+        select_related.append(config["campo_unidad"].rsplit("__", 1)[0])
+    qs = qs.select_related(*select_related)
+
+    qs = _aplicar_filtros_comunes(qs, request, categoria)
 
     CAMPO_POR_NIVEL = {
-        "sitio": "muestra__unidad_muestreo__sitio",
-        "vereda": "muestra__unidad_muestreo__sitio__vereda",
-        "municipio": "muestra__unidad_muestreo__sitio__vereda__municipio",
-        "departamento": "muestra__unidad_muestreo__sitio__vereda__municipio__departamento",
-        "region": "muestra__unidad_muestreo__sitio__vereda__municipio__departamento__region",
+        "sitio": prefijo_sitio,
+        "vereda": f"{prefijo_sitio}__vereda",
+        "municipio": f"{prefijo_sitio}__vereda__municipio",
+        "departamento": f"{prefijo_sitio}__vereda__municipio__departamento",
+        "region": f"{prefijo_sitio}__vereda__municipio__departamento__region",
     }
     campo = CAMPO_POR_NIVEL[nivel]
     campo_id = campo + "_id"
-    campo_dep = "muestra__unidad_muestreo__sitio__vereda__municipio__departamento"
+    campo_dep = f"{prefijo_sitio}__vereda__municipio__departamento"
 
     # Agregar en la base en vez de materializar cada medicion en Python: una
     # consulta con GROUP BY devuelve una fila por grupo, no una por medicion.
@@ -344,9 +469,9 @@ def resumen_geografico(request):
     agregados = list(
         base.values(campo_id).annotate(
             total_muestras=Count("id"),
-            promedio=Avg("valor"),
-            minimo=Min("valor"),
-            maximo=Max("valor"),
+            promedio=Avg(campo_valor),
+            minimo=Min(campo_valor),
+            maximo=Max(campo_valor),
             primera_fecha=Min("fecha"),
             ultima_fecha=Max("fecha"),
         )
@@ -355,12 +480,15 @@ def resumen_geografico(request):
 
     # Ultima medicion por grupo con DISTINCT ON de Postgres: una sola consulta
     # en vez de recorrer todas las filas comparando fechas.
+    campos_ultima = [campo_id, "fecha", campo_valor]
+    if config["campo_unidad"]:
+        campos_ultima.append(config["campo_unidad"])
     ultimas = {
         fila[campo_id]: fila
         for fila in base.filter(**{campo_id + "__in": claves})
         .order_by(campo_id, "-fecha", "-id")
         .distinct(campo_id)
-        .values(campo_id, "fecha", "valor", "muestra__unidad_medida__codigo")
+        .values(*campos_ultima)
     }
 
     if nivel == "sitio":
@@ -442,8 +570,8 @@ def resumen_geografico(request):
             "ultima_medicion": (
                 {
                     "fecha": ultima["fecha"].isoformat(),
-                    "valor": float(ultima["valor"]) if ultima["valor"] is not None else None,
-                    "unidad": ultima["muestra__unidad_medida__codigo"],
+                    "valor": float(ultima[campo_valor]) if ultima[campo_valor] is not None else None,
+                    "unidad": ultima[config["campo_unidad"]] if config["campo_unidad"] else config["unidad_fija"],
                 }
                 if ultima and ultima["fecha"] else None
             ),
@@ -462,6 +590,11 @@ def resumen_geografico(request):
         "type": "FeatureCollection",
         "features": features,
         "excluidos": excluidos,
+        "categoria": categoria,
+        # Unidad fija de la categoría (biomasa/cos); null en flujos, donde la
+        # unidad puede variar por grupo según el gas -va en cada
+        # "ultima_medicion" en su lugar-.
+        "unidad": config["unidad_fija"],
     })
 
 
