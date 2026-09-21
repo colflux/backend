@@ -16,7 +16,7 @@ FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 # Versión del backend, mostrada en la página raíz ("/") junto al enlace al
 # frontend. Se bumpea a mano en cada release, igual que el VERSION del
 # prototipo en docs/assets/js/layout.js.
-BACKEND_VERSION = "1.1.0"
+BACKEND_VERSION = "1.3.0"
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -109,12 +109,30 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # ── CORS ──────────────────────────────────────────────────────────────────────
 CORS_ALLOW_ALL_ORIGINS = True  # el prototipo en docs consume esta API desde otro origen
 
+# ── Email (recuperación de contraseña, etc.) ─────────────────────────────────
+# En local, sin EMAIL_HOST_USER configurado, cae al backend de consola (imprime
+# el correo en el log en vez de enviarlo) para no requerir credenciales SMTP
+# para desarrollar. En producción, .env trae las credenciales SMTP reales
+# (por ahora, Gmail con contraseña de aplicación — ver .env.example).
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.smtp.EmailBackend" if EMAIL_HOST_USER else "django.core.mail.backends.console.EmailBackend",
+)
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "1") == "1"
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "COLFLUX <colflux.plataforma@gmail.com>")
+
 # ── DRF ───────────────────────────────────────────────────────────────────────
 REST_FRAMEWORK = {
-    # Solo limita el scope "login" (fuerza bruta de contraseña); el resto de la
-    # API sigue sin throttling global, consistente con AllowAny en DataPortalModelViewSet.
+    # Limita fuerza bruta / abuso en los endpoints públicos de auth; el resto de
+    # la API sigue sin throttling global, consistente con AllowAny en DataPortalModelViewSet.
     "DEFAULT_THROTTLE_RATES": {
         "login": "5/min",
         "registro": "5/min",
+        "forgot-password": "5/min",
+        "reset-password": "10/min",
     },
 }

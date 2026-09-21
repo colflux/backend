@@ -1,5 +1,8 @@
+import uuid
+
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 from .base import TimestampedModel
 
@@ -69,6 +72,32 @@ class Usuario(TimestampedModel):
     def tiene_nivel(self, minimo):
         """True si este usuario tiene al menos el nivel `minimo` en la cascada."""
         return self.NIVELES_ACCESO.index(self.nivel) >= self.NIVELES_ACCESO.index(minimo)
+
+
+class PasswordResetToken(TimestampedModel):
+    """Token de un solo uso para el flujo self-service de "olvidé mi contraseña".
+
+    Reemplaza el reseteo manual por SSH (`manage.py changepassword`) que se
+    usaba antes en producción.
+    """
+
+    auth_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="password_reset_tokens",
+        verbose_name="cuenta de acceso",
+    )
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    expira_en = models.DateTimeField("expira en")
+    usado = models.BooleanField("usado", default=False)
+
+    class Meta:
+        verbose_name = "token de recuperación de contraseña"
+        verbose_name_plural = "tokens de recuperación de contraseña"
+        ordering = ["-created_at"]
+
+    def esta_vigente(self):
+        return not self.usado and timezone.now() < self.expira_en
 
 
 class SolicitudNivel(TimestampedModel):
