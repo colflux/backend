@@ -41,6 +41,16 @@ _CATEGORIA_CONFIG = {
         "filtro_gas": None,
         "excluir_valor_nulo": True,
     },
+    "produccion": {
+        "modelo": MuestraBiomasa,
+        "prefijo_sitio": "unidad_muestreo__sitio",
+        "prefijo_proyecto": "unidad_muestreo__unidad_experimental__proyecto",
+        "campo_valor": "prod_biomasa_g",
+        "campo_unidad": None,
+        "unidad_fija": "g",
+        "filtro_gas": None,
+        "excluir_valor_nulo": True,
+    },
     "cos": {
         "modelo": SubmuestraSuelo,
         "prefijo_sitio": "unidad_muestreo__sitio",
