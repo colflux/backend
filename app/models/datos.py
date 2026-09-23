@@ -194,6 +194,10 @@ class CargaArchivo(TimestampedModel):
         ("validado", "Validación completada"),
         ("importado", "Importado a BD"),
     ]
+    ORIGEN_MAPEO_CHOICES = [
+        ("manual", "Mapeo manual (Gestión de Datos)"),
+        ("ia_chat", "Mapeo propuesto por IA (formulario web)"),
+    ]
 
     fuente = models.ForeignKey(
         FuenteDatos, on_delete=models.CASCADE,
@@ -203,6 +207,16 @@ class CargaArchivo(TimestampedModel):
     estado = models.CharField("estado", max_length=20, choices=ESTADO_CHOICES, default="subido")
     columnas_raw = models.JSONField("columnas inspeccionadas", default=list)
     total_filas = models.IntegerField("total de filas", default=0)
+    origen_mapeo = models.CharField(
+        "origen del mapeo", max_length=20, choices=ORIGEN_MAPEO_CHOICES, default="manual",
+        help_text="Quién propuso el mapeo de columnas: una persona (Gestión de Datos) o la IA (formulario web).",
+    )
+    validado_por = models.ForeignKey(
+        Usuario, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="cargas_validadas", verbose_name="validado por",
+        help_text="Persona del equipo que revisó y confirmó una carga con origen_mapeo=ia_chat.",
+    )
+    fecha_validacion = models.DateTimeField("fecha de validación", null=True, blank=True)
     pks_importados = models.JSONField(
         "pks creados/vinculados por esta carga", default=dict, blank=True,
         help_text='Acumula, por modelo, los pk que esta carga creó o reutilizó al importar. '

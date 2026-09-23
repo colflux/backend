@@ -2,6 +2,7 @@ import csv
 import decimal
 import io
 import json
+import logging
 import math
 import re
 import urllib.request
@@ -13,6 +14,7 @@ import pandas as pd
 
 from django.apps import apps
 from django.conf import settings
+from django.core.exceptions import FieldDoesNotExist
 from django.db import models, transaction
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -21,6 +23,8 @@ from app.api.permisos import requiere_nivel
 from app.models import CargaArchivo, FuenteDatos, MapeoColumna, Proyecto, TipoCobertura
 
 from app.catalogo.generator import COLOR_POR_MODELO, GRUPOS_CATALOGO, campo_to_catalogo, fk_choices
+
+logger = logging.getLogger(__name__)
 
 # El wizard del ETL usa su propio agrupamiento de secciones, más fino que
 # GRUPOS_CATALOGO (que sigue usándose tal cual para el catálogo de
@@ -295,7 +299,10 @@ def _resolver_ruta_fuente(fuente):
     path = path.resolve()
 
     if not path.is_file():
-        raise FileNotFoundError("No se encontró el archivo registrado en la fuente.")
+        raise FileNotFoundError(
+            "No se encontró el archivo registrado en la fuente (la ruta guardada ya no existe "
+            "en el servidor). Usa \"O sube el archivo directamente\" para volver a cargarlo."
+        )
 
     return path
 
@@ -440,19 +447,23 @@ def upload_archivo(request, fuente_id):
     except (ValueError, FileNotFoundError) as exc:
         return JsonResponse({"error": str(exc)}, status=400)
     except Exception as exc:
-        return JsonResponse({"error": str(exc)}, status=500)
+        logger.exception("Error inesperado al analizar la fuente %s", fuente_id)
+        return JsonResponse({
+            "error": (
+                "No se pudo leer el archivo por un error inesperado. Verifica que no esté dañado, "
+                "protegido con contraseña o abierto en otro programa, y vuelve a subirlo. "
+                f"Detalle técnico: {exc}"
+            )
+        }, status=500)
 
 
 def campos_destino(request):
-    proyecto = None
-    fuente_id = request.GET.get("fuente")
-    if fuente_id:
-        proyecto = (
-            FuenteDatos.objects.filter(pk=fuente_id)
-            .values_list("proyecto_id", flat=True)
-            .first()
-        )
-
+    # Antes esta vista incluía las instancias existentes de cada campo FK
+    # (incluir_instancias_fk=True), lo que dispara una consulta a la BD por
+    # cada campo FK de cada modelo del catálogo — con ~13 secciones eso tardaba
+    # ~54s (ver hallazgo de rendimiento). Ahora solo devuelve la estructura
+    # estática (nombre, tipo, choices fijos) y las instancias de FK se piden
+    # aparte, por campo, bajo demanda: ver fk_choices_view.
     modelos = {}
     grupos = {}
     orden_modelo = 0
@@ -476,7 +487,7 @@ def campos_destino(request):
                 # produce una única fila por modelo/fila de origen.
                 if nombre == "Cobertura" and field.name in ("sitio", "tipo"):
                     continue
-                campos.append(campo_to_catalogo(field, proyecto=proyecto, incluir_instancias_fk=True))
+                campos.append(campo_to_catalogo(field))
             if campos:
                 modelos[nombre] = campos
                 grupos[nombre] = {
@@ -494,6 +505,43 @@ def campos_destino(request):
 
     return JsonResponse(
         {"modelos": modelos, "grupos": grupos, "tipos_cobertura": tipos_cobertura},
+        json_dumps_params={"ensure_ascii": False},
+    )
+
+
+def fk_choices_view(request):
+    """Instancias existentes de un solo campo FK, pedidas bajo demanda por el
+    wizard (al mostrar el selector de ese campo) en vez de precargarse todas
+    de una vez en campos_destino."""
+    modelo_nombre = request.GET.get("modelo")
+    campo_nombre = request.GET.get("campo")
+    if not modelo_nombre or not campo_nombre:
+        return JsonResponse({"error": "Se requieren los parámetros 'modelo' y 'campo'."}, status=400)
+
+    try:
+        modelo_cls = apps.get_model("app", modelo_nombre)
+    except LookupError:
+        return JsonResponse({"error": f"El modelo '{modelo_nombre}' no existe."}, status=404)
+
+    try:
+        field = modelo_cls._meta.get_field(campo_nombre)
+    except FieldDoesNotExist:
+        return JsonResponse({"error": f"El campo '{campo_nombre}' no existe en '{modelo_nombre}'."}, status=404)
+
+    if field.__class__.__name__ != "ForeignKey":
+        return JsonResponse({"error": f"'{campo_nombre}' no es un campo FK."}, status=400)
+
+    proyecto = None
+    fuente_id = request.GET.get("fuente")
+    if fuente_id:
+        proyecto = (
+            FuenteDatos.objects.filter(pk=fuente_id)
+            .values_list("proyecto_id", flat=True)
+            .first()
+        )
+
+    return JsonResponse(
+        {"choices": fk_choices(field, proyecto=proyecto)},
         json_dumps_params={"ensure_ascii": False},
     )
 
@@ -1137,12 +1185,18 @@ def _validar_unicidad_unidad_experimental(carga, df):
     else:
         UnidadExperimental = apps.get_model("app", "UnidadExperimental")
         vistos = {}
+        filas = []  # (fila, nombre, valores) — se recorre dos veces: primero
+        # para juntar los nombres a buscar, luego para comparar contra lo
+        # existente, así se hace UNA sola consulta en vez de una por fila
+        # (346 consultas contra una BD remota son ~1 minuto, suficiente para
+        # que el worker de gunicorn mate la request por timeout).
         for fila_idx in range(carga.total_filas):
             valores = _valores_fila_modelo(df, mapeos_ue, fila_idx)
             nombre = valores.get("nombre")
             if _es_vacio(nombre):
                 continue
             fila = fila_idx + 2
+            filas.append((fila, nombre, valores))
 
             previo = vistos.get(nombre)
             if previo is not None and previo != valores:
@@ -1152,7 +1206,12 @@ def _validar_unicidad_unidad_experimental(carga, df):
                 })
             vistos[nombre] = valores
 
-            existente = UnidadExperimental.objects.filter(proyecto=proyecto, nombre=nombre).first()
+        existentes = {
+            obj.nombre: obj
+            for obj in UnidadExperimental.objects.filter(proyecto=proyecto, nombre__in=set(vistos))
+        }
+        for fila, nombre, valores in filas:
+            existente = existentes.get(nombre)
             if existente is not None:
                 for campo, valor in valores.items():
                     # 'nombre' y 'proyecto' ya están garantizados por el filtro
@@ -2099,20 +2158,38 @@ def _preparar_vista_carga(carga, nombre_vista, filtros_raw):
     return _preparar_vista_pks(pks, nombre_vista, filtros_raw)
 
 
-def _preparar_vista_proyecto(proyecto_id, nombre_vista, filtros_raw, sitio_id=None):
-    """Igual que `_preparar_vista_carga`, pero agrega los pks importados de
-    TODAS las cargas ya importadas de las fuentes del proyecto, para poder
-    ver en una sola tabla los datos de varios archivos/fuentes distintos."""
+def _preparar_vista_proyecto(proyecto_id, nombre_vista, filtros_raw, sitio_id=None, geo_filtros=None):
+    """Resuelve vista + queryset para TODOS los datos reales del proyecto,
+    filtrando directo por la cadena de FKs hasta UnidadExperimental.proyecto
+    -mismo criterio que ya usan el mapa (/api/geo/*) y los reportes
+    (/api/reportes/*)-, no solo los que pasaron por el wizard de importación
+    de ETL (`CargaArchivo.pks_importados`).
+
+    Antes esta vista solo mostraba filas con esa trazabilidad de importación,
+    lo que la desincronizaba del mapa: un sitio podía verse con muestras en
+    el mapa/gráficas y aparecer "sin datos" acá si esas filas se cargaron por
+    otro medio (ej. una migración/fixture inicial, como pasó con varios
+    sitios de IDEAM que tenían SubmuestraGEI real sin ninguna CargaArchivo en
+    estado "importado" detrás). `_preparar_vista_carga` (ver arriba) sigue
+    necesitando `pks_importados` -es la única forma de saber qué filas
+    vinieron de UN archivo específico-, pero acá basta con "pertenece a este
+    proyecto" para mostrar todo lo real que haya."""
     vista = _VISTAS_DESNORMALIZADAS.get(nombre_vista)
     if vista is None:
         return None, None, None, f"Vista desconocida: {nombre_vista}"
 
-    pks = set()
-    cargas = CargaArchivo.objects.filter(fuente__proyecto_id=proyecto_id, estado="importado")
-    for carga in cargas:
-        pks.update((carga.pks_importados or {}).get(vista["modelo_base"], []))
+    columnas, ruta_orm_por_clave, ruta_sitio, ruta_ue = _metadatos_vista(vista)
+    if ruta_ue is None:
+        return vista, None, None, None
 
-    return _preparar_vista_pks(sorted(pks), nombre_vista, filtros_raw, sitio_id=sitio_id)
+    ModeloBase = apps.get_model("app", vista["modelo_base"])
+    qs = (
+        ModeloBase.objects
+        .filter(**{"__".join(ruta_ue + ["proyecto_id"]): proyecto_id})
+        .select_related(*_select_related_de_cadena(vista["cadena"]))
+    )
+    qs = _aplicar_filtros_vista(qs, vista, ruta_orm_por_clave, ruta_sitio, filtros_raw, sitio_id, geo_filtros)
+    return vista, columnas, qs, None
 
 
 def _reordenar_columnas(columnas, orden_prioridad):
@@ -2145,39 +2222,72 @@ def _columnas_de_vista(vista):
     return columnas
 
 
-def _preparar_vista_pks(pks, nombre_vista, filtros_raw, sitio_id=None):
-    """Resuelve vista + queryset filtrado/ordenado a partir de una lista de
-    pks del modelo base ya calculada (por una carga o por un proyecto)."""
-    vista = _VISTAS_DESNORMALIZADAS.get(nombre_vista)
-    if vista is None:
-        return None, None, None, f"Vista desconocida: {nombre_vista}"
-
+def _metadatos_vista(vista):
+    """columnas / mapa clave→ruta ORM / ruta a Sitio / ruta a UnidadExperimental
+    de una vista -comunes a cualquier forma de armar su queryset, sea por pks
+    de una carga (`_preparar_vista_pks`) o por proyecto entero
+    (`_preparar_vista_proyecto`)-."""
     cadena = vista["cadena"]
-    modelo_base = vista["modelo_base"]
     campos_por_modelo = vista.get("campos", {})
-
-    if not pks:
-        return vista, None, None, None
-
     columnas = _columnas_de_vista(vista)
     # Mapa clave ("Modelo.campo") -> ruta ORM, para poder traducir los filtros
     # del usuario a filter(**{"ruta__campo__icontains": ...}).
     ruta_orm_por_clave = {}
     ruta_sitio = None
+    ruta_ue = None
     for modelo_nombre, ruta in cadena:
         for f in _campos_planos(apps.get_model("app", modelo_nombre), campos_por_modelo.get(modelo_nombre)):
             ruta_orm_por_clave[f"{modelo_nombre}.{f.name}"] = ruta + [f.name]
         if modelo_nombre == "Sitio":
             ruta_sitio = ruta
+        if modelo_nombre == "UnidadExperimental":
+            ruta_ue = ruta
+    return columnas, ruta_orm_por_clave, ruta_sitio, ruta_ue
 
-    ModeloBase = apps.get_model("app", modelo_base)
-    qs = ModeloBase.objects.filter(pk__in=pks).select_related(*_select_related_de_cadena(cadena))
+
+def _aplicar_filtros_vista(qs, vista, ruta_orm_por_clave, ruta_sitio, filtros_raw, sitio_id, geo_filtros):
+    """Filtro exacto por sitio, geográficos/fecha y de texto libre por
+    columna -comunes a cualquier forma de armar el queryset de una vista-.
+
+    "geo_filtros" (dict opcional con claves vereda/municipio/departamento/
+    region/desde/hasta) replica para esta tabla genérica los mismos filtros
+    del panel de filtros que ya soportan /api/geo/resumen/ y /api/geo/series/
+    -así el panel de "Datos detallados" queda coherente con el mapa-. Los
+    geográficos se aplican vía la ruta a Sitio ya calculada para el filtro de
+    "sitio_id"; desde/hasta solo si el modelo base de la vista tiene un campo
+    "fecha" propio (no todas lo tienen, ej. unidad_muestreo usa
+    fecha_instalacion)."""
+    ModeloBase = apps.get_model("app", vista["modelo_base"])
 
     # Filtro exacto por sitio (usado por el geoportal al elegir un marcador
     # en el mapa): a diferencia de los filtros de texto de abajo, este es un
     # match exacto de pk, no icontains.
     if sitio_id and ruta_sitio is not None:
         qs = qs.filter(**{f"{'__'.join(ruta_sitio + ['pk'])}": sitio_id})
+
+    geo_filtros = geo_filtros or {}
+    if ruta_sitio is not None:
+        for campo, sufijo in (
+            ("vereda", "vereda_id"),
+            ("municipio", "vereda__municipio_id"),
+            ("departamento", "vereda__municipio__departamento_id"),
+            ("region", "vereda__municipio__departamento__region_id"),
+        ):
+            valor = geo_filtros.get(campo)
+            if valor:
+                qs = qs.filter(**{"__".join(ruta_sitio + [sufijo]): valor})
+
+    desde, hasta = geo_filtros.get("desde"), geo_filtros.get("hasta")
+    if desde or hasta:
+        try:
+            ModeloBase._meta.get_field("fecha")
+        except FieldDoesNotExist:
+            pass
+        else:
+            if desde:
+                qs = qs.filter(fecha__gte=desde)
+            if hasta:
+                qs = qs.filter(fecha__lte=hasta)
 
     try:
         filtros = json.loads(filtros_raw or "{}")
@@ -2189,7 +2299,24 @@ def _preparar_vista_pks(pks, nombre_vista, filtros_raw, sitio_id=None):
             continue
         qs = qs.filter(**{f"{'__'.join(ruta_orm)}__icontains": texto})
 
-    qs = qs.order_by(*vista["orden"])
+    return qs.order_by(*vista["orden"])
+
+
+def _preparar_vista_pks(pks, nombre_vista, filtros_raw, sitio_id=None, geo_filtros=None):
+    """Resuelve vista + queryset filtrado/ordenado a partir de una lista de
+    pks del modelo base ya calculada (por una carga específica -ver
+    `_preparar_vista_carga`, la única consumidora hoy-)."""
+    vista = _VISTAS_DESNORMALIZADAS.get(nombre_vista)
+    if vista is None:
+        return None, None, None, f"Vista desconocida: {nombre_vista}"
+
+    if not pks:
+        return vista, None, None, None
+
+    columnas, ruta_orm_por_clave, ruta_sitio, _ruta_ue = _metadatos_vista(vista)
+    ModeloBase = apps.get_model("app", vista["modelo_base"])
+    qs = ModeloBase.objects.filter(pk__in=pks).select_related(*_select_related_de_cadena(vista["cadena"]))
+    qs = _aplicar_filtros_vista(qs, vista, ruta_orm_por_clave, ruta_sitio, filtros_raw, sitio_id, geo_filtros)
     return vista, columnas, qs, None
 
 
@@ -2251,14 +2378,18 @@ def datos_carga(request, fuente_id, carga_id):
     )
 
 
+_GEO_FILTROS_GET = ("vereda", "municipio", "departamento", "region", "desde", "hasta")
+
+
 def datos_proyecto(request, proyecto_id):
     if not Proyecto.objects.filter(pk=proyecto_id).exists():
         return JsonResponse({"error": "Proyecto no encontrado"}, status=404)
 
     nombre_vista = request.GET.get("vista", "submuestra_gei")
     sitio_id = request.GET.get("sitio") or None
+    geo_filtros = {k: request.GET.get(k) for k in _GEO_FILTROS_GET if request.GET.get(k)}
     vista, columnas, qs, error = _preparar_vista_proyecto(
-        proyecto_id, nombre_vista, request.GET.get("filtros"), sitio_id=sitio_id,
+        proyecto_id, nombre_vista, request.GET.get("filtros"), sitio_id=sitio_id, geo_filtros=geo_filtros,
     )
     if error:
         return JsonResponse({"error": error}, status=400)

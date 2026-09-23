@@ -8,6 +8,46 @@ from app.models import IndividuoArboreo, MuestraBiomasa, MuestraMOM, SubmuestraS
 _DIMENSIONES_BIOMASA = ("familia", "genero", "especie")
 
 
+def _aplicar_filtros_geo(qs, request, prefijo_sitio, prefijo_proyecto, campo_fecha=None):
+    """Filtros de proyecto/ubicación (y opcionalmente fecha) que comparten
+    los reportes de biomasa/cos/mom, análogo a _aplicar_filtros_comunes de
+    app.api.geo.views pero parametrizado por la cadena de FKs de cada
+    modelo -estos reportes no comparten un _CATEGORIA_CONFIG único-."""
+    proyecto_id = request.GET.get("proyecto")
+    if proyecto_id:
+        qs = qs.filter(**{f"{prefijo_proyecto}_id": proyecto_id})
+
+    sitio_id = request.GET.get("sitio")
+    if sitio_id:
+        qs = qs.filter(**{f"{prefijo_sitio}_id": sitio_id})
+
+    vereda_id = request.GET.get("vereda")
+    if vereda_id:
+        qs = qs.filter(**{f"{prefijo_sitio}__vereda_id": vereda_id})
+
+    municipio_id = request.GET.get("municipio")
+    if municipio_id:
+        qs = qs.filter(**{f"{prefijo_sitio}__vereda__municipio_id": municipio_id})
+
+    departamento_id = request.GET.get("departamento")
+    if departamento_id:
+        qs = qs.filter(**{f"{prefijo_sitio}__vereda__municipio__departamento_id": departamento_id})
+
+    region_id = request.GET.get("region")
+    if region_id:
+        qs = qs.filter(**{f"{prefijo_sitio}__vereda__municipio__departamento__region_id": region_id})
+
+    if campo_fecha:
+        desde = request.GET.get("desde")
+        if desde:
+            qs = qs.filter(**{f"{campo_fecha}__gte": desde})
+        hasta = request.GET.get("hasta")
+        if hasta:
+            qs = qs.filter(**{f"{campo_fecha}__lte": hasta})
+
+    return qs
+
+
 @require_GET
 def biomasa_por_taxon(request):
     """Conteo de individuos arbóreos agrupados por taxón:
@@ -25,9 +65,16 @@ def biomasa_por_taxon(request):
             {"error": f"dimension debe ser uno de: {', '.join(_DIMENSIONES_BIOMASA)}"}, status=400,
         )
 
+    qs = IndividuoArboreo.objects.exclude(**{dimension: ""})
+    qs = _aplicar_filtros_geo(
+        qs, request,
+        prefijo_sitio="muestra__unidad_muestreo__sitio",
+        prefijo_proyecto="muestra__unidad_muestreo__unidad_experimental__proyecto",
+        campo_fecha="muestra__fecha",
+    )
+
     qs = (
-        IndividuoArboreo.objects
-        .exclude(**{dimension: ""})
+        qs
         .values(dimension)
         .annotate(
             total_individuos=Count("id"),
@@ -66,15 +113,14 @@ def biomasa_produccion(request):
     PostGIS pesado) en cada fila aunque no se use, lo que sobre una base de
     datos remota hace la consulta mucho más lenta de lo que el volumen de
     filas (unos pocos cientos) haría esperar."""
-    qs = MuestraBiomasa.objects.exclude(fecha=None).order_by("fecha")
-
-    proyecto_id = request.GET.get("proyecto")
-    if proyecto_id:
-        qs = qs.filter(unidad_muestreo__unidad_experimental__proyecto_id=proyecto_id)
-
-    sitio_id = request.GET.get("sitio")
-    if sitio_id:
-        qs = qs.filter(unidad_muestreo__sitio_id=sitio_id)
+    qs = MuestraBiomasa.objects.exclude(fecha=None)
+    qs = _aplicar_filtros_geo(
+        qs, request,
+        prefijo_sitio="unidad_muestreo__sitio",
+        prefijo_proyecto="unidad_muestreo__unidad_experimental__proyecto",
+        campo_fecha="fecha",
+    )
+    qs = qs.order_by("fecha")
 
     campos = qs.values(
         "fecha",
@@ -120,14 +166,12 @@ def cos_por_profundidad(request):
     """% de carbono orgánico del suelo promedio por rango de profundidad
     (0-10, 10-20, 20-30, 30-50, 50-100, 100+ cm)."""
     qs = SubmuestraSuelo.objects.exclude(profundidad_desde_cm=None).exclude(carbono_pct=None)
-
-    proyecto_id = request.GET.get("proyecto")
-    if proyecto_id:
-        qs = qs.filter(unidad_muestreo__unidad_experimental__proyecto_id=proyecto_id)
-
-    sitio_id = request.GET.get("sitio")
-    if sitio_id:
-        qs = qs.filter(unidad_muestreo__sitio_id=sitio_id)
+    qs = _aplicar_filtros_geo(
+        qs, request,
+        prefijo_sitio="unidad_muestreo__sitio",
+        prefijo_proyecto="unidad_muestreo__unidad_experimental__proyecto",
+        campo_fecha="fecha",
+    )
 
     grupos = {}
     for sub in qs.only("profundidad_desde_cm", "carbono_pct"):
@@ -157,10 +201,12 @@ def mom_tendencia(request):
         return JsonResponse({"error": "agrupar debe ser mes o anio"}, status=400)
 
     qs = MuestraMOM.objects.exclude(fecha=None).exclude(carbono_hojarasca_g_m2=None)
-
-    proyecto_id = request.GET.get("proyecto")
-    if proyecto_id:
-        qs = qs.filter(unidad_muestreo__unidad_experimental__proyecto_id=proyecto_id)
+    qs = _aplicar_filtros_geo(
+        qs, request,
+        prefijo_sitio="unidad_muestreo__sitio",
+        prefijo_proyecto="unidad_muestreo__unidad_experimental__proyecto",
+        campo_fecha="fecha",
+    )
 
     trunc = TruncMonth("fecha") if agrupar == "mes" else TruncYear("fecha")
     filas = (
