@@ -4333,7 +4333,7 @@
           "verbose_name": "carga de archivo",
           "verbose_name_plural": "cargas de archivos",
           "descripcion": "Proceso ETL de carga de un archivo de una fuente de datos: inspección de columnas, mapeo, validación e importación.",
-          "total_campos": 6,
+          "total_campos": 9,
           "campos": [
             {
               "nombre": "fuente",
@@ -4402,6 +4402,48 @@
               "tipo": "Entero",
               "tipo_raw": "IntegerField",
               "requerido": true,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "origen_mapeo",
+              "verbose_name": "origen del mapeo",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": true,
+              "max_length": 20,
+              "choices": [
+                {
+                  "valor": "manual",
+                  "etiqueta": "Mapeo manual (Gestión de Datos)"
+                },
+                {
+                  "valor": "ia_chat",
+                  "etiqueta": "Mapeo propuesto por IA (formulario web)"
+                }
+              ],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "validado_por",
+              "verbose_name": "validado por",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "Usuario"
+            },
+            {
+              "nombre": "fecha_validacion",
+              "verbose_name": "fecha de validación",
+              "tipo": "Fecha y hora",
+              "tipo_raw": "DateTimeField",
+              "requerido": false,
               "max_length": null,
               "choices": [],
               "es_fk": false,

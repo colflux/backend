@@ -124,7 +124,15 @@ def sitios_geojson(request):
     "resumen_por_gas" y las de "resumen_biomasa"/"resumen_cos" toman la
     lectura de mayor fecha; ante empate (varias lecturas el mismo dia) se
     resuelve por el id mayor, para que el resultado sea estable entre
-    ejecuciones."""
+    ejecuciones.
+
+    Filtros opcionales (los mismos nombres que /api/geo/resumen/ y
+    /api/geo/series/): "proyecto", "vereda", "municipio", "departamento" y
+    "region" acotan qué Sitio se devuelve; "desde", "hasta", "analizador" y
+    "condicion_luz" acotan las mediciones de flujos usadas para calcular el
+    resumen de cada sitio (desde/hasta también acotan biomasa/cos;
+    analizador/condicion_luz solo existen en flujos). No hay filtro de gas
+    acá -el cliente ya recibe "resumen_por_gas" desagregado por los tres-."""
     sitios = (
         Sitio.objects
         .select_related("vereda", "vereda__municipio", "vereda__municipio__departamento")
@@ -134,6 +142,29 @@ def sitios_geojson(request):
         )
     )
 
+    # Filtros geográficos y de proyecto: acotan qué Sitio se devuelve (a
+    # diferencia de desde/hasta/analizador/condicion_luz, que solo acotan las
+    # mediciones usadas para calcular el resumen de cada sitio, más abajo).
+    proyecto_id = request.GET.get("proyecto")
+    if proyecto_id:
+        sitios = sitios.filter(unidades_muestreo__unidad_experimental__proyecto_id=proyecto_id).distinct()
+
+    vereda_id = request.GET.get("vereda")
+    if vereda_id:
+        sitios = sitios.filter(vereda_id=vereda_id)
+
+    municipio_id = request.GET.get("municipio")
+    if municipio_id:
+        sitios = sitios.filter(vereda__municipio_id=municipio_id)
+
+    departamento_id = request.GET.get("departamento")
+    if departamento_id:
+        sitios = sitios.filter(vereda__municipio__departamento_id=departamento_id)
+
+    region_id = request.GET.get("region")
+    if region_id:
+        sitios = sitios.filter(vereda__municipio__departamento__region_id=region_id)
+
     # Última lectura, conteo y rango de fechas por sitio y por gas, en una
     # sola pasada (evita N+1: una query para todas las submuestras en vez de
     # una por sitio). Se acumula tanto el resumen agregado (todos los gases,
@@ -141,6 +172,22 @@ def sitios_geojson(request):
     # ultima_medicion_co2) como el resumen desagregado por gas.
     SITIO = "muestra__unidad_muestreo__sitio_id"
     base = SubmuestraGEI.objects.exclude(fecha=None).exclude(**{SITIO: None})
+
+    desde = request.GET.get("desde")
+    if desde:
+        base = base.filter(fecha__gte=desde)
+
+    hasta = request.GET.get("hasta")
+    if hasta:
+        base = base.filter(fecha__lte=hasta)
+
+    analizador_id = request.GET.get("analizador")
+    if analizador_id:
+        base = base.filter(muestra__analizador_id=analizador_id)
+
+    condicion_luz = request.GET.get("condicion_luz")
+    if condicion_luz:
+        base = base.filter(condicion_luz=condicion_luz)
 
     # Conteo y rango de fechas por sitio, agregados en la base.
     resumen_por_sitio = {
@@ -180,28 +227,30 @@ def sitios_geojson(request):
             r["ultimo_valor"] = float(fila["valor"]) if fila["valor"] is not None else None
             r["ultima_unidad"] = fila["muestra__unidad_medida__codigo"]
 
-    resumen_biomasa_por_sitio = _resumen_por_sitio_generico(
-        MuestraBiomasa.objects.exclude(fecha=None).exclude(unidad_muestreo__sitio_id=None),
-        "unidad_muestreo__sitio_id",
-        "prom_tonc_ha",
-    )
-    resumen_cos_por_sitio = _resumen_por_sitio_generico(
-        SubmuestraSuelo.objects.exclude(fecha=None).exclude(carbono_pct=None).exclude(unidad_muestreo__sitio_id=None),
-        "unidad_muestreo__sitio_id",
-        "carbono_pct",
-    )
+    biomasa_qs = MuestraBiomasa.objects.exclude(fecha=None).exclude(unidad_muestreo__sitio_id=None)
+    cos_qs = SubmuestraSuelo.objects.exclude(fecha=None).exclude(carbono_pct=None).exclude(unidad_muestreo__sitio_id=None)
+    if desde:
+        biomasa_qs = biomasa_qs.filter(fecha__gte=desde)
+        cos_qs = cos_qs.filter(fecha__gte=desde)
+    if hasta:
+        biomasa_qs = biomasa_qs.filter(fecha__lte=hasta)
+        cos_qs = cos_qs.filter(fecha__lte=hasta)
+
+    resumen_biomasa_por_sitio = _resumen_por_sitio_generico(biomasa_qs, "unidad_muestreo__sitio_id", "prom_tonc_ha")
+    resumen_cos_por_sitio = _resumen_por_sitio_generico(cos_qs, "unidad_muestreo__sitio_id", "carbono_pct")
 
     features = []
     for sitio in sitios:
         proyectos = {}
         unidades_muestreo = []
         for um in sitio.unidades_muestreo.all():
+            ue = um.unidad_experimental
             unidades_muestreo.append({
                 "id": um.pk,
                 "nombre": um.nombre,
                 "tipo": um.tipo.nombre if um.tipo_id else None,
+                "unidad_experimental": ue.nombre if ue is not None else None,
             })
-            ue = um.unidad_experimental
             if ue is not None and ue.proyecto_id and ue.proyecto_id not in proyectos:
                 proyectos[ue.proyecto_id] = {"id": ue.proyecto_id, "nombre": ue.proyecto.nombre}
 
@@ -329,6 +378,14 @@ def series_co2(request):
     if region_id:
         qs = qs.filter(muestra__unidad_muestreo__sitio__vereda__municipio__departamento__region_id=region_id)
 
+    analizador_id = request.GET.get("analizador")
+    if analizador_id:
+        qs = qs.filter(muestra__analizador_id=analizador_id)
+
+    condicion_luz = request.GET.get("condicion_luz")
+    if condicion_luz:
+        qs = qs.filter(condicion_luz=condicion_luz)
+
     campos = qs.values(
         "fecha",
         "valor",
@@ -411,6 +468,17 @@ def _aplicar_filtros_comunes(qs, request, categoria="flujos"):
     sitio_id = request.GET.get("sitio")
     if sitio_id:
         qs = qs.filter(**{f"{prefijo_sitio}_id": sitio_id})
+
+    # analizador/condicion_luz solo existen en SubmuestraGEI (flujos) -las
+    # demás categorías no tienen estos campos-.
+    if categoria == "flujos":
+        analizador_id = request.GET.get("analizador")
+        if analizador_id:
+            qs = qs.filter(muestra__analizador_id=analizador_id)
+
+        condicion_luz = request.GET.get("condicion_luz")
+        if condicion_luz:
+            qs = qs.filter(condicion_luz=condicion_luz)
 
     return qs
 
@@ -748,6 +816,26 @@ def tendencia_instalacion(request):
     proyecto_id = request.GET.get("proyecto")
     if proyecto_id:
         qs = qs.filter(unidad_experimental__proyecto_id=proyecto_id)
+
+    sitio_id = request.GET.get("sitio")
+    if sitio_id:
+        qs = qs.filter(sitio_id=sitio_id)
+
+    vereda_id = request.GET.get("vereda")
+    if vereda_id:
+        qs = qs.filter(sitio__vereda_id=vereda_id)
+
+    municipio_id = request.GET.get("municipio")
+    if municipio_id:
+        qs = qs.filter(sitio__vereda__municipio_id=municipio_id)
+
+    departamento_id = request.GET.get("departamento")
+    if departamento_id:
+        qs = qs.filter(sitio__vereda__municipio__departamento_id=departamento_id)
+
+    region_id = request.GET.get("region")
+    if region_id:
+        qs = qs.filter(sitio__vereda__municipio__departamento__region_id=region_id)
 
     trunc = TruncMonth("fecha_instalacion") if agrupar == "mes" else TruncYear("fecha_instalacion")
     filas = (

@@ -5,10 +5,12 @@ from app.api.auth.views import ForgotPasswordView, LoginView, LogoutView, MeView
 from app.api.dashboard.views import DashboardView, DataModelView, VisualizerView, chart_data
 from app.api.datos.views import FuenteDatosViewSet, fuentes_datos_api
 from app.api.etl.views import (
-    archivo_fuente, campos_destino, datos_carga, datos_proyecto, exportar_carga, exportar_proyecto, importar_carga,
-    mapeo_carga, previsualizar_carga, regex_sugerido, upload_archivo, validar_carga, verificar_existencia,
+    archivo_fuente, campos_destino, datos_carga, datos_proyecto, exportar_carga, exportar_proyecto, fk_choices_view,
+    importar_carga, mapeo_carga, previsualizar_carga, regex_sugerido, upload_archivo, validar_carga,
+    verificar_existencia,
 )
 from app.api.geo.views import resumen_categorico, resumen_geografico, series_co2, sitios_geojson, tendencia_instalacion
+from app.api.ia_carga.views import columnas_carga_ia, confirmar_mapeo_ia, iniciar_carga_ia
 from app.api.institucion.views import InstitucionViewSet
 from app.api.proyecto.views import ProyectoViewSet
 from app.api.reglas.views import (
@@ -48,8 +50,12 @@ urlpatterns = [
     path("api/proyectos/crear/", ProyectoViewSet.as_view({"post": "create"}), name="proyectos-crear"),
     path("api/responsables/crear/", ReportadorViewSet.as_view({"post": "create"}), name="responsables-crear"),
     path("api/etl/campos-destino/", campos_destino, name="etl-campos-destino"),
+    path("api/etl/fk-choices/", fk_choices_view, name="etl-fk-choices"),
     path("api/etl/regex-sugerido/", regex_sugerido, name="etl-regex-sugerido"),
     path("api/etl/verificar-existencia/", verificar_existencia, name="etl-verificar-existencia"),
+    path("api/ia-carga/subir/", iniciar_carga_ia, name="ia-carga-subir"),
+    path("api/ia-carga/<int:carga_id>/", columnas_carga_ia, name="ia-carga-columnas"),
+    path("api/ia-carga/<int:carga_id>/confirmar/", confirmar_mapeo_ia, name="ia-carga-confirmar"),
     path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/mapeo/", mapeo_carga, name="mapeo-carga"),
     path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/validar/", validar_carga, name="validar-carga"),
     path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/previsualizar/", previsualizar_carga, name="previsualizar-carga"),
