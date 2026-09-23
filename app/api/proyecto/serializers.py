@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
-from app.models import Proyecto
+from app.api.institucion.serializers import InstitucionSerializer
+from app.models import Institucion, Proyecto
 
 
 class ProyectoResumenSerializer(serializers.ModelSerializer):
@@ -10,6 +11,11 @@ class ProyectoResumenSerializer(serializers.ModelSerializer):
 
 
 class ProyectoSerializer(serializers.ModelSerializer):
+    instituciones = serializers.PrimaryKeyRelatedField(
+        queryset=Institucion.objects.all(), many=True, required=False
+    )
+    instituciones_detalle = InstitucionSerializer(source="instituciones", many=True, read_only=True)
+
     class Meta:
         model = Proyecto
         fields = [
@@ -21,4 +27,6 @@ class ProyectoSerializer(serializers.ModelSerializer):
             "objetivo_general",
             "fecha_inicio",
             "fecha_fin",
+            "instituciones",
+            "instituciones_detalle",
         ]
