@@ -207,7 +207,18 @@ def fk_choices(field, proyecto=None):
         return []
 
 
-def campo_to_catalogo(field, proyecto=None, incluir_instancias_fk=False):
+# Campos que el ETL llena solo (ver app/api/etl/views.py, kwargs.setdefault),
+# aunque el modelo los marque como requeridos: el wizard no debe pedirle al
+# usuario que los mapee, porque ya se resuelven desde la fuente/carga.
+CAMPOS_AUTOMATICOS_ETL = {
+    ("UnidadExperimental", "proyecto"),
+    ("UnidadMuestreo", "fuente_datos"),
+    ("UnidadMuestreo", "unidad_experimental"),
+    ("MuestraAmbiental", "fuente_datos"),
+}
+
+
+def campo_to_catalogo(field, proyecto=None, incluir_instancias_fk=False, nombre_modelo=None):
     """`incluir_instancias_fk` solo debe pedirlo el ETL (campos_destino), que
     necesita ofrecer instancias reales ya cargadas (p. ej. qué UnidadMuestreo
     ya existen) para que el usuario elija una al mapear una columna. El
@@ -226,11 +237,13 @@ def campo_to_catalogo(field, proyecto=None, incluir_instancias_fk=False):
     return {
         "nombre": field.name,
         "verbose_name": str(getattr(field, "verbose_name", field.name)),
+        "help_text": str(getattr(field, "help_text", "") or ""),
         "tipo": TIPO_MAP.get(tipo_raw, tipo_raw),
         "tipo_raw": tipo_raw,
         "requerido": not (
             getattr(field, "blank", True) or getattr(field, "null", True)
         ),
+        "automatico": (nombre_modelo, field.name) in CAMPOS_AUTOMATICOS_ETL,
         "max_length": getattr(field, "max_length", None),
         "choices": choices,
         "es_fk": es_fk,
@@ -255,7 +268,7 @@ def modelo_to_catalogo(nombre_modelo):
             continue
         if field.name in ("id", "created_at", "updated_at"):
             continue
-        campos.append(campo_to_catalogo(field))
+        campos.append(campo_to_catalogo(field, nombre_modelo=nombre_modelo))
 
     entry = {
         "nombre": nombre_modelo,

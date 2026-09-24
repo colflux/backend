@@ -14,6 +14,7 @@ import pandas as pd
 
 from django.apps import apps
 from django.conf import settings
+from django.core.cache import cache
 from django.core.exceptions import FieldDoesNotExist
 from django.db import models, transaction
 from django.http import HttpResponse, JsonResponse
@@ -68,12 +69,24 @@ for _grupo in GRUPOS_CATALOGO:
         SECCIONES_ETL.append({
             "nombre": "Unidad de Muestreo",
             "icono": "📏",
+            # Solo el modelo base: nombre, tipo (obligatorio, ver
+            # _validar_obligatorios_unidad_muestreo), fecha de instalación,
+            # compartimento. Parcela/Transecto quedan en la sección siguiente
+            # porque cuáles de sus atributos aplican depende del valor que
+            # se le haya dado acá a "tipo" -mostrarlos juntos hacía parecer
+            # que un archivo con datos de Parcela Y de Transecto era normal,
+            # cuando una unidad de muestreo solo puede ser de un tipo-.
+            "entidades": ["UnidadMuestreo"],
+        })
+        SECCIONES_ETL.append({
+            "nombre": "Detalles de muestreo",
+            "icono": "📐",
             # UnidadMuestreoTipo no se incluye aquí a propósito: es un catálogo
             # cerrado de tipos (parcela, transecto, etc.), no datos que el ETL
-            # deba crear o modificar. El campo "tipo" de UnidadMuestreo se sigue
-            # pudiendo mapear igual, pero como FK de solo selección entre los
-            # tipos ya existentes (ver fk_choices en catalogo/generator.py).
-            "entidades": ["UnidadMuestreo", "Parcela", "Transecto"],
+            # deba crear o modificar. El campo "tipo" de UnidadMuestreo se
+            # mapea en la sección anterior, como FK de solo selección entre
+            # los tipos ya existentes (ver fk_choices en catalogo/generator.py).
+            "entidades": ["Parcela", "Transecto"],
         })
         SECCIONES_ETL.append({
             "nombre": "Sitio",
@@ -186,6 +199,138 @@ def _columnas_desde_dataframe(df):
     return columnas
 
 
+def _outliers_iqr(series_numerica):
+    """Cantidad de valores fuera de [Q1 - 1.5·IQR, Q3 + 1.5·IQR] -método
+    estándar de caja (boxplot) para columnas numéricas-. Con menos de 4
+    valores no hay suficiente base para calcular cuartiles con sentido."""
+    limpio = series_numerica.dropna()
+    if len(limpio) < 4:
+        return 0
+    q1 = limpio.quantile(0.25)
+    q3 = limpio.quantile(0.75)
+    iqr = q3 - q1
+    if iqr == 0:
+        return 0
+    limite_inf = q1 - 1.5 * iqr
+    limite_sup = q3 + 1.5 * iqr
+    return int(((limpio < limite_inf) | (limpio > limite_sup)).sum())
+
+
+def _top_valores(series, n=5):
+    """Los `n` valores más frecuentes (no nulos) de una columna, para el
+    resumen tipo `.describe()` de columnas categóricas/texto."""
+    conteos = series.dropna().astype(str).value_counts().head(n)
+    return [{"valor": str(v), "conteo": int(c)} for v, c in conteos.items()]
+
+
+def _eda_columna(df, col):
+    """Estadísticas descriptivas + señales de calidad de una sola columna,
+    para el paso de análisis EDA del wizard (entre "Analizar fuente" y "Qué
+    encontramos"): así el usuario decide si el archivo está listo para
+    mapear antes de invertir tiempo en el mapeo."""
+    serie = df[col]
+    total = len(serie)
+    nulls = int(serie.isna().sum())
+    dtype = _infer_dtype(serie)
+    valores_unicos = int(serie.nunique(dropna=True))
+
+    stats = {
+        "nombre": col,
+        "dtype": dtype,
+        "total": total,
+        "nulls": nulls,
+        "nulls_pct": round(100 * nulls / total, 1) if total else 0.0,
+        "valores_unicos": valores_unicos,
+        "minimo": None,
+        "maximo": None,
+        "promedio": None,
+        "desviacion": None,
+        "outliers": None,
+        "top_valores": None,
+        "hoja": None,
+    }
+
+    if dtype == "number":
+        limpio = serie.dropna()
+        if len(limpio):
+            stats["minimo"] = _to_python(limpio.min())
+            stats["maximo"] = _to_python(limpio.max())
+            stats["promedio"] = _to_python(round(float(limpio.mean()), 4))
+            stats["desviacion"] = _to_python(round(float(limpio.std()), 4)) if len(limpio) > 1 else 0.0
+            stats["outliers"] = _outliers_iqr(limpio)
+    elif dtype == "date":
+        limpio = serie.dropna()
+        if len(limpio):
+            stats["minimo"] = str(limpio.min())
+            stats["maximo"] = str(limpio.max())
+    else:
+        stats["top_valores"] = _top_valores(serie)
+
+    return stats
+
+
+def _eda_desde_dataframe(df):
+    """Resumen EDA completo de la carga: estadística descriptiva por columna
+    (similar a `df.describe()`) y señales de calidad de datos (nulos,
+    outliers, duplicados) para mostrarse en el paso EDA del wizard antes de
+    que el usuario decida el mapeo. Se calcula sobre el DataFrame completo
+    -no solo la muestra que ya viaja en `columnas`- porque duplicados y
+    outliers requieren verlo todo."""
+    columnas = [_eda_columna(df, col) for col in df.columns]
+
+    filas_duplicadas = int(df.duplicated().sum())
+    columnas_con_muchos_nulos = [c["nombre"] for c in columnas if c["nulls_pct"] >= 30]
+    columnas_con_outliers = [c["nombre"] for c in columnas if (c["outliers"] or 0) > 0]
+
+    return {
+        "total_filas": len(df),
+        "total_columnas": len(df.columns),
+        "columnas": columnas,
+        "filas_duplicadas": filas_duplicadas,
+        "columnas_con_muchos_nulos": columnas_con_muchos_nulos,
+        "columnas_con_outliers": columnas_con_outliers,
+    }
+
+
+def _agregar_eda_y_columnas_otras_hojas(eda, path_archivo, sheets, hoja_activa, hojas_data, carga_id):
+    """Agrega al EDA las columnas de las demás hojas del Excel, y llena
+    `hojas_data` con `columnas_raw`/`total_filas` de cada una -no solo la
+    hoja activa se mapea/importa: una misma carga puede mapear varias hojas
+    del mismo archivo en un solo flujo (Sitio/UM/UE, mediciones GEI, Clima,
+    etc.), así que hace falta esta info de cada una desde el primer
+    análisis, sin tener que volver a leer el archivo por hoja. Se excluyen
+    las hojas de "diccionario de datos" (no se mapean). Cada columna del EDA
+    queda marcada con `hoja` para distinguir su origen; las señales de
+    calidad (duplicados, nulos altos, outliers) se dejan acotadas a la hoja
+    activa, que es la del EDA calculado por el llamador."""
+    for c in eda["columnas"]:
+        c["hoja"] = hoja_activa
+
+    for otra_hoja in sheets:
+        if otra_hoja == hoja_activa or "diccionario" in otra_hoja.lower():
+            continue
+        try:
+            df_otra = pd.read_excel(path_archivo, sheet_name=otra_hoja)
+        except Exception:
+            logger.warning("No se pudo leer la hoja '%s' para el EDA", otra_hoja, exc_info=True)
+            continue
+        if df_otra.empty:
+            continue
+        columnas_otra = [_eda_columna(df_otra, col) for col in df_otra.columns]
+        for c in columnas_otra:
+            c["hoja"] = otra_hoja
+        eda["columnas"].extend(columnas_otra)
+
+        hojas_data[otra_hoja] = {
+            "columnas_raw": _columnas_desde_dataframe(df_otra),
+            "total_filas": len(df_otra),
+        }
+        cache.set(f"etl_carga_df_{carga_id}_{otra_hoja}", df_otra, timeout=None)
+
+    eda["total_columnas"] = len(eda["columnas"])
+    return eda
+
+
 _EXTENSIONES_VALIDAS = (".xlsx", ".xls", ".csv")
 
 _EXT_POR_CONTENT_TYPE = {
@@ -280,6 +425,26 @@ def _leer_csv(path, **kwargs):
     raise ValueError("No se pudo determinar la codificación del archivo CSV.")
 
 
+def _leer_dataframe_carga(carga, hoja):
+    """Lee el DataFrame de una hoja del archivo de una `carga`, cacheado por
+    `carga.id` + `hoja` (una misma carga puede mapear varias hojas del mismo
+    archivo a la vez). El archivo queda fijo desde `upload_archivo`, así que
+    no hace falta releer/reparsear el Excel o CSV completo -ni redescargarlo
+    si la fuente es remota- en cada validar/previsualizar/importar de
+    sección: eso es lo que hacía lento cada clic de "Validar y guardar", sin
+    importar cuántas columnas tuviera mapeadas esa sección.
+    Devuelve una copia porque el llamador la muta in-place (ver
+    `_aplicar_estrategia_nulos`)."""
+    clave = f"etl_carga_df_{carga.id}_{hoja}"
+    df = cache.get(clave)
+    if df is None:
+        path = _resolver_ruta_fuente(carga.fuente)
+        nombre = str(path).lower()
+        df = _leer_csv(path) if nombre.endswith(".csv") else pd.read_excel(path, sheet_name=hoja)
+        cache.set(clave, df, timeout=None)
+    return df.copy()
+
+
 def _resolver_ruta_fuente(fuente):
     raw_path = (fuente.url or "").strip()
     if not raw_path:
@@ -347,6 +512,7 @@ def upload_archivo(request, fuente_id):
         return JsonResponse({"error": "Fuente de datos no encontrada"}, status=404)
 
     archivo_subido = request.FILES.get("archivo")
+    hoja_solicitada = (request.POST.get("hoja") or "").strip()
 
     try:
         if archivo_subido:
@@ -371,26 +537,52 @@ def upload_archivo(request, fuente_id):
             wb = openpyxl.load_workbook(path_archivo, read_only=True, data_only=True)
             sheets = wb.sheetnames
 
-            hoja_activa = sheets[0]
-            for sheet_name in sheets:
-                ws = wb[sheet_name]
-                if ws.max_row and ws.max_row > 1:
-                    hoja_activa = sheet_name
-                    break
+            if hoja_solicitada and hoja_solicitada in sheets:
+                # El usuario eligió explícitamente qué hoja mapear en esta
+                # carga (p. ej. para registrar CO2/CH4/Clima además de la
+                # hoja principal) -no se aplica la detección automática de
+                # abajo, que siempre cae en la primera hoja con datos-.
+                hoja_activa = hoja_solicitada
+            else:
+                hoja_activa = sheets[0]
+                for sheet_name in sheets:
+                    ws = wb[sheet_name]
+                    if ws.max_row and ws.max_row > 1:
+                        hoja_activa = sheet_name
+                        break
 
             df = pd.read_excel(path_archivo, sheet_name=hoja_activa)
             total_filas = len(df)
             columnas = _columnas_desde_dataframe(df)
             wb.close()
 
+        # Precarga la caché con el DataFrame que ya se leyó acá, para que el
+        # primer "Validar y guardar" de esta carga tampoco lo tenga que releer.
+        cache.set(f"etl_carga_df_{carga.pk}_{hoja_activa}", df, timeout=None)
+
+        # `hojas_data` reúne columnas_raw/total_filas por hoja -no solo la
+        # activa- para que el asistente pueda mapear varias hojas del mismo
+        # archivo (Sitio/UM/UE, CO2, CH4, Clima, ...) en un solo flujo, sin
+        # tener que volver a analizar el archivo por cada una.
+        hojas_data = {hoja_activa: {"columnas_raw": columnas, "total_filas": total_filas}}
+
+        # EDA sobre el DataFrame completo (no la muestra de `columnas`): se
+        # calcula acá, aprovechando que el archivo ya está leído en memoria,
+        # para el paso "Análisis EDA" del wizard (antes de decidir el mapeo).
+        eda = _eda_desde_dataframe(df)
+        if sheets:
+            eda = _agregar_eda_y_columnas_otras_hojas(eda, path_archivo, sheets, hoja_activa, hojas_data, carga.pk)
+
         carga.hoja_activa = hoja_activa
         carga.columnas_raw = columnas
         carga.total_filas = total_filas
-        carga.save(update_fields=["hoja_activa", "columnas_raw", "total_filas"])
+        carga.hojas = hojas_data
+        carga.save(update_fields=["hoja_activa", "columnas_raw", "total_filas", "hojas"])
 
         # Recuperar el avance de mapeo de la última carga de esta fuente,
-        # copiándolo a la carga nueva (solo columnas que siguen existiendo).
-        mapeos_previos = []
+        # copiándolo a la carga nueva (solo columnas que siguen existiendo),
+        # por cada hoja analizada acá.
+        mapeos_previos_por_hoja = {}
         carga_previa = (
             CargaArchivo.objects.filter(fuente=fuente, mapeos__isnull=False)
             .exclude(pk=carga.pk)
@@ -398,42 +590,54 @@ def upload_archivo(request, fuente_id):
             .first()
         )
         if carga_previa:
-            nombres_actuales = {c["nombre"] for c in columnas}
-            # Los atributos manuales (constantes) no dependen de las columnas del
-            # archivo, así que siempre se conservan.
-            copias = [
-                m for m in carga_previa.mapeos.all()
-                if m.columna_origen in nombres_actuales or m.transformacion == "constante"
-            ]
-            MapeoColumna.objects.bulk_create([
-                MapeoColumna(
-                    carga=carga,
-                    columna_origen=m.columna_origen,
-                    modelo_destino=m.modelo_destino,
-                    campo_destino=m.campo_destino,
-                    transformacion=m.transformacion,
-                    regex_patron=m.regex_patron,
-                    mapeo_valores=m.mapeo_valores,
-                    valor_constante=m.valor_constante,
-                    estrategia_nulos=m.estrategia_nulos,
-                    valor_relleno_manual=m.valor_relleno_manual,
+            nuevos_mapeos = []
+            for hoja_nombre, info in hojas_data.items():
+                nombres_actuales = {c["nombre"] for c in info["columnas_raw"]}
+                # Los atributos manuales (constantes) no dependen de las
+                # columnas del archivo, así que siempre se conservan.
+                copias = [
+                    m for m in carga_previa.mapeos.filter(hoja=hoja_nombre)
+                    if m.columna_origen in nombres_actuales or m.transformacion == "constante"
+                ]
+                if not copias and carga_previa.hoja_activa == hoja_nombre:
+                    # Cargas previas a esta migración no tenían `hoja` en sus
+                    # MapeoColumna (queda ""): si esa carga previa solo
+                    # mapeaba justo esta hoja, se asume que son suyos.
+                    copias = [
+                        m for m in carga_previa.mapeos.filter(hoja="")
+                        if m.columna_origen in nombres_actuales or m.transformacion == "constante"
+                    ]
+                nuevos_mapeos.extend(
+                    MapeoColumna(
+                        carga=carga,
+                        hoja=hoja_nombre,
+                        columna_origen=m.columna_origen,
+                        modelo_destino=m.modelo_destino,
+                        campo_destino=m.campo_destino,
+                        transformacion=m.transformacion,
+                        regex_patron=m.regex_patron,
+                        mapeo_valores=m.mapeo_valores,
+                        valor_constante=m.valor_constante,
+                        estrategia_nulos=m.estrategia_nulos,
+                        valor_relleno_manual=m.valor_relleno_manual,
+                    )
+                    for m in copias
                 )
-                for m in copias
-            ])
-            mapeos_previos = [
-                {
-                    "columna_origen": m.columna_origen,
-                    "modelo_destino": m.modelo_destino,
-                    "campo_destino": m.campo_destino,
-                    "transformacion": m.transformacion,
-                    "regex_patron": m.regex_patron,
-                    "mapeo_valores": m.mapeo_valores,
-                    "valor_constante": m.valor_constante,
-                    "estrategia_nulos": m.estrategia_nulos,
-                    "valor_relleno_manual": m.valor_relleno_manual,
-                }
-                for m in copias
-            ]
+                mapeos_previos_por_hoja[hoja_nombre] = [
+                    {
+                        "columna_origen": m.columna_origen,
+                        "modelo_destino": m.modelo_destino,
+                        "campo_destino": m.campo_destino,
+                        "transformacion": m.transformacion,
+                        "regex_patron": m.regex_patron,
+                        "mapeo_valores": m.mapeo_valores,
+                        "valor_constante": m.valor_constante,
+                        "estrategia_nulos": m.estrategia_nulos,
+                        "valor_relleno_manual": m.valor_relleno_manual,
+                    }
+                    for m in copias
+                ]
+            MapeoColumna.objects.bulk_create(nuevos_mapeos)
 
         return JsonResponse({
             "carga_id": carga.pk,
@@ -441,7 +645,16 @@ def upload_archivo(request, fuente_id):
             "hoja_activa": hoja_activa,
             "total_filas": total_filas,
             "columnas": columnas,
-            "mapeos": mapeos_previos,
+            "mapeos": mapeos_previos_por_hoja.get(hoja_activa, []),
+            "eda": eda,
+            "hojas": {
+                hoja_nombre: {
+                    "total_filas": info["total_filas"],
+                    "columnas": info["columnas_raw"],
+                    "mapeos": mapeos_previos_por_hoja.get(hoja_nombre, []),
+                }
+                for hoja_nombre, info in hojas_data.items()
+            },
         }, json_dumps_params={"ensure_ascii": False})
 
     except (ValueError, FileNotFoundError) as exc:
@@ -487,7 +700,14 @@ def campos_destino(request):
                 # produce una única fila por modelo/fila de origen.
                 if nombre == "Cobertura" and field.name in ("sitio", "tipo"):
                     continue
-                campos.append(campo_to_catalogo(field))
+                # UnidadMuestreo.sitio se vincula solo (igual que Cobertura.sitio
+                # arriba): al guardar la sección Sitio, _procesar_filas la
+                # reprocesa junto con Unidad Experimental/Unidad de Muestreo y
+                # engancha por la fila del archivo, sin que el usuario mapee una
+                # columna acá.
+                if nombre == "UnidadMuestreo" and field.name == "sitio":
+                    continue
+                campos.append(campo_to_catalogo(field, nombre_modelo=nombre))
             if campos:
                 modelos[nombre] = campos
                 grupos[nombre] = {
@@ -646,21 +866,29 @@ def mapeo_carga(request, fuente_id, carga_id):
         return JsonResponse({"error": "Carga no encontrada"}, status=404)
 
     if request.method == "GET":
+        # `hoja` es opcional: sin ella se mantiene el comportamiento previo
+        # (todos los mapeos de la carga, columnas_raw/total_filas de la hoja
+        # activa) para no romper la vista de solo lectura EtlMapeo.tsx; con
+        # ella, se acota a esa hoja -la que usa el asistente de mapeo, que
+        # ahora puede tener varias hojas mapeadas en una misma carga-.
+        hoja = request.GET.get("hoja")
+        mapeos_qs = carga.mapeos if hoja is None else carga.mapeos.filter(hoja=hoja)
         mapeos = list(
-            carga.mapeos.values(
+            mapeos_qs.values(
                 "columna_origen", "modelo_destino", "campo_destino",
                 "transformacion", "regex_patron", "factor_escala", "mapeo_valores", "valor_constante",
-                "estrategia_nulos", "valor_relleno_manual", "tipo_cobertura",
+                "estrategia_nulos", "valor_relleno_manual", "tipo_cobertura", "gas_fijo",
                 tipo_cobertura_nombre=models.F("tipo_cobertura__nombre"),
             )
         )
+        info_hoja = carga.hojas.get(hoja) if hoja is not None else None
         return JsonResponse({
             "carga_id": carga.pk,
             "fuente_id": carga.fuente_id,
             "fuente_nombre": carga.fuente.nombre,
             "estado": carga.estado,
-            "columnas_raw": carga.columnas_raw,
-            "total_filas": carga.total_filas,
+            "columnas_raw": info_hoja["columnas_raw"] if info_hoja else carga.columnas_raw,
+            "total_filas": info_hoja["total_filas"] if info_hoja else carga.total_filas,
             "mapeos": mapeos,
         }, json_dumps_params={"ensure_ascii": False})
 
@@ -678,6 +906,10 @@ def mapeo_carga(request, fuente_id, carga_id):
         items = body.get("mapeos")
         if not isinstance(items, list):
             return JsonResponse({"error": "Se esperaba un array en 'mapeos'"}, status=400)
+
+        # Hoja a la que pertenece este lote de mapeos -el asistente guarda de
+        # a una hoja por vez, aunque la carga en conjunto pueda tener varias-.
+        hoja = body.get("hoja", "")
 
         # parcial=True: guardado incremental de columnas sueltas; no cambia el estado
         parcial = bool(body.get("parcial"))
@@ -717,8 +949,19 @@ def mapeo_carga(request, fuente_id, carga_id):
                             status=400,
                         )
 
+                gas_fijo_raw = item.get("gas_fijo") or ""
+                gas_fijo = ""
+                if modelo_destino == "SubmuestraGEI" and campo_destino == "valor" and gas_fijo_raw:
+                    if gas_fijo_raw not in dict(MapeoColumna.GAS_CHOICES_MAPEO):
+                        return JsonResponse(
+                            {"error": f'gas_fijo inválido para la columna "{columna_origen}": {gas_fijo_raw!r}'},
+                            status=400,
+                        )
+                    gas_fijo = gas_fijo_raw
+
                 MapeoColumna.objects.update_or_create(
                     carga=carga,
+                    hoja=hoja,
                     columna_origen=columna_origen,
                     modelo_destino=modelo_destino,
                     campo_destino=campo_destino,
@@ -733,20 +976,23 @@ def mapeo_carga(request, fuente_id, carga_id):
                         else "dejar_null",
                         "valor_relleno_manual": item.get("valor_relleno_manual", ""),
                         "tipo_cobertura_id": tipo_cobertura_id,
+                        "gas_fijo": gas_fijo,
                     },
                 )
                 enviados.add((columna_origen, modelo_destino, campo_destino))
                 guardados += 1
 
-            # El frontend siempre envía el estado completo (columnas + atributos
-            # manuales): lo que ya no venga se elimina (p. ej. un atributo manual
-            # que se quitó o se re-apuntó a otro campo, o un destino extra removido).
+            # El frontend siempre envía el estado completo DE ESTA HOJA (columnas +
+            # atributos manuales): lo que ya no venga se elimina (p. ej. un atributo
+            # manual que se quitó o se re-apuntó a otro campo, o un destino extra
+            # removido). Acotado a `hoja`: si no, borraría los mapeos de las demás
+            # hojas de esta misma carga, que no vienen en este payload.
             claves_actuales = set(
-                carga.mapeos.values_list("columna_origen", "modelo_destino", "campo_destino")
+                carga.mapeos.filter(hoja=hoja).values_list("columna_origen", "modelo_destino", "campo_destino")
             )
             for columna, modelo, campo in claves_actuales - enviados:
                 carga.mapeos.filter(
-                    columna_origen=columna, modelo_destino=modelo, campo_destino=campo,
+                    hoja=hoja, columna_origen=columna, modelo_destino=modelo, campo_destino=campo,
                 ).delete()
 
             if not parcial:
@@ -895,15 +1141,15 @@ def _validar_columna(df, mapeo):
     try:
         modelo_cls = apps.get_model("app", modelo_destino)
     except LookupError:
-        return {"advertencia": "modelo_o_campo_no_encontrado"}
+        return {"advertencia": "modelo_o_campo_no_encontrado", "columna": columna_origen, "errores": []}
 
     try:
         field = modelo_cls._meta.get_field(campo_destino)
     except Exception:
-        return {"advertencia": "modelo_o_campo_no_encontrado"}
+        return {"advertencia": "modelo_o_campo_no_encontrado", "columna": columna_origen, "errores": []}
 
     if columna_origen not in df.columns:
-        return {"advertencia": "modelo_o_campo_no_encontrado"}
+        return {"advertencia": "modelo_o_campo_no_encontrado", "columna": columna_origen, "errores": []}
 
     serie = df[columna_origen]
     errores = []
@@ -1026,7 +1272,7 @@ def _validar_constante(mapeo, total_filas):
         modelo_cls = apps.get_model("app", mapeo.modelo_destino)
         field = modelo_cls._meta.get_field(mapeo.campo_destino)
     except Exception:
-        return {"advertencia": "modelo_o_campo_no_encontrado"}
+        return {"advertencia": "modelo_o_campo_no_encontrado", "columna": mapeo.columna_origen, "errores": []}
 
     val = mapeo.valor_constante
     errores = []
@@ -1094,6 +1340,9 @@ def _validar_obligatorios_unidad_muestreo(mapeos, modelos_incluidos, total_filas
     modelo (por eso _validar_columna/_validar_constante no las cubren):
     - 'nombre' es obligatorio para toda unidad de muestreo, así que debe
       quedar mapeado (columna o atributo manual) antes de guardar la sección.
+    - 'tipo' también es obligatorio (parcela/transecto/...): sin este check,
+      el error real -not-null constraint de la columna tipo_id- solo aparecía
+      como un error crudo de Postgres al momento de guardar.
     - 'unidad_experimental' debe quedar resuelto sí o sí: mapeado explícito,
       o heredado automáticamente porque 'UnidadExperimental' se importa en la
       misma tanda (ver el vínculo automático por fila en importar_carga)."""
@@ -1110,6 +1359,16 @@ def _validar_obligatorios_unidad_muestreo(mapeos, modelos_incluidos, total_filas
                 "El campo 'nombre' de Unidad de Muestreo no está mapeado (ni por "
                 "columna ni como atributo manual). Es obligatorio: toda unidad de "
                 "muestreo necesita un nombre."
+            ),
+        })
+
+    if "tipo" not in campos_um:
+        errores.append({
+            "fila": None, "valor": None, "tipo": "campo_obligatorio_sin_mapear",
+            "mensaje": (
+                "El campo 'tipo' de Unidad de Muestreo no está mapeado (ni por "
+                "columna ni como atributo manual). Es obligatorio: toda unidad de "
+                "muestreo debe ser de un tipo (parcela, transecto, etc.)."
             ),
         })
 
@@ -1165,12 +1424,15 @@ def _validar_obligatorios_unidad_experimental(mapeos, modelos_incluidos, total_f
     }
 
 
-def _validar_unicidad_unidad_experimental(carga, df):
+def _validar_unicidad_unidad_experimental(carga, df, mapeos):
     """Unidad Experimental es única por (proyecto, nombre): la fuente debe
     tener un proyecto asociado, y si ese nombre ya existe en el proyecto con
     otros datos (p. ej. otra descripción), se avisa acá en vez de fallar con
-    un error de base de datos al intentar crearla."""
-    mapeos_ue = [m for m in carga.mapeos.exclude(modelo_destino="") if m.modelo_destino == "UnidadExperimental"]
+    un error de base de datos al intentar crearla.
+    `mapeos` viene acotado a la hoja de `df` -no se re-consulta carga.mapeos-,
+    porque una misma carga puede mapear varias hojas a la vez y cada hoja
+    tiene su propio DataFrame."""
+    mapeos_ue = [m for m in mapeos if m.modelo_destino == "UnidadExperimental"]
     mapeo_nombre = next((m for m in mapeos_ue if m.campo_destino == "nombre"), None)
     if mapeo_nombre is None:
         return None
@@ -1190,7 +1452,7 @@ def _validar_unicidad_unidad_experimental(carga, df):
         # existente, así se hace UNA sola consulta en vez de una por fila
         # (346 consultas contra una BD remota son ~1 minuto, suficiente para
         # que el worker de gunicorn mate la request por timeout).
-        for fila_idx in range(carga.total_filas):
+        for fila_idx in range(len(df)):
             valores = _valores_fila_modelo(df, mapeos_ue, fila_idx)
             nombre = valores.get("nombre")
             if _es_vacio(nombre):
@@ -1233,12 +1495,12 @@ def _validar_unicidad_unidad_experimental(carga, df):
                         break
 
     filas_con_error = {e["fila"] for e in errores if e["fila"] is not None}
-    ok = 0 if any(e["tipo"] == "sin_proyecto" for e in errores) else carga.total_filas - len(filas_con_error)
+    ok = 0 if any(e["tipo"] == "sin_proyecto" for e in errores) else len(df) - len(filas_con_error)
     return {
         "columna": "Unidad Experimental (nombre único por proyecto)",
         "modelo_destino": "UnidadExperimental",
         "campo_destino": "nombre",
-        "total": carga.total_filas,
+        "total": len(df),
         "ok": ok,
         "errores": errores,
     }
@@ -1256,14 +1518,12 @@ def validar_carga(request, fuente_id, carga_id):
         return JsonResponse({"error": "Carga no encontrada"}, status=404)
 
     try:
-        path = _resolver_ruta_fuente(carga.fuente)
-        nombre = str(path).lower()
-        if nombre.endswith(".csv"):
-            df = _leer_csv(path)
-        else:
-            df = pd.read_excel(path, sheet_name=carga.hoja_activa)
+        # `validar_carga` valida toda la carga de una vez (no por sección) y
+        # no la usa el asistente de mapeo (que valida por sección vía
+        # `_validar_seccion`, sí multi-hoja) — se deja acotada a hoja_activa.
+        df = _leer_dataframe_carga(carga, carga.hoja_activa)
 
-        mapeos = carga.mapeos.exclude(modelo_destino="")
+        mapeos = list(carga.mapeos.filter(hoja=carga.hoja_activa).exclude(modelo_destino=""))
         _aplicar_estrategia_nulos(df, mapeos)
 
         resultados = []
@@ -1271,7 +1531,7 @@ def validar_carga(request, fuente_id, carga_id):
 
         for mapeo in mapeos:
             if mapeo.transformacion == "constante":
-                resultado = _validar_constante(mapeo, carga.total_filas)
+                resultado = _validar_constante(mapeo, len(df))
             else:
                 resultado = _validar_columna(df, mapeo)
             if "advertencia" not in resultado:
@@ -1279,20 +1539,20 @@ def validar_carga(request, fuente_id, carga_id):
                     filas_con_error.add(e["fila"])
             resultados.append(resultado)
 
-        resultado_ue = _validar_unicidad_unidad_experimental(carga, df)
+        resultado_ue = _validar_unicidad_unidad_experimental(carga, df, mapeos)
         if resultado_ue is not None:
             for e in resultado_ue["errores"]:
                 filas_con_error.add(e["fila"])
             resultados.append(resultado_ue)
 
         modelos_incluidos = {m.modelo_destino for m in mapeos}
-        resultado_ue_obl = _validar_obligatorios_unidad_experimental(mapeos, modelos_incluidos, carga.total_filas)
+        resultado_ue_obl = _validar_obligatorios_unidad_experimental(mapeos, modelos_incluidos, len(df))
         if resultado_ue_obl is not None:
             for e in resultado_ue_obl["errores"]:
                 filas_con_error.add(e["fila"])
             resultados.append(resultado_ue_obl)
 
-        resultado_um = _validar_obligatorios_unidad_muestreo(mapeos, modelos_incluidos, carga.total_filas)
+        resultado_um = _validar_obligatorios_unidad_muestreo(mapeos, modelos_incluidos, len(df))
         if resultado_um is not None:
             for e in resultado_um["errores"]:
                 filas_con_error.add(e["fila"])
@@ -1308,11 +1568,11 @@ def validar_carga(request, fuente_id, carga_id):
 
         return JsonResponse({
             "resumen": {
-                "total_filas": carga.total_filas,
-                "columnas_mapeadas": mapeos.count(),
+                "total_filas": len(df),
+                "columnas_mapeadas": len(mapeos),
                 "columnas_con_errores": columnas_con_errores,
                 "total_errores": total_errores,
-                "filas_limpias": carga.total_filas - len(filas_con_error),
+                "filas_limpias": len(df) - len(filas_con_error),
                 "filas_con_errores": len(filas_con_error),
             },
             "columnas": resultados,
@@ -1460,7 +1720,258 @@ _CAMPOS_IDENTIDAD = {
 _MODELOS_EVENTO = {"MuestraAmbiental", "MuestraMOM"}
 
 
-def _procesar_fila_cobertura(df, fila_idx, mapeos, instancias_fila, resumen_modelos, pks_por_modelo, detalle):
+def _clave_cache_objeto(modelo, campos):
+    """Clave hasheable para `cache_objetos` a partir de los kwargs de
+    lookup de un get_or_create — los valores de FK ya son instancias de
+    modelo (hasheables por su pk una vez guardadas). None si algún valor no
+    es hasheable (no debería pasar para los campos escalares/FK que arma
+    _procesar_filas, pero mejor no cachear que reventar)."""
+    try:
+        return (modelo, tuple(sorted(campos.items())))
+    except TypeError:
+        return None
+
+
+def _clave_identidad(campos_clave):
+    """Clave hasheable y comparable para un dict campo->valor de identidad
+    (campos_clave de update_or_create): los FK quedan representados por su
+    pk, así una instancia recién traída de la BD y una instancia ya resuelta
+    en memoria para la misma fila producen la MISMA clave."""
+    return tuple(
+        (nombre, valor.pk if hasattr(valor, "pk") else valor)
+        for nombre, valor in sorted(campos_clave.items())
+    )
+
+
+def _clave_identidad_obj(modelo_cls, campos, obj):
+    """Igual que _clave_identidad pero leyendo los valores de una instancia
+    ya guardada en la BD (usa "<campo>_id" en FK para no disparar una
+    consulta adicional por objeto)."""
+    valores = {}
+    for campo in campos:
+        field = modelo_cls._meta.get_field(campo)
+        valores[campo] = getattr(obj, f"{campo}_id") if _es_fk(field) else getattr(obj, campo)
+    return tuple(sorted(valores.items()))
+
+
+def _buscar_existentes_por_identidad(modelo_cls, campos_clave_por_fila):
+    """Trae en UNA sola consulta todos los objetos que ya existan con
+    alguna de las identidades en `campos_clave_por_fila` (lista de dicts
+    campo->valor, todos con el mismo conjunto de claves) — reemplaza el
+    round-trip por fila que hacía update_or_create() cuando se llamaba una
+    vez por cada una de las 346 filas del archivo. Devuelve un dict
+    clave_identidad -> objeto (mismo formato que _clave_identidad)."""
+    if not campos_clave_por_fila:
+        return {}
+    campos = list(campos_clave_por_fila[0])
+
+    vistos = set()
+    unicos = []
+    for campos_clave in campos_clave_por_fila:
+        h = _clave_identidad(campos_clave)
+        if h in vistos:
+            continue
+        vistos.add(h)
+        unicos.append(campos_clave)
+
+    if len(campos) == 1:
+        campo = campos[0]
+        queryset = modelo_cls.objects.filter(**{f"{campo}__in": [c[campo] for c in unicos]})
+    else:
+        condicion = models.Q(**unicos[0])
+        for campos_clave in unicos[1:]:
+            condicion |= models.Q(**campos_clave)
+        queryset = modelo_cls.objects.filter(condicion)
+
+    return {_clave_identidad_obj(modelo_cls, campos, obj): obj for obj in queryset}
+
+
+def _campos_clave_de_fila(modelo, modelo_cls, kwargs):
+    """Mismo criterio de antes para decidir si una fila tiene identidad
+    propia: primero un OneToOneField (p. ej. Parcela -> unidad_muestreo), y
+    si no hay, los campos de _CAMPOS_IDENTIDAD -solo si la fila trae TODOS
+    esos campos con valor real-."""
+    campos_clave = {
+        nombre: valor
+        for nombre, valor in kwargs.items()
+        if type(modelo_cls._meta.get_field(nombre)).__name__ == "OneToOneField"
+    }
+    if not campos_clave and modelo in _CAMPOS_IDENTIDAD:
+        identidad = _CAMPOS_IDENTIDAD[modelo]
+        if all(kwargs.get(c) is not None for c in identidad):
+            campos_clave = {c: kwargs[c] for c in identidad}
+    return campos_clave
+
+
+def _armar_kwargs_modelo_fila(df, fila_idx, mapeos, modelo_cls, resueltos, cache_fk):
+    """Arma los kwargs de una fila para un modelo a partir de sus mapeos:
+    resuelve transformaciones/constantes, FKs (por pk mapeado explícitamente
+    o auto-vinculados a otro modelo ya resuelto en esta misma fila) y
+    coerciona tipos. Devuelve None si a la fila le falta algún valor
+    requerido (columna vacía en un campo obligatorio, "ignorar_fila", FK que
+    no resuelve, etc.) o si no queda ningún campo. Extraído de la Fase 1 de
+    `_procesar_filas` para reutilizarlo también en `_procesar_fila_gei_flujo`."""
+    kwargs = {}
+    incompleto = False
+
+    for mapeo in mapeos:
+        field = modelo_cls._meta.get_field(mapeo.campo_destino)
+
+        if mapeo.transformacion == "constante":
+            valor = None if _es_vacio(mapeo.valor_constante) else mapeo.valor_constante
+        else:
+            val_crudo = df[mapeo.columna_origen].iloc[fila_idx]
+            try:
+                valor = _resolver_valor_columna(val_crudo, mapeo)
+            except ValueError:
+                incompleto = True
+                continue
+
+        if valor is None:
+            # "ignorar_fila": el usuario decidió explícitamente no crear el
+            # registro de este modelo cuando esta columna viene vacía, sin
+            # importar si el campo admite nulos.
+            if mapeo.estrategia_nulos == "ignorar_fila" or not (
+                getattr(field, "blank", True) or getattr(field, "null", True)
+            ):
+                incompleto = True
+            continue
+
+        if _es_fk(field):
+            fk_modelo = field.related_model.__name__
+            if fila_idx in resueltos.get(fk_modelo, {}):
+                kwargs[mapeo.campo_destino] = resueltos[fk_modelo][fila_idx]
+            else:
+                # Resolución por pk memoizada: a diferencia del FK
+                # auto-vinculado de arriba (que varía por fila), esto es un
+                # .get(pk=valor) de solo lectura -mismo pk siempre da el
+                # mismo objeto-, así que cachearlo es seguro incluso si
+                # "valor" se repite en muchas filas (p. ej. un atributo
+                # constante, o una columna con pocos valores distintos como
+                # "tipo"): sin esto, se repetía la misma consulta una vez
+                # por fila.
+                clave_fk = (fk_modelo, valor)
+                if clave_fk in cache_fk:
+                    kwargs[mapeo.campo_destino] = cache_fk[clave_fk]
+                else:
+                    try:
+                        obj_fk = field.related_model.objects.get(pk=valor)
+                    except (field.related_model.DoesNotExist, ValueError, TypeError):
+                        incompleto = True
+                    else:
+                        cache_fk[clave_fk] = obj_fk
+                        kwargs[mapeo.campo_destino] = obj_fk
+        else:
+            try:
+                kwargs[mapeo.campo_destino] = _coercionar_valor(valor, field)
+            except (ValueError, TypeError):
+                incompleto = True
+
+    # Vincular automáticamente los FK hacia otros modelos ya resueltos para
+    # esta misma fila, aunque el usuario no haya mapeado esa columna
+    # explícitamente (p. ej. Parcela se asocia solo a la UnidadMuestreo de
+    # su misma fila).
+    for field in modelo_cls._meta.get_fields():
+        if not _es_fk(field) or field.name in kwargs:
+            continue
+        fk_modelo = field.related_model.__name__
+        if fila_idx in resueltos.get(fk_modelo, {}):
+            kwargs[field.name] = resueltos[fk_modelo][fila_idx]
+
+    if incompleto or not kwargs:
+        return None
+    return kwargs
+
+
+def _resolver_get_or_create(modelo_cls, nombre_modelo, campos, cache_objetos):
+    """get_or_create con memoización en `cache_objetos` y el mismo fallback
+    de MultipleObjectsReturned que usa la rama "genérico" de _procesar_filas
+    -filtro parcial que matchea más de un objeto existente: se usa cualquiera
+    de los que ya matchean en vez de romper la carga entera-. Devuelve
+    (obj, creado)."""
+    clave = _clave_cache_objeto(nombre_modelo, campos)
+    if clave is not None and clave in cache_objetos:
+        return cache_objetos[clave], False
+    try:
+        obj, creado = modelo_cls.objects.get_or_create(**campos)
+    except modelo_cls.MultipleObjectsReturned:
+        obj = modelo_cls.objects.filter(**campos).first()
+        creado = False
+    if clave is not None:
+        cache_objetos[clave] = obj
+    return obj, creado
+
+
+def _procesar_fila_gei_flujo(
+    df, fila_idx, mapeos_muestra_gei, mapeos_submuestra_resto, mapeos_valor_fijo,
+    resueltos, cache_fk, resumen_modelos, pks_por_modelo, detalle, cache_objetos,
+):
+    """Resuelve MuestraGEI+SubmuestraGEI para una fila cuando el archivo trae
+    el flujo de cada gas en su propia columna (formato ancho): a diferencia
+    del camino normal (que fusiona todos los mapeos de un modelo en un único
+    kwargs, formato largo con columna 'gas' + columna 'valor'), acá cada
+    MapeoColumna en `mapeos_valor_fijo` (campo_destino='valor' con gas_fijo)
+    produce su PROPIO par MuestraGEI/SubmuestraGEI, etiquetado con el gas fijo
+    de ese mapeo. Si a la fila le falta el valor de un gas, ese gas se salta
+    sin afectar a los demás."""
+    MuestraGEI = apps.get_model("app", "MuestraGEI")
+    SubmuestraGEI = apps.get_model("app", "SubmuestraGEI")
+
+    kwargs_base_muestra = _armar_kwargs_modelo_fila(
+        df, fila_idx, mapeos_muestra_gei, MuestraGEI, resueltos, cache_fk
+    )
+    if kwargs_base_muestra is None:
+        kwargs_base_muestra = {}
+    kwargs_base_submuestra = _armar_kwargs_modelo_fila(
+        df, fila_idx, mapeos_submuestra_resto, SubmuestraGEI, resueltos, cache_fk
+    )
+    if kwargs_base_submuestra is None:
+        kwargs_base_submuestra = {}
+
+    for mapeo in mapeos_valor_fijo:
+        if mapeo.transformacion == "constante":
+            valor = None if _es_vacio(mapeo.valor_constante) else mapeo.valor_constante
+        else:
+            val_crudo = df[mapeo.columna_origen].iloc[fila_idx]
+            try:
+                valor = _resolver_valor_columna(val_crudo, mapeo)
+            except ValueError:
+                continue
+        if _es_vacio(valor):
+            continue
+        try:
+            valor = _coercionar_valor(valor, SubmuestraGEI._meta.get_field("valor"))
+        except (ValueError, TypeError):
+            continue
+
+        campos_muestra = {**kwargs_base_muestra, "gas": mapeo.gas_fijo}
+        obj_muestra, creado_muestra = _resolver_get_or_create(
+            MuestraGEI, "MuestraGEI", campos_muestra, cache_objetos
+        )
+        resumen_modelos["MuestraGEI"]["creados" if creado_muestra else "reutilizados"] += 1
+        pks_por_modelo.setdefault("MuestraGEI", set()).add(obj_muestra.pk)
+
+        campos_submuestra = {**kwargs_base_submuestra, "valor": valor, "muestra": obj_muestra}
+        obj_submuestra, creado_submuestra = _resolver_get_or_create(
+            SubmuestraGEI, "SubmuestraGEI", campos_submuestra, cache_objetos
+        )
+        resumen_modelos["SubmuestraGEI"]["creados" if creado_submuestra else "reutilizados"] += 1
+        pks_por_modelo.setdefault("SubmuestraGEI", set()).add(obj_submuestra.pk)
+
+        if detalle is not None:
+            for nombre_modelo, obj, creado, campos in (
+                ("MuestraGEI", obj_muestra, creado_muestra, campos_muestra),
+                ("SubmuestraGEI", obj_submuestra, creado_submuestra, campos_submuestra),
+            ):
+                bucket = detalle.setdefault(nombre_modelo, {})
+                if obj.pk not in bucket and len(bucket) < _PREVIEW_MAX_POR_MODELO:
+                    bucket[obj.pk] = {
+                        "accion": "creado" if creado else "reutilizado",
+                        "campos": _representar_kwargs(campos),
+                    }
+
+
+def _procesar_fila_cobertura(df, fila_idx, mapeos, sitio, resumen_modelos, pks_por_modelo, detalle, cache_objetos):
     """Resuelve los mapeos de Cobertura para una fila: a diferencia de
     _procesar_filas (que fusiona todos los mapeos de un modelo en un único
     kwargs), acá cada MapeoColumna con campo_destino="nombre" produce su
@@ -1470,7 +1981,6 @@ def _procesar_fila_cobertura(df, fila_idx, mapeos, instancias_fila, resumen_mode
     mismo criterio que Parcela -> UnidadMuestreo-."""
     Cobertura = apps.get_model("app", "Cobertura")
 
-    sitio = instancias_fila.get("Sitio")
     if sitio is None:
         return
 
@@ -1490,9 +2000,14 @@ def _procesar_fila_cobertura(df, fila_idx, mapeos, instancias_fila, resumen_mode
         if _es_vacio(valor):
             continue
 
-        obj, creado = Cobertura.objects.get_or_create(
-            sitio=sitio, tipo=mapeo.tipo_cobertura, nombre=str(valor),
-        )
+        campos_cobertura = {"sitio": sitio, "tipo": mapeo.tipo_cobertura, "nombre": str(valor)}
+        clave = _clave_cache_objeto("Cobertura", campos_cobertura)
+        if clave is not None and clave in cache_objetos:
+            obj, creado = cache_objetos[clave], False
+        else:
+            obj, creado = Cobertura.objects.get_or_create(**campos_cobertura)
+            if clave is not None:
+                cache_objetos[clave] = obj
         resumen_modelos["Cobertura"]["creados" if creado else "reutilizados"] += 1
         pks_por_modelo.setdefault("Cobertura", set()).add(obj.pk)
 
@@ -1508,89 +2023,98 @@ def _procesar_fila_cobertura(df, fila_idx, mapeos, instancias_fila, resumen_mode
 
 
 def _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos, capturar_detalle=False):
-    """Recorre cada fila del archivo y crea/reutiliza (get_or_create /
-    update_or_create) una instancia por modelo en `orden`, vinculando por FK
-    las que se crearon para la misma fila. Se usa tanto para importar de
-    verdad como, dentro de una transacción que se revierte, para la vista
-    previa (capturar_detalle=True) sin escribir nada permanente."""
+    """Recorre cada modelo en `orden` (uno a la vez, sobre TODAS las filas) y
+    crea/reutiliza sus instancias en lote, vinculando por FK las que ya se
+    resolvieron para modelos anteriores en la misma fila. Se usa tanto para
+    importar de verdad como, dentro de una transacción que se revierte, para
+    la vista previa (capturar_detalle=True) sin escribir nada permanente.
+
+    Antes esto procesaba fila por fila (para cada fila, para cada modelo):
+    para modelos con identidad propia (UnidadMuestreo, Sitio, MuestraAmbiental,
+    Parcela/Transecto vía OneToOne) eso significaba un update_or_create -varios
+    round-trips- POR FILA. Con una base remota, 346 filas únicas (sin nada que
+    memoizar, a diferencia de UnidadExperimental que se repite entre filas)
+    superaban el timeout de gunicorn y mataban el worker a mitad de
+    transacción. Ahora se recorre modelo por modelo: primero se arman los
+    kwargs de TODAS las filas de ese modelo (sin tocar la BD, salvo resolver
+    por pk un FK mapeado explícitamente a una columna), luego UNA consulta
+    trae los que ya existen, y UN bulk_create/bulk_update escribe el resto.
+    El orden topológico (`orden`) sigue garantizando que un modelo se procesa
+    después de aquellos a los que referencia por FK, así que sus instancias
+    ya están resueltas (con pk real) cuando se necesitan."""
     detalle = {} if capturar_detalle else None
     # A diferencia de `detalle` (limitado a _PREVIEW_MAX_POR_MODELO para la
     # UI de vista previa), esto guarda TODOS los pk tocados por esta corrida,
     # sin límite, para poder filtrar después "solo lo de esta carga".
     pks_por_modelo = {}
+    # Memoiza get_or_create() de esta corrida para el branch "genérico" (ver
+    # más abajo): filas repetidas con los mismos valores (p. ej. el mismo
+    # TipoCobertura en muchas filas) no necesitan un round-trip a la BD cada
+    # una. No se usa para _MODELOS_EVENTO (cada fila es una medición real
+    # distinta a propósito) ni para los modelos con identidad propia (donde
+    # "última fila gana" sobre los demás campos y cachear cambiaría ese
+    # comportamiento) -esos dos casos ahora van en lote, ver abajo-.
+    cache_objetos = {}
+    # Memoiza la resolución de FK por pk (ver más abajo, en Fase 1) — de
+    # solo lectura, así que es seguro compartirla entre modelos.
+    cache_fk = {}
+    total_filas = len(df)
+    # resueltos[modelo][fila_idx] = instancia ya creada/reutilizada para esa
+    # fila y ese modelo -reemplaza a instancias_fila de la versión anterior
+    # (que solo vivía durante una fila): acá vive durante todo el paso por
+    # ese modelo, porque ahora se procesa un modelo a la vez, no una fila a
+    # la vez-.
+    resueltos = {modelo: {} for modelo in orden}
 
-    for fila_idx in range(len(df)):
-        instancias_fila = {}
-        for modelo in orden:
-            modelo_cls = apps.get_model("app", modelo)
+    for modelo in orden:
+        modelo_cls = apps.get_model("app", modelo)
+        mapeos = mapeos_por_modelo.get(modelo, [])
 
-            # Caso especial: a diferencia del resto de los modelos, una fila
-            # de origen puede traer varias columnas de Cobertura (CLC, IPCC,
-            # IGBP, Köppen, nombre local, Suelo IPCC), y cada una se vuelve
-            # una fila de Cobertura DISTINTA -no se fusionan en una sola
-            # instancia como hace el resto de este loop (ver
-            # `instancias_fila[modelo] = obj` más abajo, que solo guarda una
-            # por modelo por fila)-, todas ligadas al Sitio de esta fila.
-            if modelo == "Cobertura":
+        # Caso especial: a diferencia del resto de los modelos, una fila de
+        # origen puede traer varias columnas de Cobertura (CLC, IPCC, IGBP,
+        # Köppen, nombre local, Suelo IPCC), y cada una se vuelve una fila de
+        # Cobertura DISTINTA -no se fusionan en una sola instancia como el
+        # resto de este loop-, todas ligadas al Sitio de esa misma fila. Se
+        # deja fila por fila (ya memoizado vía cache_objetos, y Cobertura no
+        # suele ser el cuello de botella).
+        if modelo == "Cobertura":
+            for fila_idx in range(total_filas):
                 _procesar_fila_cobertura(
-                    df, fila_idx, mapeos_por_modelo.get(modelo, []),
-                    instancias_fila, resumen_modelos, pks_por_modelo, detalle,
+                    df, fila_idx, mapeos, resueltos.get("Sitio", {}).get(fila_idx),
+                    resumen_modelos, pks_por_modelo, detalle, cache_objetos,
                 )
-                continue
+            continue
 
-            kwargs = {}
-            incompleto = False
+        # Caso especial: archivo en formato ancho (el flujo de cada gas en su
+        # propia columna, ver MapeoColumna.gas_fijo) en vez de una columna
+        # 'gas' + una columna 'valor'. Cada columna con gas_fijo produce su
+        # propio par MuestraGEI/SubmuestraGEI por fila -no se puede fusionar
+        # en el único kwargs por fila que arma el resto de este loop-.
+        mapeos_valor_fijo = [
+            m for m in mapeos_por_modelo.get("SubmuestraGEI", [])
+            if m.campo_destino == "valor" and m.gas_fijo
+        ]
+        if modelo == "MuestraGEI" and mapeos_valor_fijo:
+            # Se arma dentro del branch de SubmuestraGEI de abajo, uno por gas.
+            continue
+        if modelo == "SubmuestraGEI" and mapeos_valor_fijo:
+            mapeos_resto = [m for m in mapeos if m not in mapeos_valor_fijo]
+            for fila_idx in range(total_filas):
+                _procesar_fila_gei_flujo(
+                    df, fila_idx, mapeos_por_modelo.get("MuestraGEI", []),
+                    mapeos_resto, mapeos_valor_fijo, resueltos, cache_fk,
+                    resumen_modelos, pks_por_modelo, detalle, cache_objetos,
+                )
+            continue
 
-            for mapeo in mapeos_por_modelo.get(modelo, []):
-                field = modelo_cls._meta.get_field(mapeo.campo_destino)
-
-                if mapeo.transformacion == "constante":
-                    valor = None if _es_vacio(mapeo.valor_constante) else mapeo.valor_constante
-                else:
-                    val_crudo = df[mapeo.columna_origen].iloc[fila_idx]
-                    try:
-                        valor = _resolver_valor_columna(val_crudo, mapeo)
-                    except ValueError:
-                        incompleto = True
-                        continue
-
-                if valor is None:
-                    # "ignorar_fila": el usuario decidió explícitamente no
-                    # crear el registro de este modelo cuando esta columna
-                    # viene vacía, sin importar si el campo admite nulos.
-                    if mapeo.estrategia_nulos == "ignorar_fila" or not (
-                        getattr(field, "blank", True) or getattr(field, "null", True)
-                    ):
-                        incompleto = True
-                    continue
-
-                if _es_fk(field):
-                    fk_modelo = field.related_model.__name__
-                    if fk_modelo in instancias_fila:
-                        kwargs[mapeo.campo_destino] = instancias_fila[fk_modelo]
-                    else:
-                        try:
-                            kwargs[mapeo.campo_destino] = field.related_model.objects.get(pk=valor)
-                        except (field.related_model.DoesNotExist, ValueError, TypeError):
-                            incompleto = True
-                else:
-                    try:
-                        kwargs[mapeo.campo_destino] = _coercionar_valor(valor, field)
-                    except (ValueError, TypeError):
-                        incompleto = True
-
-            # Vincular automáticamente los FK hacia otros modelos ya
-            # creados en esta misma fila, aunque el usuario no haya
-            # mapeado esa columna explícitamente (p. ej. Parcela se
-            # asocia solo a la UnidadMuestreo de su misma fila).
-            for field in modelo_cls._meta.get_fields():
-                if not _es_fk(field) or field.name in kwargs:
-                    continue
-                fk_modelo = field.related_model.__name__
-                if fk_modelo in instancias_fila:
-                    kwargs[field.name] = instancias_fila[fk_modelo]
-
-            if incompleto or not kwargs:
+        # Fase 1: arma los kwargs de cada fila sin tocar la BD -salvo
+        # resolver por pk un FK mapeado explícitamente a una columna, que
+        # sigue siendo por fila porque el pk viene del archivo, no de algo
+        # que ya calculamos-.
+        filas_kwargs = {}
+        for fila_idx in range(total_filas):
+            kwargs = _armar_kwargs_modelo_fila(df, fila_idx, mapeos, modelo_cls, resueltos, cache_fk)
+            if kwargs is None:
                 continue
 
             if modelo == "UnidadMuestreo":
@@ -1602,74 +2126,132 @@ def _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos, captur
             if modelo == "MuestraAmbiental":
                 kwargs.setdefault("fuente_datos", carga.fuente)
 
-            # Si el modelo tiene un vínculo OneToOne (p. ej. Parcela →
-            # unidad_muestreo), ese vínculo es su clave real: solo puede
-            # existir una fila por unidad, así que el resto de los campos
-            # se actualizan en vez de intentar crear otra fila (que
-            # violaría la restricción única).
-            campos_clave = {
-                nombre: valor
-                for nombre, valor in kwargs.items()
-                if type(modelo_cls._meta.get_field(nombre)).__name__ == "OneToOneField"
-            }
-            # Modelos sin OneToOne pero con una identidad propia definida acá
-            # (ver _CAMPOS_IDENTIDAD): solo se usa si TODOS esos campos vienen
-            # con valor real en esta fila -si falta alguno, no hay forma
-            # confiable de saber si es la misma fila que otra ya guardada-.
-            if not campos_clave and modelo in _CAMPOS_IDENTIDAD:
-                identidad = _CAMPOS_IDENTIDAD[modelo]
-                if all(kwargs.get(c) is not None for c in identidad):
-                    campos_clave = {c: kwargs[c] for c in identidad}
+            filas_kwargs[fila_idx] = kwargs
 
+        if not filas_kwargs:
+            continue
+
+        # Fase 2: agrupa las filas por el tipo de escritura que necesitan
+        # -mismo criterio que antes, solo que ahora se ejecuta en lote por
+        # grupo en vez de una vez por fila-.
+        grupos_identidad = {}
+        filas_evento = []
+        filas_generico = []
+        for fila_idx, kwargs in filas_kwargs.items():
+            campos_clave = _campos_clave_de_fila(modelo, modelo_cls, kwargs)
             if campos_clave:
                 defaults = {k: v for k, v in kwargs.items() if k not in campos_clave}
-                obj, creado = modelo_cls.objects.update_or_create(**campos_clave, defaults=defaults)
+                grupos_identidad.setdefault(frozenset(campos_clave), []).append((fila_idx, campos_clave, defaults))
             elif modelo in _MODELOS_EVENTO:
                 # A diferencia de UnidadMuestreo/UnidadExperimental/Sitio
                 # (lugares que se reutilizan entre filas y cargas), cada fila
                 # de un modelo "evento" es una medición real distinta -dos
                 # lecturas pueden compartir todos sus valores mapeados sin
                 # ser la misma-. Sin una identidad completa (ver arriba),
-                # buscar "si ya existe" con get_or_create() puede fusionar
-                # lecturas distintas por coincidencia, o romper con
-                # "get() returned more than one" cuando ya hay varias con
-                # esos mismos valores. Se crea siempre una fila nueva; si se
-                # re-sube el mismo archivo dos veces, se duplican las
-                # lecturas que no tengan la identidad completa (fecha+hora
-                # acá), igual que no las protege el UniqueConstraint en BD.
-                obj = modelo_cls.objects.create(**kwargs)
-                creado = True
+                # buscar "si ya existe" puede fusionar lecturas distintas por
+                # coincidencia. Se crea siempre una fila nueva; si se re-sube
+                # el mismo archivo dos veces, se duplican las lecturas que no
+                # tengan la identidad completa (fecha+hora acá), igual que no
+                # las protege el UniqueConstraint en BD.
+                filas_evento.append((fila_idx, kwargs))
+            else:
+                filas_generico.append((fila_idx, kwargs))
+
+        accion_por_fila = {}
+
+        # --- Identidad propia / OneToOne: update_or_create en lote ---
+        for filas in grupos_identidad.values():
+            existentes = _buscar_existentes_por_identidad(modelo_cls, [c for _, c, _ in filas])
+            pendientes_nuevos = {}
+            a_actualizar = {}
+            campos_actualizar = set()
+
+            for fila_idx, campos_clave, defaults in filas:
+                clave_hash = _clave_identidad(campos_clave)
+                obj_existente = existentes.get(clave_hash)
+                if obj_existente is not None:
+                    for k, v in defaults.items():
+                        setattr(obj_existente, k, v)
+                    campos_actualizar.update(defaults.keys())
+                    a_actualizar[obj_existente.pk] = obj_existente
+                    resueltos[modelo][fila_idx] = obj_existente
+                    accion_por_fila[fila_idx] = "reutilizados"
+                    continue
+
+                obj = pendientes_nuevos.get(clave_hash)
+                if obj is None:
+                    obj = modelo_cls(**campos_clave, **defaults)
+                    pendientes_nuevos[clave_hash] = obj
+                    accion_por_fila[fila_idx] = "creados"
+                else:
+                    # Dos filas de este archivo apuntan a la misma identidad
+                    # que todavía no existe en la BD: mismo criterio de
+                    # "última fila gana" que antes tenía update_or_create
+                    # fila por fila.
+                    for k, v in defaults.items():
+                        setattr(obj, k, v)
+                    accion_por_fila[fila_idx] = "reutilizados"
+                resueltos[modelo][fila_idx] = obj
+
+            if pendientes_nuevos:
+                modelo_cls.objects.bulk_create(list(pendientes_nuevos.values()))
+            if a_actualizar and campos_actualizar:
+                modelo_cls.objects.bulk_update(list(a_actualizar.values()), list(campos_actualizar))
+
+        # --- Evento: create en lote ---
+        if filas_evento:
+            instancias = [modelo_cls(**kwargs) for _, kwargs in filas_evento]
+            modelo_cls.objects.bulk_create(instancias)
+            for (fila_idx, _kwargs), obj in zip(filas_evento, instancias):
+                resueltos[modelo][fila_idx] = obj
+                accion_por_fila[fila_idx] = "creados"
+
+        # --- Genérico (modelos "perfil" sin identidad propia, p. ej.
+        # Disturbio/Vegetación): get_or_create con memoización, sin cambios
+        # de fondo -no es el cuello de botella, y el manejo de
+        # MultipleObjectsReturned (filtro parcial que matchea más de uno) es
+        # más simple de mantener fila por fila-.
+        for fila_idx, kwargs in filas_generico:
+            clave = _clave_cache_objeto(modelo, kwargs)
+            if clave is not None and clave in cache_objetos:
+                obj, creado = cache_objetos[clave], False
             else:
                 try:
                     obj, creado = modelo_cls.objects.get_or_create(**kwargs)
                 except modelo_cls.MultipleObjectsReturned:
                     # kwargs es un subconjunto parcial de los campos del
-                    # modelo (los que esta fila trae con valor real) para
-                    # modelos "perfil" sin identidad propia (Cobertura,
-                    # Disturbio, Vegetacion): si dos filas distintas ya
-                    # crearon variantes que coinciden en ese subconjunto
-                    # pero difieren en un campo que esta fila no trae -p.
-                    # ej. dos Disturbio con el mismo tipo/proteccion_legal
-                    # pero distinto estado_conservacion, y esta fila no
-                    # informa estado_conservacion-, el filtro parcial
-                    # matchea a más de uno. No hay forma de saber cuál es
-                    # "el correcto" con la información de esta fila, así
-                    # que se toma cualquiera de los que ya matchean en vez
-                    # de romper la carga entera por una fila ambigua.
+                    # modelo (los que esta fila trae con valor real): si dos
+                    # filas distintas ya crearon variantes que coinciden en
+                    # ese subconjunto pero difieren en un campo que esta fila
+                    # no trae, el filtro parcial matchea a más de uno. No hay
+                    # forma de saber cuál es "el correcto" con la información
+                    # de esta fila, así que se toma cualquiera de los que ya
+                    # matchean en vez de romper la carga entera.
                     obj = modelo_cls.objects.filter(**kwargs).first()
                     creado = False
+                if clave is not None:
+                    cache_objetos[clave] = obj
+            resueltos[modelo][fila_idx] = obj
+            accion_por_fila[fila_idx] = "creados" if creado else "reutilizados"
 
-            instancias_fila[modelo] = obj
-            resumen_modelos[modelo]["creados" if creado else "reutilizados"] += 1
+        for fila_idx, accion in accion_por_fila.items():
+            resumen_modelos[modelo][accion] += 1
+
+        for obj in resueltos[modelo].values():
             pks_por_modelo.setdefault(modelo, set()).add(obj.pk)
 
-            if capturar_detalle:
-                bucket = detalle.setdefault(modelo, {})
-                if obj.pk not in bucket and len(bucket) < _PREVIEW_MAX_POR_MODELO:
-                    bucket[obj.pk] = {
-                        "accion": "creado" if creado else "reutilizado",
-                        "campos": _representar_kwargs(kwargs),
-                    }
+        if detalle is not None:
+            bucket = detalle.setdefault(modelo, {})
+            for fila_idx in sorted(resueltos[modelo]):
+                if len(bucket) >= _PREVIEW_MAX_POR_MODELO:
+                    break
+                obj = resueltos[modelo][fila_idx]
+                if obj.pk in bucket:
+                    continue
+                bucket[obj.pk] = {
+                    "accion": "creado" if accion_por_fila[fila_idx] == "creados" else "reutilizado",
+                    "campos": _representar_kwargs(filas_kwargs[fila_idx]),
+                }
 
     return detalle, pks_por_modelo
 
@@ -1700,13 +2282,15 @@ def _preparar_importacion(carga, hasta_grupo_solicitado):
 
 def _validar_seccion(carga, df, mapeos):
     """Corre todas las validaciones (por columna + reglas de negocio) sobre
-    el subconjunto `mapeos` de esta sección. Devuelve (resultados, total_errores,
+    el subconjunto `mapeos` de esta sección -ya acotado a UNA hoja por el
+    llamador (`_leer_y_validar_multihoja`), así que `df` y `mapeos` siempre
+    se corresponden entre sí-. Devuelve (resultados, total_errores,
     filas_con_error)."""
     resultados = []
     filas_con_error = set()
     for mapeo in mapeos:
         if mapeo.transformacion == "constante":
-            resultado = _validar_constante(mapeo, carga.total_filas)
+            resultado = _validar_constante(mapeo, len(df))
         else:
             resultado = _validar_columna(df, mapeo)
         if "advertencia" not in resultado:
@@ -1714,20 +2298,20 @@ def _validar_seccion(carga, df, mapeos):
                 filas_con_error.add(e["fila"])
         resultados.append(resultado)
 
-    resultado_ue = _validar_unicidad_unidad_experimental(carga, df)
+    resultado_ue = _validar_unicidad_unidad_experimental(carga, df, mapeos)
     if resultado_ue is not None:
         for e in resultado_ue["errores"]:
             filas_con_error.add(e["fila"])
         resultados.append(resultado_ue)
 
     modelos_incluidos = {m.modelo_destino for m in mapeos}
-    resultado_ue_obl = _validar_obligatorios_unidad_experimental(mapeos, modelos_incluidos, carga.total_filas)
+    resultado_ue_obl = _validar_obligatorios_unidad_experimental(mapeos, modelos_incluidos, len(df))
     if resultado_ue_obl is not None:
         for e in resultado_ue_obl["errores"]:
             filas_con_error.add(e["fila"])
         resultados.append(resultado_ue_obl)
 
-    resultado_um = _validar_obligatorios_unidad_muestreo(mapeos, modelos_incluidos, carga.total_filas)
+    resultado_um = _validar_obligatorios_unidad_muestreo(mapeos, modelos_incluidos, len(df))
     if resultado_um is not None:
         for e in resultado_um["errores"]:
             filas_con_error.add(e["fila"])
@@ -1735,6 +2319,58 @@ def _validar_seccion(carga, df, mapeos):
 
     total_errores = sum(len(r["errores"]) for r in resultados if "advertencia" not in r)
     return resultados, total_errores, filas_con_error
+
+
+def _leer_y_validar_multihoja(carga, mapeos):
+    """Agrupa `mapeos` (de una sección, potencialmente de varias hojas) por
+    `hoja`, corre `_validar_seccion` por cada una con su propio DataFrame, y
+    fusiona los resultados. Devuelve (resultados, total_errores,
+    total_filas_combinado, filas_con_error_combinado, dfs_por_hoja)
+    -`dfs_por_hoja` se reutiliza después al importar, para no releer-."""
+    resultados = []
+    total_errores = 0
+    total_filas_combinado = 0
+    filas_con_error_combinado = 0
+    dfs_por_hoja = {}
+    for hoja in sorted({m.hoja for m in mapeos}):
+        mapeos_hoja = [m for m in mapeos if m.hoja == hoja]
+        df = _leer_dataframe_carga(carga, hoja)
+        _aplicar_estrategia_nulos(df, mapeos_hoja)
+        dfs_por_hoja[hoja] = df
+
+        resultados_hoja, errores_hoja, filas_hoja = _validar_seccion(carga, df, mapeos_hoja)
+        resultados.extend(resultados_hoja)
+        total_errores += errores_hoja
+        total_filas_combinado += len(df)
+        filas_con_error_combinado += len(filas_hoja)
+
+    return resultados, total_errores, total_filas_combinado, filas_con_error_combinado, dfs_por_hoja
+
+
+def _procesar_filas_multihoja(carga, mapeos, orden, resumen_modelos, dfs_por_hoja, capturar_detalle=False):
+    """Como `_procesar_filas`, pero corriendo una vez por cada hoja presente
+    en `mapeos` (con su propio DataFrame) y fusionando detalle/pks — una
+    misma sección puede tener columnas mapeadas desde más de una hoja."""
+    detalle_combinado = {} if capturar_detalle else None
+    pks_combinado = {}
+    for hoja in sorted({m.hoja for m in mapeos}):
+        mapeos_hoja = [m for m in mapeos if m.hoja == hoja]
+        modelos_hoja = {m.modelo_destino for m in mapeos_hoja}
+        orden_hoja = [modelo for modelo in orden if modelo in modelos_hoja]
+        mapeos_por_modelo_hoja = {}
+        for m in mapeos_hoja:
+            mapeos_por_modelo_hoja.setdefault(m.modelo_destino, []).append(m)
+
+        detalle_hoja, pks_hoja = _procesar_filas(
+            dfs_por_hoja[hoja], orden_hoja, mapeos_por_modelo_hoja, carga, resumen_modelos, capturar_detalle,
+        )
+        if detalle_hoja:
+            for modelo, bucket in detalle_hoja.items():
+                detalle_combinado.setdefault(modelo, {}).update(bucket)
+        for modelo, pks in pks_hoja.items():
+            pks_combinado.setdefault(modelo, set()).update(pks)
+
+    return detalle_combinado, pks_combinado
 
 
 @csrf_exempt
@@ -1762,24 +2398,16 @@ def previsualizar_carga(request, fuente_id, carga_id):
         return error_response
 
     try:
-        path = _resolver_ruta_fuente(carga.fuente)
-        nombre = str(path).lower()
-        if nombre.endswith(".csv"):
-            df = _leer_csv(path)
-        else:
-            df = pd.read_excel(path, sheet_name=carga.hoja_activa)
-        _aplicar_estrategia_nulos(df, mapeos)
-
-        resultados, total_errores, filas_con_error = _validar_seccion(carga, df, mapeos)
+        resultados, total_errores, total_filas, filas_con_error, dfs_por_hoja = _leer_y_validar_multihoja(carga, mapeos)
         if total_errores > 0:
             return JsonResponse({
                 "ok": False,
                 "resumen": {
-                    "total_filas": carga.total_filas,
+                    "total_filas": total_filas,
                     "columnas_mapeadas": len(mapeos),
                     "total_errores": total_errores,
-                    "filas_limpias": carga.total_filas - len(filas_con_error),
-                    "filas_con_errores": len(filas_con_error),
+                    "filas_limpias": total_filas - filas_con_error,
+                    "filas_con_errores": filas_con_error,
                 },
                 "columnas": resultados,
             }, status=400, json_dumps_params={"ensure_ascii": False})
@@ -1787,15 +2415,13 @@ def previsualizar_carga(request, fuente_id, carga_id):
         modelos_incluidos = sorted({m.modelo_destino for m in mapeos})
         orden = _orden_topologico(modelos_incluidos)
 
-        mapeos_por_modelo = {}
-        for mapeo in mapeos:
-            mapeos_por_modelo.setdefault(mapeo.modelo_destino, []).append(mapeo)
-
         resumen_modelos = {m: {"creados": 0, "reutilizados": 0} for m in modelos_incluidos}
 
         with transaction.atomic():
             sid = transaction.savepoint()
-            detalle, _pks = _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos, capturar_detalle=True)
+            detalle, _pks = _procesar_filas_multihoja(
+                carga, mapeos, orden, resumen_modelos, dfs_por_hoja, capturar_detalle=True,
+            )
             transaction.savepoint_rollback(sid)
 
         modelos_preview = {
@@ -1840,9 +2466,6 @@ def importar_carga(request, fuente_id, carga_id):
     except CargaArchivo.DoesNotExist:
         return JsonResponse({"error": "Carga no encontrada"}, status=404)
 
-    if carga.estado == "importado":
-        return JsonResponse({"error": "Esta carga ya fue importada por completo."}, status=409)
-
     try:
         body = json.loads(request.body or "{}")
     except json.JSONDecodeError:
@@ -1852,27 +2475,41 @@ def importar_carga(request, fuente_id, carga_id):
     if error_response is not None:
         return error_response
 
-    try:
-        path = _resolver_ruta_fuente(carga.fuente)
-        nombre = str(path).lower()
-        if nombre.endswith(".csv"):
-            df = _leer_csv(path)
-        else:
-            df = pd.read_excel(path, sheet_name=carga.hoja_activa)
-        _aplicar_estrategia_nulos(df, mapeos)
+    if carga.estado == "importado" or carga.fuente.estado == "completo":
+        # La carga (o la fuente, si esto es una carga nueva creada para
+        # corregir una fuente ya completa -ver upload_archivo, que copia los
+        # mapeos previos-) ya se importó por completo. Es seguro reprocesar
+        # los modelos con identidad propia
+        # (UnidadExperimental, UnidadMuestreo, Sitio, Parcela/Transecto,
+        # etc.): _procesar_filas los reutiliza por su clave y sobreescribe
+        # los campos recién mapeados en el registro existente, no crea
+        # duplicados. Los modelos "evento" (_MODELOS_EVENTO) sí duplicarían
+        # una medición por cada corrida, así que esos quedan bloqueados acá.
+        modelos_solicitados = {m.modelo_destino for m in mapeos}
+        modelos_evento_incluidos = modelos_solicitados & _MODELOS_EVENTO
+        if modelos_evento_incluidos:
+            return JsonResponse({
+                "error": (
+                    "Esta carga ya fue importada. No se pueden registrar ahora columnas que "
+                    f"generen nuevas mediciones ({', '.join(sorted(modelos_evento_incluidos))}) porque "
+                    "duplicarían las que ya existen; solo se pueden completar campos de entidades "
+                    "como Sitio, Unidad de Muestreo o Unidad Experimental."
+                ),
+            }, status=409)
 
-        # 1) Validar solo el subconjunto de mapeos de esta sección; no se
-        # escribe nada en la base si queda algún error.
-        resultados, total_errores, filas_con_error = _validar_seccion(carga, df, mapeos)
+    try:
+        # 1) Validar solo el subconjunto de mapeos de esta sección (por cada
+        # hoja involucrada); no se escribe nada en la base si queda error.
+        resultados, total_errores, total_filas, filas_con_error, dfs_por_hoja = _leer_y_validar_multihoja(carga, mapeos)
         if total_errores > 0:
             return JsonResponse({
                 "ok": False,
                 "resumen": {
-                    "total_filas": carga.total_filas,
+                    "total_filas": total_filas,
                     "columnas_mapeadas": len(mapeos),
                     "total_errores": total_errores,
-                    "filas_limpias": carga.total_filas - len(filas_con_error),
-                    "filas_con_errores": len(filas_con_error),
+                    "filas_limpias": total_filas - filas_con_error,
+                    "filas_con_errores": filas_con_error,
                 },
                 "columnas": resultados,
             }, status=400, json_dumps_params={"ensure_ascii": False})
@@ -1881,14 +2518,10 @@ def importar_carga(request, fuente_id, carga_id):
         modelos_incluidos = sorted({m.modelo_destino for m in mapeos})
         orden = _orden_topologico(modelos_incluidos)
 
-        mapeos_por_modelo = {}
-        for mapeo in mapeos:
-            mapeos_por_modelo.setdefault(mapeo.modelo_destino, []).append(mapeo)
-
         resumen_modelos = {m: {"creados": 0, "reutilizados": 0} for m in modelos_incluidos}
 
         with transaction.atomic():
-            _, pks_por_modelo = _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos)
+            _, pks_por_modelo = _procesar_filas_multihoja(carga, mapeos, orden, resumen_modelos, dfs_por_hoja)
 
             # Acumula (no reemplaza) los pk tocados por esta sección con los de
             # secciones anteriores de la misma carga, para poder mostrar luego
