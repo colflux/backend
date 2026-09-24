@@ -203,10 +203,22 @@ class CargaArchivo(TimestampedModel):
         FuenteDatos, on_delete=models.CASCADE,
         related_name="cargas", verbose_name="fuente de datos",
     )
-    hoja_activa = models.CharField("hoja activa", max_length=255, blank=True)
+    hoja_activa = models.CharField(
+        "hoja activa", max_length=255, blank=True,
+        help_text="Última hoja abierta en el asistente de mapeo. No es la única hoja de la carga — ver `hojas`.",
+    )
     estado = models.CharField("estado", max_length=20, choices=ESTADO_CHOICES, default="subido")
-    columnas_raw = models.JSONField("columnas inspeccionadas", default=list)
+    columnas_raw = models.JSONField(
+        "columnas inspeccionadas", default=list,
+        help_text="Snapshot de columnas de `hoja_activa`. Para todas las hojas ver `hojas`.",
+    )
     total_filas = models.IntegerField("total de filas", default=0)
+    hojas = models.JSONField(
+        "hojas analizadas", default=dict, blank=True,
+        help_text='Snapshot por hoja del archivo (excluye hojas de "diccionario de datos"): '
+                   '{"CO2 (detalle)": {"columnas_raw": [...], "total_filas": 346}, ...}. '
+                   'Permite mapear varias hojas del mismo archivo en un solo flujo, sin crear una carga por hoja.',
+    )
     origen_mapeo = models.CharField(
         "origen del mapeo", max_length=20, choices=ORIGEN_MAPEO_CHOICES, default="manual",
         help_text="Quién propuso el mapeo de columnas: una persona (Gestión de Datos) o la IA (formulario web).",
@@ -235,6 +247,16 @@ class CargaArchivo(TimestampedModel):
 class MapeoColumna(TimestampedModel):
     """Mapeo de una columna del archivo cargado hacia un campo del modelo destino, con su transformación."""
 
+    # Duplica TipoMuestra.GAS_CHOICES (app/models/co2.py): co2.py importa
+    # FuenteDatos desde este módulo, así que importar en sentido contrario
+    # crearía un ciclo. Son 3 valores fijos del catálogo, no se espera que
+    # cambien sin tocar ambos lugares.
+    GAS_CHOICES_MAPEO = [
+        ("CO2", "CO₂"),
+        ("CH4", "CH₄"),
+        ("N2O", "N₂O"),
+    ]
+
     TRANSFORMACION_CHOICES = [
         ("directo", "Directo"),
         ("lookup", "Lookup / FK"),
@@ -249,6 +271,11 @@ class MapeoColumna(TimestampedModel):
     carga           = models.ForeignKey(
         CargaArchivo, on_delete=models.CASCADE,
         related_name="mapeos", verbose_name="carga",
+    )
+    hoja            = models.CharField(
+        "hoja", max_length=255, blank=True,
+        help_text="Hoja del archivo de la que viene columna_origen. Permite que una misma carga mapee varias "
+                   "hojas del Excel (p. ej. Unidad Muestreo-Experimental, CO2 (detalle), Clima) a la vez.",
     )
     columna_origen  = models.CharField("columna origen", max_length=255)
     modelo_destino  = models.CharField("modelo destino", max_length=100, blank=True)
@@ -301,6 +328,14 @@ class MapeoColumna(TimestampedModel):
                    "clasificación (CLC, IPCC, IGBP, …) se guarda el valor de esta columna, ya que un "
                    "sitio puede tener varias filas de Cobertura (una por columna/sistema de origen).",
     )
+    gas_fijo = models.CharField(
+        "gas fijo", max_length=4, choices=GAS_CHOICES_MAPEO, blank=True,
+        help_text="Solo aplica cuando modelo_destino es 'SubmuestraGEI' y campo_destino es 'valor': "
+                   "fija a qué gas (CO₂, CH₄, N₂O) corresponde esta columna, para archivos que traen "
+                   "el flujo de cada gas en su propia columna (formato ancho) en vez de una columna "
+                   "'gas' + una columna 'valor' (formato largo). Cada columna con gas_fijo genera su "
+                   "propio par MuestraGEI/SubmuestraGEI por fila.",
+    )
 
     class Meta:
         verbose_name = "mapeo de columna"
@@ -309,8 +344,11 @@ class MapeoColumna(TimestampedModel):
         # podía alimentar un destino. Se amplía a la tupla completa para poder
         # mapear la misma columna a más de un modelo/campo (p. ej. una columna
         # "ID" que sirve como nombre de UnidadExperimental -vía regex- y,
-        # completa, como nombre de UnidadMuestreo).
-        unique_together = [("carga", "columna_origen", "modelo_destino", "campo_destino")]
+        # completa, como nombre de UnidadMuestreo). Se agrega "hoja" porque dos
+        # hojas distintas de la misma carga pueden tener una columna con el
+        # mismo nombre (p. ej. "fecha" en CO2 y en Clima) mapeada a destinos
+        # distintos.
+        unique_together = [("carga", "hoja", "columna_origen", "modelo_destino", "campo_destino")]
         ordering = ["columna_origen"]
 
     def __str__(self):

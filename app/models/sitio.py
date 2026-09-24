@@ -160,6 +160,11 @@ class UnidadExperimental(TimestampedModel):
     tipo = models.ForeignKey(
         UnidadMuestreoTipo, on_delete=models.PROTECT, related_name="unidades_experimentales",
         null=True, blank=True, verbose_name="tipo",
+        help_text=(
+            "Tipo de unidad de muestreo (parcela, transecto, conglomerado, plot, etc.). Es un "
+            "catálogo cerrado: se elige entre los tipos ya existentes, no se crean tipos nuevos "
+            "al cargar datos."
+        ),
     )
     descripcion = models.TextField(
         "descripción", blank=True,
@@ -201,14 +206,27 @@ class UnidadMuestreo(TimestampedModel):
     tipo = models.ForeignKey(
         UnidadMuestreoTipo, on_delete=models.PROTECT, related_name="unidades_muestreo",
         verbose_name="tipo",
+        help_text=(
+            "Tipo de unidad de muestreo (parcela, transecto, conglomerado, plot, etc.). Es un "
+            "catálogo cerrado: se elige entre los tipos ya existentes, no se crean tipos nuevos "
+            "al cargar datos."
+        ),
     )
     unidad_experimental = models.ForeignKey(
         UnidadExperimental, on_delete=models.CASCADE, related_name="unidades_muestreo",
         null=True, blank=True, verbose_name="unidad experimental",
+        help_text=(
+            "Unidad experimental a la que pertenece. Se resuelve sola con la que se creó o "
+            "seleccionó en el paso anterior para la misma fila del archivo."
+        ),
     )
     sitio = models.ForeignKey(
         Sitio, on_delete=models.SET_NULL, related_name="unidades_muestreo",
         null=True, blank=True, verbose_name="sitio",
+        help_text=(
+            "Sitio de ubicación de esta unidad de muestreo. Se vincula solo al guardar la "
+            "sección Sitio (por la fila del archivo), no se mapea acá."
+        ),
     )
     fuente_datos = models.ForeignKey(
         FuenteDatos, on_delete=models.SET_NULL, related_name="unidades_muestreo",
@@ -220,7 +238,11 @@ class UnidadMuestreo(TimestampedModel):
     )
     compartimento = models.CharField(
         "compartimento", max_length=25, choices=COMPARTIMENTO_CHOICES, blank=True,
-        help_text="Reservorio de carbono que mide esta unidad de muestreo (biomasa, COS, materia orgánica muerta).",
+        help_text=(
+            "Reservorio de carbono que mide esta unidad de muestreo, solo si el mismo punto/parcela "
+            "se divide en unidades distintas por tipo de medición (ej. una parcela para biomasa y "
+            "otra para suelo dentro de la misma unidad experimental). Déjalo vacío si no aplica."
+        ),
     )
 
     class Meta:
