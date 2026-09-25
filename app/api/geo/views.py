@@ -323,10 +323,13 @@ def series_co2(request):
     con filtros opcionales por año o rango de fechas, gas (CO2/CH4/N2O),
     sitio, proyecto, vereda, municipio, departamento y región. Sin ?gas=
     devuelve los tres gases mezclados -cada resultado trae su propio campo
-    "gas" para que el cliente filtre/agrupe-. No agrega ni convierte unidades
-    -eso queda a criterio de quien consuma la serie-, solo devuelve el dato
-    tal como está en la base para que el geoportal (u otro cliente) arme sus
-    propios gráficos de tendencia/agregados."""
+    "gas" para que el cliente filtre/agrupe-. Igual con condicion_luz y
+    analizador: si no se filtran, cada resultado trae su propio valor para
+    que el cliente pueda desagregar en varias series sin pedir la data
+    varias veces. No agrega ni convierte unidades -eso queda a criterio de
+    quien consuma la serie-, solo devuelve el dato tal como está en la base
+    para que el geoportal (u otro cliente) arme sus propios gráficos de
+    tendencia/agregados."""
     qs = (
         SubmuestraGEI.objects
         .exclude(fecha=None)
@@ -389,8 +392,11 @@ def series_co2(request):
     campos = qs.values(
         "fecha",
         "valor",
+        "condicion_luz",
         "muestra__unidad_medida__codigo",
         "muestra__gas",
+        "muestra__analizador_id",
+        "muestra__analizador__modelo",
         "muestra__unidad_muestreo__sitio_id",
         "muestra__unidad_muestreo__sitio__nombre",
         "muestra__unidad_muestreo__sitio__vereda_id",
@@ -407,6 +413,9 @@ def series_co2(request):
             "valor": float(f["valor"]) if f["valor"] is not None else None,
             "unidad": f["muestra__unidad_medida__codigo"],
             "gas": f["muestra__gas"] or None,
+            "condicion_luz": f["condicion_luz"] or None,
+            "analizador_id": f["muestra__analizador_id"],
+            "analizador": f["muestra__analizador__modelo"] or None,
             "sitio_id": f["muestra__unidad_muestreo__sitio_id"],
             "sitio_nombre": f["muestra__unidad_muestreo__sitio__nombre"],
             "vereda_id": f["muestra__unidad_muestreo__sitio__vereda_id"],

@@ -4133,7 +4133,7 @@
               "help_text": "Valor medido del flujo de gas, en la unidad reportada por la muestra (MuestraGEI.unidad_medida).",
               "tipo": "Decimal",
               "tipo_raw": "DecimalField",
-              "requerido": false,
+              "requerido": true,
               "automatico": false,
               "max_length": null,
               "choices": [],
@@ -4841,7 +4841,7 @@
           "verbose_name": "carga de archivo",
           "verbose_name_plural": "cargas de archivos",
           "descripcion": "Proceso ETL de carga de un archivo de una fuente de datos: inspección de columnas, mapeo, validación e importación.",
-          "total_campos": 10,
+          "total_campos": 15,
           "campos": [
             {
               "nombre": "fuente",
@@ -4998,6 +4998,88 @@
               "choices": [],
               "es_fk": false,
               "modelo_fk": null
+            },
+            {
+              "nombre": "progreso_estado",
+              "verbose_name": "estado del progreso de importación",
+              "help_text": "Importar corre en un hilo en background (no hay worker separado); este campo permite que el frontend haga polling del avance en vez de bloquear la petición HTTP.",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": true,
+              "automatico": false,
+              "max_length": 20,
+              "choices": [
+                {
+                  "valor": "idle",
+                  "etiqueta": "Sin iniciar"
+                },
+                {
+                  "valor": "en_progreso",
+                  "etiqueta": "En progreso"
+                },
+                {
+                  "valor": "completado",
+                  "etiqueta": "Completado"
+                },
+                {
+                  "valor": "error",
+                  "etiqueta": "Error"
+                }
+              ],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "progreso_actual",
+              "verbose_name": "progreso actual",
+              "help_text": "",
+              "tipo": "Entero",
+              "tipo_raw": "IntegerField",
+              "requerido": true,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "progreso_total",
+              "verbose_name": "progreso total",
+              "help_text": "",
+              "tipo": "Entero",
+              "tipo_raw": "IntegerField",
+              "requerido": true,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "progreso_mensaje",
+              "verbose_name": "mensaje de progreso",
+              "help_text": "",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": 255,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "progreso_resultado",
+              "verbose_name": "resultado final de la importación",
+              "help_text": "Mismo shape que hoy devuelve el endpoint de importación de forma síncrona, guardado aquí cuando progreso_estado pasa a completado/error.",
+              "tipo": "JSON",
+              "tipo_raw": "JSONField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
             }
           ]
         },
@@ -5006,7 +5088,7 @@
           "verbose_name": "mapeo de columna",
           "verbose_name_plural": "mapeos de columnas",
           "descripcion": "Mapeo de una columna del archivo cargado hacia un campo del modelo destino, con su transformación.",
-          "total_campos": 14,
+          "total_campos": 15,
           "campos": [
             {
               "nombre": "carga",
@@ -5041,6 +5123,19 @@
               "tipo": "Texto",
               "tipo_raw": "CharField",
               "requerido": true,
+              "automatico": false,
+              "max_length": 255,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "hoja_origen",
+              "verbose_name": "hoja origen de la columna",
+              "help_text": "Si columna_origen viene de una hoja distinta a `hoja` (la hoja de contexto de este mapeo, la que se está escribiendo), el nombre de esa otra hoja. Vacío = misma hoja. Permite mapear un atributo de una sección usando una columna de otra hoja del mismo archivo, cruzando filas por una clave común (ver _CLAVES_JOIN_HOJAS en etl/views.py).",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
               "automatico": false,
               "max_length": 255,
               "choices": [],

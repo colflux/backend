@@ -234,6 +234,25 @@ class CargaArchivo(TimestampedModel):
         help_text='Acumula, por modelo, los pk que esta carga creó o reutilizó al importar. '
                    'Ej: {"SubmuestraGEI": [10, 11, 12]}. Permite mostrar solo los datos de esta carga en el panel de visualización.',
     )
+    PROGRESO_CHOICES = [
+        ("idle", "Sin iniciar"),
+        ("en_progreso", "En progreso"),
+        ("completado", "Completado"),
+        ("error", "Error"),
+    ]
+    progreso_estado = models.CharField(
+        "estado del progreso de importación", max_length=20, choices=PROGRESO_CHOICES, default="idle",
+        help_text="Importar corre en un hilo en background (no hay worker separado); este campo permite "
+                   "que el frontend haga polling del avance en vez de bloquear la petición HTTP.",
+    )
+    progreso_actual = models.IntegerField("progreso actual", default=0)
+    progreso_total = models.IntegerField("progreso total", default=0)
+    progreso_mensaje = models.CharField("mensaje de progreso", max_length=255, blank=True)
+    progreso_resultado = models.JSONField(
+        "resultado final de la importación", null=True, blank=True,
+        help_text="Mismo shape que hoy devuelve el endpoint de importación de forma síncrona, "
+                   "guardado aquí cuando progreso_estado pasa a completado/error.",
+    )
 
     class Meta:
         verbose_name = "carga de archivo"
@@ -278,6 +297,13 @@ class MapeoColumna(TimestampedModel):
                    "hojas del Excel (p. ej. Unidad Muestreo-Experimental, CO2 (detalle), Clima) a la vez.",
     )
     columna_origen  = models.CharField("columna origen", max_length=255)
+    hoja_origen     = models.CharField(
+        "hoja origen de la columna", max_length=255, blank=True,
+        help_text="Si columna_origen viene de una hoja distinta a `hoja` (la hoja de contexto de este "
+                   "mapeo, la que se está escribiendo), el nombre de esa otra hoja. Vacío = misma hoja. "
+                   "Permite mapear un atributo de una sección usando una columna de otra hoja del mismo "
+                   "archivo, cruzando filas por una clave común (ver _CLAVES_JOIN_HOJAS en etl/views.py).",
+    )
     modelo_destino  = models.CharField("modelo destino", max_length=100, blank=True)
     campo_destino   = models.CharField("campo destino", max_length=100, blank=True)
     transformacion  = models.CharField(
