@@ -5,8 +5,8 @@ from app.api.auth.views import ForgotPasswordView, LoginView, LogoutView, MeView
 from app.api.dashboard.views import DashboardView, DataModelView, VisualizerView, chart_data
 from app.api.datos.views import FuenteDatosViewSet, fuentes_datos_api
 from app.api.etl.views import (
-    archivo_fuente, campos_destino, datos_carga, datos_proyecto, exportar_carga, exportar_proyecto, fk_choices_view,
-    importar_carga, mapeo_carga, previsualizar_carga, regex_sugerido, upload_archivo, validar_carga,
+    archivo_fuente, campos_destino, datos_carga, datos_proyecto, estado_importacion, exportar_carga, exportar_proyecto,
+    fk_choices_view, importar_carga, mapeo_carga, previsualizar_carga, regex_sugerido, upload_archivo, validar_carga,
     verificar_existencia,
 )
 from app.api.geo.views import resumen_categorico, resumen_geografico, series_co2, sitios_geojson, tendencia_instalacion
@@ -36,7 +36,7 @@ urlpatterns = [
     path("", DashboardView.as_view(), name="dashboard"),
     path("visualizador/", VisualizerView.as_view(), name="visualizer"),
     path("modelo-datos/", DataModelView.as_view(), name="data-model"),
-    path("chart-data/", chart_data, name="chart-data"),
+    path("api/chart-data/", chart_data, name="chart-data"),
     path("api/auth/login/", LoginView.as_view(), name="auth-login"),
     path("api/auth/registro/", RegistroView.as_view(), name="auth-registro"),
     path("api/auth/logout/", LogoutView.as_view(), name="auth-logout"),
@@ -60,6 +60,7 @@ urlpatterns = [
     path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/validar/", validar_carga, name="validar-carga"),
     path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/previsualizar/", previsualizar_carga, name="previsualizar-carga"),
     path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/importar/", importar_carga, name="importar-carga"),
+    path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/importar/estado/", estado_importacion, name="estado-importacion"),
     path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/datos/", datos_carga, name="datos-carga"),
     path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/exportar/", exportar_carga, name="exportar-carga"),
     path("api/proyectos/<int:proyecto_id>/datos/", datos_proyecto, name="datos-proyecto"),

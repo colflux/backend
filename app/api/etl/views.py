@@ -1,3 +1,4 @@
+import concurrent.futures
 import csv
 import decimal
 import io
@@ -5,6 +6,7 @@ import json
 import logging
 import math
 import re
+import threading
 import urllib.request
 from collections import defaultdict
 from pathlib import Path
@@ -875,7 +877,7 @@ def mapeo_carga(request, fuente_id, carga_id):
         mapeos_qs = carga.mapeos if hoja is None else carga.mapeos.filter(hoja=hoja)
         mapeos = list(
             mapeos_qs.values(
-                "columna_origen", "modelo_destino", "campo_destino",
+                "columna_origen", "hoja_origen", "modelo_destino", "campo_destino",
                 "transformacion", "regex_patron", "factor_escala", "mapeo_valores", "valor_constante",
                 "estrategia_nulos", "valor_relleno_manual", "tipo_cobertura", "gas_fijo",
                 tipo_cobertura_nombre=models.F("tipo_cobertura__nombre"),
@@ -893,11 +895,6 @@ def mapeo_carga(request, fuente_id, carga_id):
         }, json_dumps_params={"ensure_ascii": False})
 
     if request.method == "POST":
-        if carga.estado == "importado":
-            return JsonResponse(
-                {"error": "Esta carga ya fue importada: el mapeo no se puede modificar."}, status=409,
-            )
-
         try:
             body = json.loads(request.body)
         except json.JSONDecodeError:
@@ -906,6 +903,13 @@ def mapeo_carga(request, fuente_id, carga_id):
         items = body.get("mapeos")
         if not isinstance(items, list):
             return JsonResponse({"error": "Se esperaba un array en 'mapeos'"}, status=400)
+
+        # Registrar mapeos para una carga ya importada (ver "Registrar
+        # columnas sin mapear" en EtlMapeo.tsx) es seguro incluso para
+        # modelos "evento" (_MODELOS_EVENTO, p. ej. MuestraAmbiental): al
+        # reprocesar (ver importar_carga → es_correccion en _procesar_filas),
+        # las filas que ya existían se reutilizan por coincidencia exacta en
+        # vez de duplicarse, y solo se crean las genuinamente nuevas.
 
         # Hoja a la que pertenece este lote de mapeos -el asistente guarda de
         # a una hoja por vez, aunque la carga en conjunto pueda tener varias-.
@@ -959,6 +963,11 @@ def mapeo_carga(request, fuente_id, carga_id):
                         )
                     gas_fijo = gas_fijo_raw
 
+                # hoja_origen: si la columna viene de otra hoja del mismo
+                # archivo (mapeo cruzado), vacío/igual a `hoja` = misma hoja.
+                hoja_origen_raw = (item.get("hoja_origen") or "").strip()
+                hoja_origen = "" if hoja_origen_raw == hoja else hoja_origen_raw
+
                 MapeoColumna.objects.update_or_create(
                     carga=carga,
                     hoja=hoja,
@@ -966,6 +975,7 @@ def mapeo_carga(request, fuente_id, carga_id):
                     modelo_destino=modelo_destino,
                     campo_destino=campo_destino,
                     defaults={
+                        "hoja_origen": hoja_origen,
                         "transformacion": item.get("transformacion", "directo"),
                         "regex_patron": item.get("regex_patron", ""),
                         "factor_escala": factor_escala,
@@ -995,13 +1005,36 @@ def mapeo_carga(request, fuente_id, carga_id):
                     hoja=hoja, columna_origen=columna, modelo_destino=modelo, campo_destino=campo,
                 ).delete()
 
-            if not parcial:
+            # No degradar una carga ya importada de vuelta a "mapeado": esta
+            # rama también se usa para registrar columnas sueltas en una
+            # carga que ya se terminó de importar (ver arriba).
+            if not parcial and carga.estado != "importado":
                 carga.estado = "mapeado"
                 carga.save(update_fields=["estado"])
 
             return JsonResponse({"ok": True, "guardados": guardados})
         except Exception as exc:
             return JsonResponse({"error": str(exc)}, status=500)
+
+    if request.method == "DELETE":
+        if carga.estado == "importado":
+            return JsonResponse(
+                {"error": "Esta carga ya fue importada: el mapeo no se puede modificar."}, status=409,
+            )
+
+        hoja = (request.GET.get("hoja") or "").strip()
+        if not hoja:
+            return JsonResponse({"error": "Parámetro 'hoja' requerido"}, status=400)
+
+        # Vacía TODO el mapeo de esa hoja -para cuando se mapeó por error con
+        # la pestaña de hoja equivocada activa: cambiar de pestaña es un
+        # cambio de estado local (ver `handleCambiarHoja` en EtlUpload.tsx),
+        # así que el mapeo viejo bajo la hoja anterior nunca se borra solo
+        # -el cleanup incremental de más arriba está acotado a la hoja que
+        # se está guardando, a propósito, para no borrar sin querer el
+        # trabajo de otras hojas que sí mapean el mismo modelo-.
+        borrados, _ = carga.mapeos.filter(hoja=hoja).delete()
+        return JsonResponse({"ok": True, "borrados": borrados})
 
     return JsonResponse({"error": "Método no permitido"}, status=405)
 
@@ -1134,7 +1167,67 @@ def _resolver_valor_columna(val, mapeo):
     return val
 
 
-def _validar_columna(df, mapeo):
+# Claves que ya se usan implícitamente para relacionar las hojas de
+# metodología (CO2, CH4, Clima, MOM, COS, Biomasa comparten estas dos
+# columnas) — se reutilizan para cruzar filas cuando un atributo de una
+# sección se mapea desde una columna que vive en otra hoja del mismo
+# archivo (`MapeoColumna.hoja_origen`).
+_CLAVES_JOIN_HOJAS = ["nombre unidad de muestreo", "nombre unidad experimental"]
+
+
+def _resolver_columna_hoja_cruzada(df_actual, df_origen, columna_origen):
+    """Alinea `columna_origen` de `df_origen` (otra hoja) contra las filas de
+    `df_actual`, cruzando por la primera clave de `_CLAVES_JOIN_HOJAS`
+    presente como columna literal en ambos DataFrames. Devuelve
+    (serie, advertencia): `serie` queda indexada igual que `df_actual`, con
+    NaN donde no hubo fila correspondiente en `df_origen`; `advertencia` es
+    None si no hay problema, o un dict con forma de resultado de validación
+    (mismo shape que devuelve _validar_columna) si falta la clave de cruce o
+    quedaron filas sin correspondencia."""
+    clave = next(
+        (c for c in _CLAVES_JOIN_HOJAS if c in df_actual.columns and c in df_origen.columns),
+        None,
+    )
+    if clave is None:
+        advertencia = {
+            "advertencia": "sin_clave_cruce",
+            "columna": columna_origen,
+            "errores": [],
+            "mensaje": (
+                f"No se pudo cruzar la columna '{columna_origen}' de otra hoja: falta una columna "
+                f"clave común entre ambas hojas ({', '.join(_CLAVES_JOIN_HOJAS)})."
+            ),
+        }
+        return pd.Series([None] * len(df_actual), index=df_actual.index), advertencia
+
+    origen_sin_dup = df_origen.drop_duplicates(subset=clave, keep="first")
+    if columna_origen == clave:
+        # Caso borde: la columna que se quiere cruzar ES la clave de cruce
+        # (p. ej. mapear "nombre" desde otra hoja usando justo la columna
+        # "nombre unidad de muestreo" como origen). set_index() la saca de
+        # las columnas, así que no se puede indexar por su propio nombre
+        # después — el valor resuelto es, por definición, la propia clave.
+        lookup = pd.Series(origen_sin_dup[clave].values, index=origen_sin_dup[clave].values)
+    else:
+        lookup = origen_sin_dup.set_index(clave)[columna_origen]
+    serie = df_actual[clave].map(lookup)
+
+    sin_correspondencia = int(serie.isna().sum())
+    advertencia = None
+    if sin_correspondencia > 0:
+        advertencia = {
+            "advertencia": "filas_sin_cruce",
+            "columna": columna_origen,
+            "errores": [],
+            "mensaje": (
+                f"{sin_correspondencia} fila(s) no tienen un valor correspondiente en la otra "
+                f"hoja al cruzar por '{clave}'."
+            ),
+        }
+    return serie, advertencia
+
+
+def _validar_columna(df, mapeo, dfs_por_hoja=None):
     columna_origen = mapeo.columna_origen
     modelo_destino = mapeo.modelo_destino
     campo_destino = mapeo.campo_destino
@@ -1148,10 +1241,19 @@ def _validar_columna(df, mapeo):
     except Exception:
         return {"advertencia": "modelo_o_campo_no_encontrado", "columna": columna_origen, "errores": []}
 
-    if columna_origen not in df.columns:
-        return {"advertencia": "modelo_o_campo_no_encontrado", "columna": columna_origen, "errores": []}
+    advertencia_cruce = None
+    if mapeo.hoja_origen and mapeo.hoja_origen != mapeo.hoja:
+        df_origen = (dfs_por_hoja or {}).get(mapeo.hoja_origen)
+        if df_origen is None or columna_origen not in df_origen.columns:
+            return {"advertencia": "modelo_o_campo_no_encontrado", "columna": columna_origen, "errores": []}
+        serie, advertencia_cruce = _resolver_columna_hoja_cruzada(df, df_origen, columna_origen)
+        if advertencia_cruce is not None and advertencia_cruce["advertencia"] == "sin_clave_cruce":
+            return advertencia_cruce
+    else:
+        if columna_origen not in df.columns:
+            return {"advertencia": "modelo_o_campo_no_encontrado", "columna": columna_origen, "errores": []}
+        serie = df[columna_origen]
 
-    serie = df[columna_origen]
     errores = []
 
     campo_requerido = not getattr(field, "blank", True) and not getattr(field, "null", True)
@@ -1256,7 +1358,7 @@ def _validar_columna(df, mapeo):
                 })
 
     total = len(serie)
-    return {
+    resultado = {
         "columna": columna_origen,
         "modelo_destino": modelo_destino,
         "campo_destino": campo_destino,
@@ -1264,6 +1366,9 @@ def _validar_columna(df, mapeo):
         "ok": total - len(errores),
         "errores": errores,
     }
+    if advertencia_cruce is not None:
+        resultado["advertencia_cruce"] = advertencia_cruce["mensaje"]
+    return resultado
 
 
 def _validar_constante(mapeo, total_filas):
@@ -1335,7 +1440,7 @@ def _valores_fila_modelo(df, mapeos_modelo, fila_idx):
     return valores
 
 
-def _validar_obligatorios_unidad_muestreo(mapeos, modelos_incluidos, total_filas):
+def _validar_obligatorios_unidad_muestreo(mapeos, modelos_incluidos, total_filas, hoja=None):
     """Reglas de negocio de UnidadMuestreo que no se derivan de blank/null del
     modelo (por eso _validar_columna/_validar_constante no las cubren):
     - 'nombre' es obligatorio para toda unidad de muestreo, así que debe
@@ -1345,20 +1450,28 @@ def _validar_obligatorios_unidad_muestreo(mapeos, modelos_incluidos, total_filas
       como un error crudo de Postgres al momento de guardar.
     - 'unidad_experimental' debe quedar resuelto sí o sí: mapeado explícito,
       o heredado automáticamente porque 'UnidadExperimental' se importa en la
-      misma tanda (ver el vínculo automático por fila en importar_carga)."""
+      misma tanda (ver el vínculo automático por fila en importar_carga).
+    Se llama UNA VEZ POR HOJA (no una vez por sección): cada hoja escribe sus
+    propias filas de UnidadMuestreo con sus propios mapeos (`mapeos` acá ya
+    viene acotado a una hoja por `_leer_y_validar_multihoja`) -si el campo
+    está mapeado en otra hoja de la misma sección pero no en esta, las filas
+    de ESTA hoja igual fallarían al guardar (constraint not-null en la BD)-,
+    así que `hoja` se usa solo para dejar explícito en el mensaje a qué hoja
+    le falta el campo, evitando el error crudo de Postgres."""
     if "UnidadMuestreo" not in modelos_incluidos:
         return None
 
     campos_um = {m.campo_destino for m in mapeos if m.modelo_destino == "UnidadMuestreo"}
     errores = []
+    contexto = f" en la hoja '{hoja}'" if hoja else ""
 
     if "nombre" not in campos_um:
         errores.append({
             "fila": None, "valor": None, "tipo": "campo_obligatorio_sin_mapear",
             "mensaje": (
-                "El campo 'nombre' de Unidad de Muestreo no está mapeado (ni por "
-                "columna ni como atributo manual). Es obligatorio: toda unidad de "
-                "muestreo necesita un nombre."
+                f"El campo 'nombre' de Unidad de Muestreo no está mapeado{contexto} "
+                "(ni por columna ni como atributo manual). Es obligatorio: toda unidad "
+                "de muestreo necesita un nombre."
             ),
         })
 
@@ -1366,8 +1479,8 @@ def _validar_obligatorios_unidad_muestreo(mapeos, modelos_incluidos, total_filas
         errores.append({
             "fila": None, "valor": None, "tipo": "campo_obligatorio_sin_mapear",
             "mensaje": (
-                "El campo 'tipo' de Unidad de Muestreo no está mapeado (ni por "
-                "columna ni como atributo manual). Es obligatorio: toda unidad de "
+                f"El campo 'tipo' de Unidad de Muestreo no está mapeado{contexto} (ni "
+                "por columna ni como atributo manual). Es obligatorio: toda unidad de "
                 "muestreo debe ser de un tipo (parcela, transecto, etc.)."
             ),
         })
@@ -1376,15 +1489,15 @@ def _validar_obligatorios_unidad_muestreo(mapeos, modelos_incluidos, total_filas
         errores.append({
             "fila": None, "valor": None, "tipo": "campo_obligatorio_sin_mapear",
             "mensaje": (
-                "Unidad de Muestreo no tiene 'unidad_experimental' mapeada, y la "
-                "sección 'Unidad Experimental' no forma parte de esta importación, "
+                f"Unidad de Muestreo no tiene 'unidad_experimental' mapeada{contexto}, "
+                "y la sección 'Unidad Experimental' no forma parte de esta importación, "
                 "así que no se puede vincular automáticamente. Mapea la columna, o "
                 "guarda primero la sección Unidad Experimental."
             ),
         })
 
     return {
-        "columna": "Unidad de Muestreo (campos obligatorios)",
+        "columna": f"Unidad de Muestreo (campos obligatorios{contexto})",
         "modelo_destino": "UnidadMuestreo",
         "campo_destino": "",
         "total": total_filas,
@@ -1393,29 +1506,32 @@ def _validar_obligatorios_unidad_muestreo(mapeos, modelos_incluidos, total_filas
     }
 
 
-def _validar_obligatorios_unidad_experimental(mapeos, modelos_incluidos, total_filas):
+def _validar_obligatorios_unidad_experimental(mapeos, modelos_incluidos, total_filas, hoja=None):
     """'nombre' es obligatorio para toda unidad experimental (es, junto con
     'proyecto', su clave de unicidad). Si no queda mapeado, get_or_create()
     terminaría buscando solo por 'proyecto' y podría devolver más de una
-    fila cuando el proyecto ya tiene varias unidades experimentales."""
+    fila cuando el proyecto ya tiene varias unidades experimentales. Se llama
+    una vez por hoja, igual que `_validar_obligatorios_unidad_muestreo` (ver
+    su docstring): cada hoja escribe sus propias filas."""
     if "UnidadExperimental" not in modelos_incluidos:
         return None
 
     campos_ue = {m.campo_destino for m in mapeos if m.modelo_destino == "UnidadExperimental"}
     errores = []
+    contexto = f" en la hoja '{hoja}'" if hoja else ""
 
     if "nombre" not in campos_ue:
         errores.append({
             "fila": None, "valor": None, "tipo": "campo_obligatorio_sin_mapear",
             "mensaje": (
-                "El campo 'nombre' de Unidad Experimental no está mapeado (ni por "
-                "columna ni como atributo manual). Es obligatorio: identifica a la "
-                "unidad experimental dentro de su proyecto."
+                f"El campo 'nombre' de Unidad Experimental no está mapeado{contexto} "
+                "(ni por columna ni como atributo manual). Es obligatorio: identifica "
+                "a la unidad experimental dentro de su proyecto."
             ),
         })
 
     return {
-        "columna": "Unidad Experimental (campos obligatorios)",
+        "columna": f"Unidad Experimental (campos obligatorios{contexto})",
         "modelo_destino": "UnidadExperimental",
         "campo_destino": "",
         "total": total_filas,
@@ -1803,14 +1919,23 @@ def _campos_clave_de_fila(modelo, modelo_cls, kwargs):
     return campos_clave
 
 
-def _armar_kwargs_modelo_fila(df, fila_idx, mapeos, modelo_cls, resueltos, cache_fk):
+def _armar_kwargs_modelo_fila(df, fila_idx, mapeos, modelo_cls, resueltos, cache_fk, series_cruzadas=None):
     """Arma los kwargs de una fila para un modelo a partir de sus mapeos:
     resuelve transformaciones/constantes, FKs (por pk mapeado explícitamente
     o auto-vinculados a otro modelo ya resuelto en esta misma fila) y
     coerciona tipos. Devuelve None si a la fila le falta algún valor
     requerido (columna vacía en un campo obligatorio, "ignorar_fila", FK que
     no resuelve, etc.) o si no queda ningún campo. Extraído de la Fase 1 de
-    `_procesar_filas` para reutilizarlo también en `_procesar_fila_gei_flujo`."""
+    `_procesar_filas` para reutilizarlo también en `_procesar_fila_gei_flujo`.
+
+    `series_cruzadas` (opcional): dict `columna_origen -> pd.Series` ya
+    resuelta (vía `_resolver_columna_hoja_cruzada`) para los mapeos cuyo
+    `hoja_origen` no es la hoja de `df` — se calcula una sola vez por
+    columna ANTES del loop de filas (ver `_procesar_filas`), no acá, para no
+    repetir el cruce por cada fila. Si un mapeo cruzado no tiene su serie
+    precalculada (p. ej. desde `_procesar_fila_gei_flujo`, que no la arma),
+    se degrada a `df[mapeo.columna_origen]` con el mismo comportamiento que
+    antes de existir `hoja_origen`."""
     kwargs = {}
     incompleto = False
 
@@ -1820,7 +1945,11 @@ def _armar_kwargs_modelo_fila(df, fila_idx, mapeos, modelo_cls, resueltos, cache
         if mapeo.transformacion == "constante":
             valor = None if _es_vacio(mapeo.valor_constante) else mapeo.valor_constante
         else:
-            val_crudo = df[mapeo.columna_origen].iloc[fila_idx]
+            es_cruzado = mapeo.hoja_origen and mapeo.hoja_origen != mapeo.hoja
+            if es_cruzado and series_cruzadas and mapeo.columna_origen in series_cruzadas:
+                val_crudo = series_cruzadas[mapeo.columna_origen].iloc[fila_idx]
+            else:
+                val_crudo = df[mapeo.columna_origen].iloc[fila_idx]
             try:
                 valor = _resolver_valor_columna(val_crudo, mapeo)
             except ValueError:
@@ -2022,7 +2151,7 @@ def _procesar_fila_cobertura(df, fila_idx, mapeos, sitio, resumen_modelos, pks_p
                 }
 
 
-def _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos, capturar_detalle=False):
+def _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos, capturar_detalle=False, dfs_por_hoja=None, es_correccion=False):
     """Recorre cada modelo en `orden` (uno a la vez, sobre TODAS las filas) y
     crea/reutiliza sus instancias en lote, vinculando por FK las que ya se
     resolvieron para modelos anteriores en la misma fila. Se usa tanto para
@@ -2107,13 +2236,26 @@ def _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos, captur
                 )
             continue
 
+        # Mapeos con `hoja_origen` (columna que viene de otra hoja): resuelve
+        # el cruce UNA vez por columna acá, no dentro del loop de filas de
+        # abajo (sería O(filas × cruces) en vez de O(cruces)).
+        series_cruzadas = {}
+        for mapeo in mapeos:
+            if mapeo.hoja_origen and mapeo.hoja_origen != mapeo.hoja and mapeo.transformacion != "constante":
+                df_origen = (dfs_por_hoja or {}).get(mapeo.hoja_origen)
+                if df_origen is not None and mapeo.columna_origen in df_origen.columns:
+                    serie, _advertencia = _resolver_columna_hoja_cruzada(df, df_origen, mapeo.columna_origen)
+                    series_cruzadas[mapeo.columna_origen] = serie
+
         # Fase 1: arma los kwargs de cada fila sin tocar la BD -salvo
         # resolver por pk un FK mapeado explícitamente a una columna, que
         # sigue siendo por fila porque el pk viene del archivo, no de algo
         # que ya calculamos-.
         filas_kwargs = {}
         for fila_idx in range(total_filas):
-            kwargs = _armar_kwargs_modelo_fila(df, fila_idx, mapeos, modelo_cls, resueltos, cache_fk)
+            kwargs = _armar_kwargs_modelo_fila(
+                df, fila_idx, mapeos, modelo_cls, resueltos, cache_fk, series_cruzadas=series_cruzadas,
+            )
             if kwargs is None:
                 continue
 
@@ -2142,7 +2284,7 @@ def _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos, captur
             if campos_clave:
                 defaults = {k: v for k, v in kwargs.items() if k not in campos_clave}
                 grupos_identidad.setdefault(frozenset(campos_clave), []).append((fila_idx, campos_clave, defaults))
-            elif modelo in _MODELOS_EVENTO:
+            elif modelo in _MODELOS_EVENTO and not es_correccion:
                 # A diferencia de UnidadMuestreo/UnidadExperimental/Sitio
                 # (lugares que se reutilizan entre filas y cargas), cada fila
                 # de un modelo "evento" es una medición real distinta -dos
@@ -2153,6 +2295,16 @@ def _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos, captur
                 # el mismo archivo dos veces, se duplican las lecturas que no
                 # tengan la identidad completa (fecha+hora acá), igual que no
                 # las protege el UniqueConstraint en BD.
+                #
+                # es_correccion=True (reprocesando una carga ya importada,
+                # ver importar_carga) es la excepción: acá SÍ conviene buscar
+                # coincidencia exacta antes de crear (rama "genérico" de
+                # abajo) para no duplicar lo que ya se importó -el archivo
+                # que se está reprocesando suele ser el mismo, con una
+                # sección nueva agregada (p. ej. CH4 junto a CO2 ya
+                # importado)-. El riesgo de fusionar dos lecturas legítimas
+                # con valores idénticos se acepta acá, igual que ya se acepta
+                # para el resto de los modelos "genérico".
                 filas_evento.append((fila_idx, kwargs))
             else:
                 filas_generico.append((fila_idx, kwargs))
@@ -2266,7 +2418,13 @@ def _preparar_importacion(carga, hasta_grupo_solicitado):
     if not todos_mapeos:
         return None, None, None, JsonResponse({"error": "La carga no tiene mapeos definidos."}, status=400)
 
-    grupo_maximo = max(_grupo_de_modelo(m.modelo_destino) for m in todos_mapeos)
+    # No usar el máximo entre los mapeos YA guardados: si el archivo todavía
+    # no tiene columnas mapeadas para las últimas secciones del wizard (el
+    # usuario no ha llegado ahí, o falta marcarlas "sin datos"), eso daría un
+    # grupo_maximo menor al real y la carga quedaría marcada "importado"
+    # -bloqueando el mapeo- a mitad de camino, aunque el wizard siga
+    # mostrando secciones pendientes (con candado) más adelante.
+    grupo_maximo = len(SECCIONES_ETL) - 1
     hasta_grupo = hasta_grupo_solicitado if hasta_grupo_solicitado is not None else grupo_maximo
     try:
         hasta_grupo = int(hasta_grupo)
@@ -2280,19 +2438,31 @@ def _preparar_importacion(carga, hasta_grupo_solicitado):
     return mapeos, hasta_grupo, grupo_maximo, None
 
 
-def _validar_seccion(carga, df, mapeos):
-    """Corre todas las validaciones (por columna + reglas de negocio) sobre
-    el subconjunto `mapeos` de esta sección -ya acotado a UNA hoja por el
+def _validar_seccion(carga, df, mapeos, hoja=None, dfs_por_hoja=None):
+    """Corre todas las validaciones de ESTA hoja (por columna + reglas de
+    negocio) sobre el subconjunto `mapeos` -ya acotado a UNA hoja por el
     llamador (`_leer_y_validar_multihoja`), así que `df` y `mapeos` siempre
-    se corresponden entre sí-. Devuelve (resultados, total_errores,
-    filas_con_error)."""
+    se corresponden entre sí-. Los chequeos de "campo obligatorio sin
+    mapear" se corren acá TAMBIÉN por hoja (no solo a nivel de sección):
+    cada hoja escribe sus propias filas con sus propios mapeos
+    (`_procesar_filas_multihoja` procesa hoja por hoja), así que si a ESTA
+    hoja en particular le falta 'nombre'/'tipo' de UnidadMuestreo, sus filas
+    van a fallar al guardar (constraint not-null en la BD) aunque el campo
+    esté mapeado en otra hoja de la misma sección -de ahí que el mensaje
+    incluya el nombre de la hoja, para que quede claro que el problema es
+    de ESTA hoja y no de la sección completa-. Las constantes (`transformacion
+    == "constante"`) no se validan acá: `_leer_y_validar_multihoja` las
+    valida una sola vez por sección, deduplicadas, porque su formato/tipo no
+    depende de la hoja. `dfs_por_hoja` (todas las hojas ya leídas de esta
+    carga) se pasa a `_validar_columna` para resolver los mapeos con
+    `hoja_origen` seteado (columna que viene de otra hoja). Devuelve
+    (resultados, total_errores, filas_con_error)."""
     resultados = []
     filas_con_error = set()
     for mapeo in mapeos:
         if mapeo.transformacion == "constante":
-            resultado = _validar_constante(mapeo, len(df))
-        else:
-            resultado = _validar_columna(df, mapeo)
+            continue
+        resultado = _validar_columna(df, mapeo, dfs_por_hoja=dfs_por_hoja)
         if "advertencia" not in resultado:
             for e in resultado["errores"]:
                 filas_con_error.add(e["fila"])
@@ -2305,13 +2475,13 @@ def _validar_seccion(carga, df, mapeos):
         resultados.append(resultado_ue)
 
     modelos_incluidos = {m.modelo_destino for m in mapeos}
-    resultado_ue_obl = _validar_obligatorios_unidad_experimental(mapeos, modelos_incluidos, len(df))
+    resultado_ue_obl = _validar_obligatorios_unidad_experimental(mapeos, modelos_incluidos, len(df), hoja=hoja)
     if resultado_ue_obl is not None:
         for e in resultado_ue_obl["errores"]:
             filas_con_error.add(e["fila"])
         resultados.append(resultado_ue_obl)
 
-    resultado_um = _validar_obligatorios_unidad_muestreo(mapeos, modelos_incluidos, len(df))
+    resultado_um = _validar_obligatorios_unidad_muestreo(mapeos, modelos_incluidos, len(df), hoja=hoja)
     if resultado_um is not None:
         for e in resultado_um["errores"]:
             filas_con_error.add(e["fila"])
@@ -2321,39 +2491,125 @@ def _validar_seccion(carga, df, mapeos):
     return resultados, total_errores, filas_con_error
 
 
-def _leer_y_validar_multihoja(carga, mapeos):
+def _leer_y_validar_multihoja(carga, mapeos, on_progreso=None):
     """Agrupa `mapeos` (de una sección, potencialmente de varias hojas) por
-    `hoja`, corre `_validar_seccion` por cada una con su propio DataFrame, y
-    fusiona los resultados. Devuelve (resultados, total_errores,
-    total_filas_combinado, filas_con_error_combinado, dfs_por_hoja)
-    -`dfs_por_hoja` se reutiliza después al importar, para no releer-."""
+    `hoja`, corre `_validar_seccion` por cada una con su propio DataFrame
+    -incluyendo sus constantes, para los chequeos de obligatorios por hoja-,
+    y fusiona los resultados. Al final valida, una sola vez por sección, las
+    constantes (deduplicadas por si el mismo atributo manual quedó guardado
+    en más de una hoja: su formato/tipo no depende de la hoja, así que
+    validarlo por cada una sería trabajo repetido, no un chequeo distinto).
+
+    Los mapeos con `hoja_origen` seteado (columna que viene de otra hoja,
+    ver `_resolver_columna_hoja_cruzada`) necesitan el DataFrame de ESA otra
+    hoja disponible además del de su propia `hoja` — por eso se leen todas
+    las hojas involucradas (mapeadas + de origen) ANTES de validar ninguna,
+    en vez de leer y validar hoja por hoja como antes: si se validara en el
+    mismo orden en que se leen, una hoja podría necesitar el DataFrame de
+    otra que "sorted()" todavía no alcanzó a leer.
+
+    La lectura de cada hoja (I/O contra el archivo/caché) y su validación
+    (de solo lectura, sin tocar la BD de escritura) corren en paralelo con
+    un `ThreadPoolExecutor` — son independientes entre sí, a diferencia de
+    la fase de escritura (`_procesar_filas_multihoja`), que sí se deja
+    secuencial porque varias hojas pueden compartir un mismo modelo
+    (ej. UnidadMuestreo) y un `get_or_create` concurrente sobre el mismo
+    `nombre` arriesgaría duplicados/IntegrityError. Cada hilo cierra su
+    conexión de BD al terminar para no dejarlas acumuladas.
+
+    Devuelve (resultados, total_errores, total_filas_combinado,
+    filas_con_error_combinado, dfs_por_hoja) -`dfs_por_hoja` se reutiliza
+    después al importar, para no releer-."""
+    from django.db import connections
+
     resultados = []
     total_errores = 0
     total_filas_combinado = 0
     filas_con_error_combinado = 0
     dfs_por_hoja = {}
-    for hoja in sorted({m.hoja for m in mapeos}):
-        mapeos_hoja = [m for m in mapeos if m.hoja == hoja]
-        df = _leer_dataframe_carga(carga, hoja)
-        _aplicar_estrategia_nulos(df, mapeos_hoja)
-        dfs_por_hoja[hoja] = df
 
-        resultados_hoja, errores_hoja, filas_hoja = _validar_seccion(carga, df, mapeos_hoja)
+    hojas_mapeadas = sorted({m.hoja for m in mapeos})
+    mapeos_cruzados = [m for m in mapeos if m.hoja_origen and m.hoja_origen != m.hoja]
+    hojas_origen_extra = sorted({m.hoja_origen for m in mapeos_cruzados} - set(hojas_mapeadas))
+    todas_hojas = [*hojas_mapeadas, *hojas_origen_extra]
+
+    def _leer_hoja(hoja):
+        try:
+            return hoja, _leer_dataframe_carga(carga, hoja)
+        finally:
+            connections.close_all()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(todas_hojas) or 1)) as executor:
+        for hoja, df in executor.map(_leer_hoja, todas_hojas):
+            dfs_por_hoja[hoja] = df
+
+    for hoja in hojas_mapeadas:
+        mapeos_hoja = [m for m in mapeos if m.hoja == hoja]
+        _aplicar_estrategia_nulos(dfs_por_hoja[hoja], mapeos_hoja)
+    for hoja_origen in {m.hoja_origen for m in mapeos_cruzados}:
+        _aplicar_estrategia_nulos(
+            dfs_por_hoja[hoja_origen], [m for m in mapeos_cruzados if m.hoja_origen == hoja_origen],
+        )
+
+    def _validar_hoja(hoja):
+        try:
+            mapeos_hoja = [m for m in mapeos if m.hoja == hoja]
+            df = dfs_por_hoja[hoja]
+            resultados_hoja, errores_hoja, filas_hoja = _validar_seccion(
+                carga, df, mapeos_hoja, hoja=hoja, dfs_por_hoja=dfs_por_hoja,
+            )
+            return hoja, resultados_hoja, errores_hoja, len(df), len(filas_hoja)
+        finally:
+            connections.close_all()
+
+    resultados_por_hoja = {}
+    completados = 0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(hojas_mapeadas) or 1)) as executor:
+        futuros = {executor.submit(_validar_hoja, hoja): hoja for hoja in hojas_mapeadas}
+        for futuro in concurrent.futures.as_completed(futuros):
+            hoja, resultados_hoja, errores_hoja, n_filas, n_filas_error = futuro.result()
+            resultados_por_hoja[hoja] = (resultados_hoja, errores_hoja, n_filas, n_filas_error)
+            completados += 1
+            if on_progreso:
+                on_progreso(completados, len(hojas_mapeadas), hoja)
+
+    # Se fusiona en el orden determinístico `hojas_mapeadas` (no en el orden
+    # de finalización de los hilos), para que la salida no dependa de
+    # timing y sea reproducible.
+    for hoja in hojas_mapeadas:
+        resultados_hoja, errores_hoja, n_filas, n_filas_error = resultados_por_hoja[hoja]
         resultados.extend(resultados_hoja)
         total_errores += errores_hoja
-        total_filas_combinado += len(df)
-        filas_con_error_combinado += len(filas_hoja)
+        total_filas_combinado += n_filas
+        filas_con_error_combinado += n_filas_error
+
+    vistos_constantes = set()
+    for mapeo in mapeos:
+        if mapeo.transformacion != "constante":
+            continue
+        clave = (mapeo.modelo_destino, mapeo.campo_destino, mapeo.valor_constante)
+        if clave in vistos_constantes:
+            continue
+        vistos_constantes.add(clave)
+        resultado = _validar_constante(mapeo, total_filas_combinado)
+        resultados.append(resultado)
+        if "advertencia" not in resultado and resultado["errores"]:
+            total_errores += len(resultado["errores"])
+            filas_con_error_combinado += 1
 
     return resultados, total_errores, total_filas_combinado, filas_con_error_combinado, dfs_por_hoja
 
 
-def _procesar_filas_multihoja(carga, mapeos, orden, resumen_modelos, dfs_por_hoja, capturar_detalle=False):
+def _procesar_filas_multihoja(carga, mapeos, orden, resumen_modelos, dfs_por_hoja, capturar_detalle=False, on_progreso=None, es_correccion=False):
     """Como `_procesar_filas`, pero corriendo una vez por cada hoja presente
     en `mapeos` (con su propio DataFrame) y fusionando detalle/pks — una
     misma sección puede tener columnas mapeadas desde más de una hoja."""
     detalle_combinado = {} if capturar_detalle else None
     pks_combinado = {}
-    for hoja in sorted({m.hoja for m in mapeos}):
+    hojas = sorted({m.hoja for m in mapeos})
+    for i, hoja in enumerate(hojas, start=1):
+        if on_progreso:
+            on_progreso(i - 1, len(hojas), hoja)
         mapeos_hoja = [m for m in mapeos if m.hoja == hoja]
         modelos_hoja = {m.modelo_destino for m in mapeos_hoja}
         orden_hoja = [modelo for modelo in orden if modelo in modelos_hoja]
@@ -2363,12 +2619,16 @@ def _procesar_filas_multihoja(carga, mapeos, orden, resumen_modelos, dfs_por_hoj
 
         detalle_hoja, pks_hoja = _procesar_filas(
             dfs_por_hoja[hoja], orden_hoja, mapeos_por_modelo_hoja, carga, resumen_modelos, capturar_detalle,
+            dfs_por_hoja=dfs_por_hoja, es_correccion=es_correccion,
         )
         if detalle_hoja:
             for modelo, bucket in detalle_hoja.items():
                 detalle_combinado.setdefault(modelo, {}).update(bucket)
         for modelo, pks in pks_hoja.items():
             pks_combinado.setdefault(modelo, set()).update(pks)
+
+    if on_progreso and hojas:
+        on_progreso(len(hojas), len(hojas), hojas[-1])
 
     return detalle_combinado, pks_combinado
 
@@ -2421,6 +2681,7 @@ def previsualizar_carga(request, fuente_id, carga_id):
             sid = transaction.savepoint()
             detalle, _pks = _procesar_filas_multihoja(
                 carga, mapeos, orden, resumen_modelos, dfs_por_hoja, capturar_detalle=True,
+                es_correccion=carga.estado == "importado",
             )
             transaction.savepoint_rollback(sid)
 
@@ -2455,54 +2716,43 @@ def previsualizar_carga(request, fuente_id, carga_id):
         return JsonResponse({"error": str(exc)}, status=500)
 
 
-@csrf_exempt
-@requiere_nivel("reportador")
-def importar_carga(request, fuente_id, carga_id):
-    if request.method != "POST":
-        return JsonResponse({"error": "Método no permitido"}, status=405)
+def _guardar_progreso(carga, **campos):
+    for campo, valor in campos.items():
+        setattr(carga, f"progreso_{campo}", valor)
+    carga.save(update_fields=[f"progreso_{campo}" for campo in campos])
 
+
+def _ejecutar_importacion_async(carga_id, hasta_grupo_solicitado):
+    """Corre en un hilo en background (sin worker/Celery separado — un solo
+    Web Service gunicorn) lo que antes hacía `importar_carga` de forma
+    síncrona, reportando avance en `CargaArchivo.progreso_*` para que el
+    frontend haga polling en vez de bloquear la petición HTTP. Si el proceso
+    de gunicorn se reinicia a mitad de camino, el job se pierde sin
+    recuperación automática — aceptable al volumen actual del proyecto."""
+    from django.db import connections
+
+    carga = CargaArchivo.objects.get(pk=carga_id)
+    # Capturado ANTES de tocar `carga.estado` más abajo: distingue una
+    # importación de verdad (primera vez) de una corrección sobre una carga
+    # que ya se había marcado "importado" -ver es_correccion en _procesar_filas-.
+    es_correccion = carga.estado == "importado"
     try:
-        carga = CargaArchivo.objects.get(pk=carga_id, fuente_id=fuente_id)
-    except CargaArchivo.DoesNotExist:
-        return JsonResponse({"error": "Carga no encontrada"}, status=404)
+        mapeos, hasta_grupo, grupo_maximo, error_response = _preparar_importacion(carga, hasta_grupo_solicitado)
+        if error_response is not None:
+            mensaje = json.loads(error_response.content.decode("utf-8")).get("error", "Error al preparar la importación.")
+            _guardar_progreso(carga, estado="error", mensaje=mensaje, resultado={"error": mensaje})
+            return
 
-    try:
-        body = json.loads(request.body or "{}")
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "JSON inválido"}, status=400)
+        total_hojas = len(sorted({m.hoja for m in mapeos})) or 1
 
-    mapeos, hasta_grupo, grupo_maximo, error_response = _preparar_importacion(carga, body.get("hasta_grupo"))
-    if error_response is not None:
-        return error_response
+        def _reportar(actual, mensaje):
+            _guardar_progreso(carga, actual=actual, total=total_hojas * 2, mensaje=mensaje)
 
-    if carga.estado == "importado" or carga.fuente.estado == "completo":
-        # La carga (o la fuente, si esto es una carga nueva creada para
-        # corregir una fuente ya completa -ver upload_archivo, que copia los
-        # mapeos previos-) ya se importó por completo. Es seguro reprocesar
-        # los modelos con identidad propia
-        # (UnidadExperimental, UnidadMuestreo, Sitio, Parcela/Transecto,
-        # etc.): _procesar_filas los reutiliza por su clave y sobreescribe
-        # los campos recién mapeados en el registro existente, no crea
-        # duplicados. Los modelos "evento" (_MODELOS_EVENTO) sí duplicarían
-        # una medición por cada corrida, así que esos quedan bloqueados acá.
-        modelos_solicitados = {m.modelo_destino for m in mapeos}
-        modelos_evento_incluidos = modelos_solicitados & _MODELOS_EVENTO
-        if modelos_evento_incluidos:
-            return JsonResponse({
-                "error": (
-                    "Esta carga ya fue importada. No se pueden registrar ahora columnas que "
-                    f"generen nuevas mediciones ({', '.join(sorted(modelos_evento_incluidos))}) porque "
-                    "duplicarían las que ya existen; solo se pueden completar campos de entidades "
-                    "como Sitio, Unidad de Muestreo o Unidad Experimental."
-                ),
-            }, status=409)
-
-    try:
-        # 1) Validar solo el subconjunto de mapeos de esta sección (por cada
-        # hoja involucrada); no se escribe nada en la base si queda error.
-        resultados, total_errores, total_filas, filas_con_error, dfs_por_hoja = _leer_y_validar_multihoja(carga, mapeos)
+        resultados, total_errores, total_filas, filas_con_error, dfs_por_hoja = _leer_y_validar_multihoja(
+            carga, mapeos, on_progreso=lambda i, n, hoja: _reportar(i, f"Validando hoja '{hoja}' ({i}/{n})…"),
+        )
         if total_errores > 0:
-            return JsonResponse({
+            resultado = {
                 "ok": False,
                 "resumen": {
                     "total_filas": total_filas,
@@ -2512,16 +2762,20 @@ def importar_carga(request, fuente_id, carga_id):
                     "filas_con_errores": filas_con_error,
                 },
                 "columnas": resultados,
-            }, status=400, json_dumps_params={"ensure_ascii": False})
+            }
+            _guardar_progreso(carga, estado="completado", mensaje="Se encontraron errores de validación.", resultado=resultado)
+            return
 
-        # 2) Importar: crear/reutilizar instancias, en orden de dependencia FK.
         modelos_incluidos = sorted({m.modelo_destino for m in mapeos})
         orden = _orden_topologico(modelos_incluidos)
-
         resumen_modelos = {m: {"creados": 0, "reutilizados": 0} for m in modelos_incluidos}
 
         with transaction.atomic():
-            _, pks_por_modelo = _procesar_filas_multihoja(carga, mapeos, orden, resumen_modelos, dfs_por_hoja)
+            _, pks_por_modelo = _procesar_filas_multihoja(
+                carga, mapeos, orden, resumen_modelos, dfs_por_hoja,
+                on_progreso=lambda i, n, hoja: _reportar(total_hojas + i, f"Guardando hoja '{hoja}' ({i}/{n})…"),
+                es_correccion=es_correccion,
+            )
 
             # Acumula (no reemplaza) los pk tocados por esta sección con los de
             # secciones anteriores de la misma carga, para poder mostrar luego
@@ -2542,17 +2796,90 @@ def importar_carga(request, fuente_id, carga_id):
                 carga.fuente.estado = "completo"
                 carga.fuente.save(update_fields=["estado"])
 
-        return JsonResponse({
+        resultado = {
             "ok": True,
             "hasta_grupo": hasta_grupo,
             "completo": hasta_grupo >= grupo_maximo,
             "modelos": resumen_modelos,
-        }, json_dumps_params={"ensure_ascii": False})
+        }
+        _guardar_progreso(carga, estado="completado", actual=total_hojas * 2, mensaje="Completado.", resultado=resultado)
 
     except (ValueError, FileNotFoundError) as exc:
-        return JsonResponse({"error": str(exc)}, status=400)
+        _guardar_progreso(carga, estado="error", mensaje=str(exc), resultado={"error": str(exc)})
     except Exception as exc:
-        return JsonResponse({"error": str(exc)}, status=500)
+        logger.exception("Error al importar la carga %s en background", carga_id)
+        _guardar_progreso(carga, estado="error", mensaje=str(exc), resultado={"error": str(exc)})
+    finally:
+        connections.close_all()
+
+
+@csrf_exempt
+@requiere_nivel("reportador")
+def importar_carga(request, fuente_id, carga_id):
+    if request.method != "POST":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+
+    try:
+        carga = CargaArchivo.objects.get(pk=carga_id, fuente_id=fuente_id)
+    except CargaArchivo.DoesNotExist:
+        return JsonResponse({"error": "Carga no encontrada"}, status=404)
+
+    if carga.progreso_estado == "en_progreso":
+        return JsonResponse({"error": "Ya hay una importación en curso para esta carga."}, status=409)
+
+    try:
+        body = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "JSON inválido"}, status=400)
+
+    hasta_grupo_solicitado = body.get("hasta_grupo")
+    mapeos, hasta_grupo, grupo_maximo, error_response = _preparar_importacion(carga, hasta_grupo_solicitado)
+    if error_response is not None:
+        return error_response
+
+    # La carga (o la fuente, si esto es una carga nueva creada para corregir
+    # una fuente ya completa -ver upload_archivo, que copia los mapeos
+    # previos-) puede ya haberse importado por completo. Es seguro
+    # reprocesar: los modelos con identidad propia (UnidadExperimental,
+    # UnidadMuestreo, Sitio, Parcela/Transecto, etc.) se reutilizan por su
+    # clave y sobreescriben los campos recién mapeados en el registro
+    # existente; los modelos "evento" sin identidad completa (ver
+    # _MODELOS_EVENTO) usan es_correccion en _procesar_filas para buscar
+    # coincidencia exacta antes de crear -si ya existe una fila igual, se
+    # reutiliza sin duplicarla; si es nueva (p. ej. CH4 agregado junto a un
+    # CO2 ya importado), se crea-.
+    carga.progreso_estado = "en_progreso"
+    carga.progreso_actual = 0
+    carga.progreso_total = 0
+    carga.progreso_mensaje = "Iniciando…"
+    carga.progreso_resultado = None
+    carga.save(update_fields=["progreso_estado", "progreso_actual", "progreso_total", "progreso_mensaje", "progreso_resultado"])
+
+    threading.Thread(target=_ejecutar_importacion_async, args=(carga.id, hasta_grupo_solicitado), daemon=True).start()
+
+    return JsonResponse({"job_iniciado": True}, status=202)
+
+
+@csrf_exempt
+@requiere_nivel("reportador")
+def estado_importacion(request, fuente_id, carga_id):
+    if request.method != "GET":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+
+    try:
+        carga = CargaArchivo.objects.get(pk=carga_id, fuente_id=fuente_id)
+    except CargaArchivo.DoesNotExist:
+        return JsonResponse({"error": "Carga no encontrada"}, status=404)
+
+    data = {
+        "estado": carga.progreso_estado,
+        "actual": carga.progreso_actual,
+        "total": carga.progreso_total,
+        "mensaje": carga.progreso_mensaje,
+    }
+    if carga.progreso_estado in ("completado", "error"):
+        data["resultado"] = carga.progreso_resultado
+    return JsonResponse(data, json_dumps_params={"ensure_ascii": False})
 
 
 # ── Panel de visualización: tabla desnormalizada de lo importado ───────────

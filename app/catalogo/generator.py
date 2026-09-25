@@ -215,6 +215,19 @@ CAMPOS_AUTOMATICOS_ETL = {
     ("UnidadMuestreo", "fuente_datos"),
     ("UnidadMuestreo", "unidad_experimental"),
     ("MuestraAmbiental", "fuente_datos"),
+    # Igual que UnidadMuestreo.unidad_experimental: se resuelve solo,
+    # vinculando cada SubmuestraGEI con la MuestraGEI ya creada para esa
+    # misma fila dentro de la sección "Muestras GEI" -no tiene sentido
+    # pedirle al usuario que mapee una columna de origen para esto.
+    ("SubmuestraGEI", "muestra"),
+}
+
+# Caso inverso a CAMPOS_AUTOMATICOS_ETL: campos que el modelo permite en
+# blanco (para no romper otros flujos de escritura) pero que el wizard debe
+# pedir como obligatorios, porque sin ellos la fila no aporta nada -una
+# SubmuestraGEI sin valor de flujo no es una medición.
+CAMPOS_OBLIGATORIOS_ETL = {
+    ("SubmuestraGEI", "valor"),
 }
 
 
@@ -240,8 +253,9 @@ def campo_to_catalogo(field, proyecto=None, incluir_instancias_fk=False, nombre_
         "help_text": str(getattr(field, "help_text", "") or ""),
         "tipo": TIPO_MAP.get(tipo_raw, tipo_raw),
         "tipo_raw": tipo_raw,
-        "requerido": not (
-            getattr(field, "blank", True) or getattr(field, "null", True)
+        "requerido": (
+            not (getattr(field, "blank", True) or getattr(field, "null", True))
+            or (nombre_modelo, field.name) in CAMPOS_OBLIGATORIOS_ETL
         ),
         "automatico": (nombre_modelo, field.name) in CAMPOS_AUTOMATICOS_ETL,
         "max_length": getattr(field, "max_length", None),
