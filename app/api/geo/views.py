@@ -135,7 +135,7 @@ def sitios_geojson(request):
     acá -el cliente ya recibe "resumen_por_gas" desagregado por los tres-."""
     sitios = (
         Sitio.objects
-        .select_related("vereda", "vereda__municipio", "vereda__municipio__departamento")
+        .select_related("vereda", "vereda__municipio", "vereda__municipio__departamento", "disturbio")
         .prefetch_related(
             "unidades_muestreo__tipo",
             "unidades_muestreo__unidad_experimental__proyecto",
@@ -278,6 +278,12 @@ def sitios_geojson(request):
                 ),
                 "altitud": float(sitio.altitud) if sitio.altitud is not None else None,
                 "uso_actual": sitio.get_uso_actual_display() if sitio.uso_actual else None,
+                # Estado de conservación del sitio (vía su disturbio), con la
+                # etiqueta corta: «Natural», «Seminatural», «Manejado»…
+                "estado_conservacion": (
+                    sitio.disturbio.get_estado_conservacion_display().split(" (")[0]
+                    if sitio.disturbio_id and sitio.disturbio.estado_conservacion else None
+                ),
                 "proyectos": list(proyectos.values()),
                 "unidades_muestreo": unidades_muestreo,
                 "total_muestras_co2": resumen.get("total_muestras", 0),
@@ -489,6 +495,12 @@ def _aplicar_filtros_comunes(qs, request, categoria="flujos"):
         if condicion_luz:
             qs = qs.filter(condicion_luz=condicion_luz)
 
+        # Un promedio solo tiene sentido dentro de una misma unidad: el
+        # dashboard pide los promedios de flujo de a una unidad a la vez.
+        unidad = request.GET.get("unidad")
+        if unidad:
+            qs = qs.filter(muestra__unidad_medida__codigo=unidad)
+
     return qs
 
 
@@ -685,7 +697,9 @@ def resumen_geografico(request):
     })
 
 
-_DIMENSIONES_CATEGORICAS = ("proyecto", "ecosistema", "estado_conservacion", "analizador", "condicion_luz")
+_DIMENSIONES_CATEGORICAS = (
+    "proyecto", "unidad_experimental", "ecosistema", "estado_conservacion", "analizador", "condicion_luz",
+)
 
 _CONDICION_LUZ_LABELS = dict(SubmuestraGEI.CONDICION_LUZ_CHOICES)
 _ESTADO_CONSERVACION_LABELS = dict(Disturbio.ESTADO_CONSERVACION_CHOICES)
@@ -694,6 +708,7 @@ _ESTADO_CONSERVACION_LABELS = dict(Disturbio.ESTADO_CONSERVACION_CHOICES)
 # campo directo -se anota vía Subquery antes de agregar-.
 _CAMPO_ID_POR_DIMENSION = {
     "proyecto": "muestra__unidad_muestreo__unidad_experimental__proyecto_id",
+    "unidad_experimental": "muestra__unidad_muestreo__unidad_experimental_id",
     "analizador": "muestra__analizador_id",
     "condicion_luz": "condicion_luz",
     "estado_conservacion": "muestra__unidad_muestreo__sitio__disturbio__estado_conservacion",
@@ -705,7 +720,7 @@ _CAMPO_ID_POR_DIMENSION = {
 def resumen_categorico(request):
     """Resumen agregado (conteo, promedio, mínimo, máximo, última medición)
     de SubmuestraGEI, agrupado por una dimensión no geográfica:
-    ?dimension=proyecto|ecosistema|estado_conservacion|analizador|condicion_luz.
+    ?dimension=proyecto|unidad_experimental|ecosistema|estado_conservacion|analizador|condicion_luz.
     Acepta los mismos filtros que /api/geo/resumen/ (gas, desde, hasta,
     proyecto, departamento, municipio, vereda, región, sitio). Igual que
     resumen_geografico, agrega en la base de datos (GROUP BY), no en Python.
@@ -765,6 +780,12 @@ def resumen_categorico(request):
         nombres = dict(
             base.filter(**{campo_id + "__in": claves})
             .values_list(campo_id, "muestra__unidad_muestreo__unidad_experimental__proyecto__nombre")
+            .distinct()
+        )
+    elif dimension == "unidad_experimental":
+        nombres = dict(
+            base.filter(**{campo_id + "__in": claves})
+            .values_list(campo_id, "muestra__unidad_muestreo__unidad_experimental__nombre")
             .distinct()
         )
     elif dimension == "analizador":
