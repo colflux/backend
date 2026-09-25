@@ -904,6 +904,36 @@ def mapeo_carga(request, fuente_id, carga_id):
         if not isinstance(items, list):
             return JsonResponse({"error": "Se esperaba un array en 'mapeos'"}, status=400)
 
+        # Un mismo campo destino no puede recibir dos columnas de origen
+        # distintas dentro de la misma hoja: en _armar_kwargs_modelo_fila la
+        # última mapeo procesada pisa el valor de la anterior sin avisar
+        # (pasó con "nombre unidad de muestreo" pisando a "nombre unidad
+        # experimental" sobre UnidadExperimental.nombre, dejando
+        # UnidadMuestreo sin mapear del todo y esas filas sin vínculo a
+        # sitio). Se corta acá para que el error salga al guardar el mapeo,
+        # no como filas importadas sin geolocalizar.
+        destinos = {}
+        for item in items:
+            modelo_destino = item.get("modelo_destino", "")
+            campo_destino = item.get("campo_destino", "")
+            if not modelo_destino or not campo_destino or item.get("transformacion") == "ignorar":
+                continue
+            columna_origen = (item.get("columna_origen") or "").strip()
+            clave = (modelo_destino, campo_destino)
+            previa = destinos.get(clave)
+            if previa is not None and previa != columna_origen:
+                return JsonResponse(
+                    {
+                        "error": (
+                            f'"{modelo_destino}.{campo_destino}" está mapeado a dos columnas distintas '
+                            f'("{previa}" y "{columna_origen}"): cada campo destino solo puede recibir '
+                            "una columna de origen. Revisa el mapeo de esta hoja."
+                        )
+                    },
+                    status=400,
+                )
+            destinos[clave] = columna_origen
+
         # Registrar mapeos para una carga ya importada (ver "Registrar
         # columnas sin mapear" en EtlMapeo.tsx) es seguro incluso para
         # modelos "evento" (_MODELOS_EVENTO, p. ej. MuestraAmbiental): al
@@ -1540,6 +1570,44 @@ def _validar_obligatorios_unidad_experimental(mapeos, modelos_incluidos, total_f
     }
 
 
+def _validar_obligatorios_muestra_ambiental(mapeos, modelos_incluidos, total_filas, hoja=None):
+    """MuestraAmbiental.unidad_muestreo es NOT NULL en el modelo (a
+    diferencia de MuestraGEI.unidad_muestreo, que es opcional) — sin este
+    check, una hoja donde solo se mapeó algún campo de Clima (p. ej. por
+    sugerencia automática de nombre de columna) pero nunca se completó la
+    sección "Clima" explícitamente, revienta con un IntegrityError crudo de
+    Postgres al momento de guardar en vez de un mensaje entendible. Pasa
+    sobre todo cuando la sección "Clima" se marcó "sin datos" u opcional:
+    eso no borra mapeos sueltos que ya se hayan guardado para este modelo en
+    esta hoja."""
+    if "MuestraAmbiental" not in modelos_incluidos:
+        return None
+
+    campos_ma = {m.campo_destino for m in mapeos if m.modelo_destino == "MuestraAmbiental"}
+    errores = []
+    contexto = f" en la hoja '{hoja}'" if hoja else ""
+
+    if "unidad_muestreo" not in campos_ma:
+        errores.append({
+            "fila": None, "valor": None, "tipo": "campo_obligatorio_sin_mapear",
+            "mensaje": (
+                f"Clima (MuestraAmbiental) tiene columnas mapeadas{contexto} pero falta "
+                "mapear 'unidad_muestreo'. Es obligatorio: sin él no se sabe a qué lugar "
+                "corresponde la lectura. Mapea esa columna en la sección Clima, o borra el "
+                "mapeo de Clima en esta hoja si no tienes esos datos."
+            ),
+        })
+
+    return {
+        "columna": f"Clima (campos obligatorios{contexto})",
+        "modelo_destino": "MuestraAmbiental",
+        "campo_destino": "",
+        "total": total_filas,
+        "ok": 0 if errores else total_filas,
+        "errores": errores,
+    }
+
+
 def _validar_unicidad_unidad_experimental(carga, df, mapeos):
     """Unidad Experimental es única por (proyecto, nombre): la fuente debe
     tener un proyecto asociado, y si ese nombre ya existe en el proyecto con
@@ -1673,6 +1741,12 @@ def validar_carga(request, fuente_id, carga_id):
             for e in resultado_um["errores"]:
                 filas_con_error.add(e["fila"])
             resultados.append(resultado_um)
+
+        resultado_ma = _validar_obligatorios_muestra_ambiental(mapeos, modelos_incluidos, len(df))
+        if resultado_ma is not None:
+            for e in resultado_ma["errores"]:
+                filas_con_error.add(e["fila"])
+            resultados.append(resultado_ma)
 
         columnas_con_errores = sum(
             1 for r in resultados
@@ -1833,7 +1907,16 @@ _CAMPOS_IDENTIDAD = {
 # vacías en la fuente real (solo carbono en hojarasca suele traer dato), así
 # que varias filas de una misma UnidadMuestreo terminan con kwargs idénticos
 # y get_or_create() revienta con "get() returned more than one".
-_MODELOS_EVENTO = {"MuestraAmbiental", "MuestraMOM"}
+# SubmuestraGEI tampoco tiene identidad propia (sin unique_together: dos
+# tomas de la misma muestra en el mismo momento/condición son igual de
+# válidas y no deben fusionarse) y, sin este flag, caía en el camino
+# genérico -get_or_create fila por fila, con su propio savepoint- en vez del
+# bulk_create de acá: para una hoja de CO2/CH4 con miles de filas eso se
+# traduce en miles de round-trips secuenciales a la base, suficiente para
+# que la importación en background nunca termine dentro de lo que el
+# usuario está dispuesto a esperar (aunque no llegue a chocar con el
+# --timeout de gunicorn, que solo vigila el worker HTTP, no el hilo).
+_MODELOS_EVENTO = {"MuestraAmbiental", "MuestraMOM", "SubmuestraGEI"}
 
 
 def _clave_cache_objeto(modelo, campos):
@@ -2487,6 +2570,12 @@ def _validar_seccion(carga, df, mapeos, hoja=None, dfs_por_hoja=None):
             filas_con_error.add(e["fila"])
         resultados.append(resultado_um)
 
+    resultado_ma = _validar_obligatorios_muestra_ambiental(mapeos, modelos_incluidos, len(df), hoja=hoja)
+    if resultado_ma is not None:
+        for e in resultado_ma["errores"]:
+            filas_con_error.add(e["fila"])
+        resultados.append(resultado_ma)
+
     total_errores = sum(len(r["errores"]) for r in resultados if "advertencia" not in r)
     return resultados, total_errores, filas_con_error
 
@@ -2717,6 +2806,13 @@ def previsualizar_carga(request, fuente_id, carga_id):
 
 
 def _guardar_progreso(carga, **campos):
+    # `progreso_mensaje` es un CharField(max_length=255) -un mensaje de
+    # excepción más largo (p. ej. el DETAIL completo de un IntegrityError de
+    # Postgres) revienta el propio guardado del error con un
+    # StringDataRightTruncation, dejando el polling del frontend esperando
+    # para siempre en vez de recibir el estado "error".
+    if "mensaje" in campos and campos["mensaje"] and len(campos["mensaje"]) > 255:
+        campos["mensaje"] = campos["mensaje"][:252] + "..."
     for campo, valor in campos.items():
         setattr(carga, f"progreso_{campo}", valor)
     carga.save(update_fields=[f"progreso_{campo}" for campo in campos])

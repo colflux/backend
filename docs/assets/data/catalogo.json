@@ -4034,7 +4034,7 @@
               "tipo": "FK (relación)",
               "tipo_raw": "ForeignKey",
               "requerido": true,
-              "automatico": false,
+              "automatico": true,
               "max_length": null,
               "choices": [],
               "es_fk": true,
