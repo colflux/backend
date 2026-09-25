@@ -192,14 +192,42 @@ def fk_choices(field, proyecto=None):
         filtro = _FILTRO_PROYECTO_POR_MODELO.get(modelo_cls.__name__)
         if proyecto is not None and filtro:
             qs = qs.filter(**{filtro: proyecto})
-        # select_related de las FK directas: evita N+1 al armar str(obj) para
-        # modelos cuyo __str__ recorre una relación (p. ej. Vereda -> Municipio).
-        fk_names = [
-            f.name for f in modelo_cls._meta.get_fields()
-            if getattr(f, "is_relation", False) and hasattr(f, "column")
+        # select_related de las FK directas -y de las FK de esas FK, hasta 3
+        # niveles- para evitar N+1 al armar str(obj): __str__ suele recorrer
+        # más de un salto (p. ej. Vereda -> Municipio -> Departamento). Un
+        # solo nivel de select_related no alcanzaba para ese caso y dejaba
+        # cientos de queries sueltas por cada fk_choices_view, suficientes
+        # para que gunicorn matara el worker por --timeout -y con él,
+        # cualquier importación ETL corriendo en background en ese mismo
+        # proceso (ver _ejecutar_importacion_async), dejándola colgada.
+        #
+        # De paso, se excluyen los campos de geometría (MultiPolygonField):
+        # str(obj) nunca los lee, pero Vereda/Municipio/Sitio los tienen y
+        # son polígonos grandes -traerlos igual (por venir incluidos en el
+        # select_related) hacía que resolver 500 opciones de Vereda tardara
+        # ~15s, cerca del límite de --timeout.
+        fk_paths = []
+        campos_geom = [
+            f.name for f in modelo_cls._meta.get_fields() if f.__class__.__name__ == "MultiPolygonField"
         ]
-        if fk_names:
-            qs = qs.select_related(*fk_names)
+
+        def _agregar_fk_paths(cls, prefijo, restante):
+            if restante <= 0:
+                return
+            for f in cls._meta.get_fields():
+                if getattr(f, "is_relation", False) and hasattr(f, "column"):
+                    path = f"{prefijo}{f.name}"
+                    fk_paths.append(path)
+                    for fg in f.related_model._meta.get_fields():
+                        if fg.__class__.__name__ == "MultiPolygonField":
+                            campos_geom.append(f"{path}__{fg.name}")
+                    _agregar_fk_paths(f.related_model, path + "__", restante - 1)
+
+        _agregar_fk_paths(modelo_cls, "", 3)
+        if fk_paths:
+            qs = qs.select_related(*fk_paths)
+        if campos_geom:
+            qs = qs.defer(*campos_geom)
         qs = qs[:_FK_CHOICES_LIMITE]
         return [{"valor": str(obj.pk), "etiqueta": str(obj)} for obj in qs]
     except Exception:
