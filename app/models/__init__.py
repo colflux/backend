@@ -11,7 +11,10 @@ from .sitio import (
 
 from .proyecto import Institucion, Proyecto, ProyectoInstitucion, ProyectoUsuario
 
-from .torre import ConfiguracionSensorGas, TorreEc, TorreFuenteEnergia
+from .torre import (
+    ConfiguracionSensorGas, MuestraTorre, SubmuestraEddy, SubmuestraReddy,
+    TorreEc, TorreFuenteEnergia,
+)
 
 from .suelo import CaracterizacionMuestreoSuelo, MonitoreoSuelo, SubmuestraSuelo
 
@@ -60,6 +63,9 @@ __all__ = [
     "ConfiguracionSensorGas",
     "TorreEc",
     "TorreFuenteEnergia",
+    "MuestraTorre",
+    "SubmuestraEddy",
+    "SubmuestraReddy",
     # Suelo
     "CaracterizacionMuestreoSuelo",
     "MonitoreoSuelo",

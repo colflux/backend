@@ -3669,3 +3669,56 @@ def exportar_proyecto(request, proyecto_id):
     )
     response["Content-Disposition"] = f'attachment; filename="proyecto_{proyecto_id}.xlsx"'
     return response
+
+
+# Hojas de la plantilla de reporte: "Unidad Muestreo-Experimental" da el
+# contexto (dónde/qué unidad) que necesitan todas las demás, y luego una hoja
+# por metodología que hoy se puede cargar fila por fila vía ETL (Flujos vive
+# como dos hojas, CO2 y CH4, porque `importar_carga` necesita el gas
+# resuelto por hoja -ver SECCIONES_ETL/_HOJAS_EXPORT arriba-, no porque el
+# diccionario de atributos cambie entre una y otra). Clima/Suelo-protocolo
+# quedan fuera a propósito: no fueron pedidas y Suelo-protocolo ni siquiera
+# es cargable por ETL hoy (ver _GRUPOS_EXCLUIDOS_TEMPORAL).
+_HOJAS_PLANTILLA = [
+    {"nombre_vista": "unidad_muestreo", "hoja": "Unidad Muestreo-Experimental"},
+    {"nombre_vista": "submuestra_gei", "hoja": "Flujos - CO2"},
+    {"nombre_vista": "submuestra_gei", "hoja": "Flujos - CH4"},
+    {"nombre_vista": "mom", "hoja": "MOM"},
+    {"nombre_vista": "cos", "hoja": "COS"},
+    {"nombre_vista": "biomasa", "hoja": "Biomasa"},
+]
+
+
+@requiere_nivel("reportador")
+def plantilla_vacia(request):
+    """Plantilla de Excel para reportar datos: una hoja por metodología
+    (Unidad Muestreo-Experimental, Flujos CO2/CH4, MOM, COS, Biomasa) con
+    solo los encabezados -sin filas-, más la hoja "Diccionario de datos" con
+    la descripción de cada atributo. Las columnas salen de
+    `_columnas_de_vista`/`_VISTAS_DESNORMALIZADAS`, la misma definición que
+    usa el resto del ETL (`exportar_carga`, el wizard), así que la plantilla
+    queda sincronizada con el modelo de datos real sin mantenimiento aparte:
+    si un campo se agrega/renombra/cambia de tipo en Django, la próxima
+    descarga ya sale actualizada."""
+    hojas = []
+    for hoja_def in _HOJAS_PLANTILLA:
+        vista = _VISTAS_DESNORMALIZADAS[hoja_def["nombre_vista"]]
+        columnas = _columnas_de_vista(vista)
+        encabezados = [c["verbose_name"] or c["campo"] for c in columnas]
+        df = pd.DataFrame(columns=encabezados)
+        hojas.append((hoja_def["hoja"][:31], df, columnas))
+
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        for nombre_hoja, df, columnas in hojas:
+            df.to_excel(writer, sheet_name=nombre_hoja, index=False)
+            _colorear_encabezados(writer.sheets[nombre_hoja], columnas)
+        _agregar_hoja_diccionario_datos(writer, hojas)
+
+    buffer.seek(0)
+    response = HttpResponse(
+        buffer.read(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = 'attachment; filename="plantilla_colflux.xlsx"'
+    return response

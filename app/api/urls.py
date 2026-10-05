@@ -6,8 +6,8 @@ from app.api.dashboard.views import DashboardView, DataModelView, VisualizerView
 from app.api.datos.views import FuenteDatosViewSet, fuentes_datos_api
 from app.api.etl.views import (
     archivo_fuente, campos_destino, datos_carga, datos_proyecto, estado_importacion, exportar_carga, exportar_proyecto,
-    fk_choices_view, importar_carga, mapeo_carga, previsualizar_carga, regex_sugerido, upload_archivo, validar_carga,
-    verificar_existencia,
+    fk_choices_view, importar_carga, mapeo_carga, plantilla_vacia, previsualizar_carga, regex_sugerido, upload_archivo,
+    validar_carga, verificar_existencia,
 )
 from app.api.geo.views import resumen_categorico, resumen_geografico, series_co2, sitios_geojson, tendencia_instalacion
 from app.api.ia_carga.views import columnas_carga_ia, confirmar_mapeo_ia, iniciar_carga_ia
@@ -53,6 +53,7 @@ urlpatterns = [
     path("api/etl/fk-choices/", fk_choices_view, name="etl-fk-choices"),
     path("api/etl/regex-sugerido/", regex_sugerido, name="etl-regex-sugerido"),
     path("api/etl/verificar-existencia/", verificar_existencia, name="etl-verificar-existencia"),
+    path("api/etl/plantilla/", plantilla_vacia, name="etl-plantilla-vacia"),
     path("api/ia-carga/subir/", iniciar_carga_ia, name="ia-carga-subir"),
     path("api/ia-carga/<int:carga_id>/", columnas_carga_ia, name="ia-carga-columnas"),
     path("api/ia-carga/<int:carga_id>/confirmar/", confirmar_mapeo_ia, name="ia-carga-confirmar"),
