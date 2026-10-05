@@ -86,3 +86,104 @@ class TorreFuenteEnergia(TimestampedModel):
 
     def __str__(self):
         return f"{self.get_tipo_fuente_display()} — {self.torre}"
+
+
+class MuestraTorre(TimestampedModel):
+    """Ancla de identidad de un registro semihorario de torre EC: torre + instante de tiempo."""
+
+    torre = models.ForeignKey(TorreEc, on_delete=models.CASCADE, related_name="muestras_torre")
+    fecha = models.DateField("fecha")
+    hora = models.TimeField("hora")
+
+    class Meta:
+        verbose_name = "muestra de torre"
+        verbose_name_plural = "muestras de torre"
+        ordering = ["torre", "fecha", "hora"]
+        unique_together = [("torre", "fecha", "hora")]
+
+    def __str__(self):
+        return f"{self.torre} — {self.fecha} {self.hora}"
+
+
+class SubmuestraEddy(TimestampedModel):
+    """Datos de salida de Eddypro para un registro semihorario de torre EC. Obligatoria por cada `MuestraTorre`."""
+
+    muestra = models.OneToOneField(MuestraTorre, on_delete=models.CASCADE, related_name="submuestra_eddy")
+
+    # Flujos corregidos y su control de calidad
+    co2_flux = models.DecimalField("flujo CO₂", max_digits=14, decimal_places=6, null=True, blank=True)
+    qc_co2_flux = models.PositiveSmallIntegerField("flag calidad CO₂", null=True, blank=True)
+    rand_err_co2_flux = models.DecimalField("error aleatorio CO₂", max_digits=14, decimal_places=6, null=True, blank=True)
+
+    ch4_flux = models.DecimalField("flujo CH₄", max_digits=14, decimal_places=6, null=True, blank=True)
+    qc_ch4_flux = models.PositiveSmallIntegerField("flag calidad CH₄", null=True, blank=True)
+    rand_err_ch4_flux = models.DecimalField("error aleatorio CH₄", max_digits=14, decimal_places=6, null=True, blank=True)
+
+    h2o_flux = models.DecimalField("flujo H₂O", max_digits=14, decimal_places=6, null=True, blank=True)
+    qc_h2o_flux = models.PositiveSmallIntegerField("flag calidad H₂O", null=True, blank=True)
+    rand_err_h2o_flux = models.DecimalField("error aleatorio H₂O", max_digits=14, decimal_places=6, null=True, blank=True)
+
+    h_flux = models.DecimalField("calor sensible (H)", max_digits=14, decimal_places=6, null=True, blank=True)
+    qc_h_flux = models.PositiveSmallIntegerField("flag calidad H", null=True, blank=True)
+    rand_err_h_flux = models.DecimalField("error aleatorio H", max_digits=14, decimal_places=6, null=True, blank=True)
+
+    le_flux = models.DecimalField("calor latente (LE)", max_digits=14, decimal_places=6, null=True, blank=True)
+    qc_le_flux = models.PositiveSmallIntegerField("flag calidad LE", null=True, blank=True)
+    rand_err_le_flux = models.DecimalField("error aleatorio LE", max_digits=14, decimal_places=6, null=True, blank=True)
+
+    tau = models.DecimalField("esfuerzo cortante (Tau)", max_digits=14, decimal_places=6, null=True, blank=True)
+    qc_tau = models.PositiveSmallIntegerField("flag calidad Tau", null=True, blank=True)
+    rand_err_tau = models.DecimalField("error aleatorio Tau", max_digits=14, decimal_places=6, null=True, blank=True)
+
+    # Turbulencia
+    ustar = models.DecimalField("velocidad de fricción (u*)", max_digits=10, decimal_places=6, null=True, blank=True)
+    tke = models.DecimalField("energía cinética turbulenta (TKE)", max_digits=14, decimal_places=6, null=True, blank=True)
+    monin_obukhov_length = models.DecimalField("longitud de Monin-Obukhov (L)", max_digits=14, decimal_places=4, null=True, blank=True)
+    bowen_ratio = models.DecimalField("razón de Bowen", max_digits=14, decimal_places=6, null=True, blank=True)
+
+    # Footprint
+    footprint_x_peak = models.DecimalField("footprint x_peak (m)", max_digits=10, decimal_places=2, null=True, blank=True)
+    footprint_x_70 = models.DecimalField("footprint x_70% (m)", max_digits=10, decimal_places=2, null=True, blank=True)
+    footprint_x_90 = models.DecimalField("footprint x_90% (m)", max_digits=10, decimal_places=2, null=True, blank=True)
+
+    # Aire / viento
+    air_temperature = models.DecimalField("temperatura del aire (°C)", max_digits=6, decimal_places=2, null=True, blank=True)
+    air_pressure = models.DecimalField("presión atmosférica (Pa)", max_digits=10, decimal_places=2, null=True, blank=True)
+    relative_humidity = models.DecimalField("humedad relativa (%)", max_digits=5, decimal_places=2, null=True, blank=True)
+    vpd = models.DecimalField("déficit de presión de vapor (VPD, Pa)", max_digits=10, decimal_places=2, null=True, blank=True)
+    air_density = models.DecimalField("densidad del aire (kg/m³)", max_digits=8, decimal_places=4, null=True, blank=True)
+    wind_speed = models.DecimalField("velocidad del viento (m/s)", max_digits=8, decimal_places=4, null=True, blank=True)
+    wind_dir = models.DecimalField("dirección del viento (°)", max_digits=6, decimal_places=2, null=True, blank=True)
+
+    # Resto de las columnas de Eddypro no modeladas individualmente todavía
+    # (varianzas/covarianzas, spikes, diagnósticos propios de LI-7200/LI-7700).
+    datos_extra = models.JSONField("datos adicionales", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "submuestra Eddypro"
+        verbose_name_plural = "submuestras Eddypro"
+
+    def __str__(self):
+        return f"Eddy — {self.muestra}"
+
+
+class SubmuestraReddy(TimestampedModel):
+    """Datos de salida de ReddyProc para un registro semihorario de torre EC. Opcional: solo existe si la torre tiene ese postprocesamiento."""
+
+    muestra = models.OneToOneField(MuestraTorre, on_delete=models.CASCADE, related_name="submuestra_reddy")
+
+    nee_f = models.DecimalField("NEE con gap-filling", max_digits=14, decimal_places=6, null=True, blank=True)
+    nee_fqc = models.PositiveSmallIntegerField("flag calidad gap-filling NEE", null=True, blank=True)
+    reco = models.DecimalField("respiración del ecosistema (Reco)", max_digits=14, decimal_places=6, null=True, blank=True)
+    gpp_f = models.DecimalField("productividad primaria bruta (GPP)", max_digits=14, decimal_places=6, null=True, blank=True)
+    ustar_used = models.DecimalField("umbral de u* usado en el filtrado", max_digits=10, decimal_places=6, null=True, blank=True)
+
+    # Resto de las columnas de ReddyProc no modeladas individualmente todavía.
+    datos_extra = models.JSONField("datos adicionales", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "submuestra ReddyProc"
+        verbose_name_plural = "submuestras ReddyProc"
+
+    def __str__(self):
+        return f"Reddy — {self.muestra}"
