@@ -24,13 +24,13 @@ GRUPOS_CATALOGO = [
         "nombre": "Geografía",
         "icono": "🗺️",
         "color": "#ff6f61",  # rojo camarón / coral — distinto de Unidad de Muestreo y Experimental
-        "entidades": ["Region", "Departamento", "Municipio", "Sitio"],
+        "entidades": ["Region", "Departamento", "Municipio", "Vereda", "SistemaReferencia", "Sitio"],
     },
     {
         "nombre": "Unidad de Muestreo y Experimental",
         "icono": "📍",
         "color": "#7c3aed",  # violeta
-        "entidades": ["UnidadMuestreoTipo", "UnidadMuestreo", "UnidadExperimental", "Parcela", "Transecto"],
+        "entidades": ["UnidadMuestreoTipo", "UnidadMuestreo", "UnidadExperimental", "Parcela", "Transecto", "Microtopografia"],
     },
     # Nota: el ETL (app/api/etl/views.py) usa su propio SECCIONES_ETL, que
     # divide este grupo en "Unidad Experimental" y "Unidad de Muestreo" (y
@@ -42,7 +42,12 @@ GRUPOS_CATALOGO = [
         "nombre": "Cobertura y Vegetación",
         "icono": "🌿",
         "color": "#0f8139",
-        "entidades": ["TipoCobertura", "Cobertura", "Vegetacion", "Disturbio"],
+        "entidades": [
+            "ClasificacionTipo", "ValorClasificacionTipo", "ClasificacionArea",
+            "CoberturaManual", "Vegetacion", "Disturbio", "UnidadMuestreoDisturbio",
+            "TipoClasificacionEcosistema", "ValorClasificacionEcosistema", "EcosistemaManual",
+            "FuenteExterna", "ExposicionExterna",
+        ],
     },
     {
         "nombre": "Suelo",
@@ -78,7 +83,7 @@ GRUPOS_CATALOGO = [
         "nombre": "Torre EC y Flujos",
         "icono": "📡",
         "color": "#3c78d8",
-        "entidades": ["TorreEc", "ConfiguracionSensorGas"],
+        "entidades": ["TorreEc", "ConfiguracionSensorGas", "MuestraTorre", "SubMuestraTorre"],
     },
     {
         "nombre": "Muestras GEI",
@@ -86,8 +91,14 @@ GRUPOS_CATALOGO = [
         "color": "#3c78d8",
         "entidades": [
             "UnidadMedida", "Equipo", "TipoMuestra",
-            "MuestraAmbiental", "MuestraGEI", "SubmuestraGEI",
+            "MuestraGEI", "SubmuestraGEI",
         ],
+    },
+    {
+        "nombre": "Muestra Ambiental",
+        "icono": "☀️",
+        "color": "#06b6d4",
+        "entidades": ["MuestraAmbiental"],
     },
     {
         "nombre": "Proyecto",
@@ -346,12 +357,100 @@ def generar_catalogo_data():
     return {"grupos": grupos}
 
 
+# Tipo de campo Django -> tipo de columna DBML. Solo cubre los tipos usados
+# hoy en app/models/*.py (ver TIPO_MAP más arriba, que es la versión "humana"
+# para catalogo.json); lo que no esté acá cae a "varchar" en vez de romper la
+# generación por un campo nuevo.
+DBML_TIPO_MAP = {
+    "CharField": "varchar",
+    "TextField": "text",
+    "IntegerField": "integer",
+    "PositiveIntegerField": "integer",
+    "PositiveSmallIntegerField": "integer",
+    "FloatField": "float",
+    "DecimalField": "decimal",
+    "DateField": "date",
+    "DateTimeField": "timestamp",
+    "TimeField": "time",
+    "BooleanField": "boolean",
+    "URLField": "varchar",
+    "EmailField": "varchar",
+    "JSONField": "json",
+    "FileField": "varchar",
+    "UUIDField": "uuid",
+    "PointField": "geometry",
+    "MultiPolygonField": "geometry",
+    "ForeignKey": "integer",
+    "OneToOneField": "integer",
+}
+
+# ForeignKey y OneToOneField son las dos variantes de FK "columna propia" que
+# usan los modelos (ver auth_user en Usuario) -las dos necesitan `ref: >` en
+# el DBML aunque el catálogo humano (campo es_fk) solo marque ForeignKey.
+_TIPOS_FK = {"ForeignKey", "OneToOneField"}
+
+
+def _dbml_escapar(texto):
+    return texto.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ")
+
+
+def _dbml_tabla(entidad, color=None):
+    nombre = entidad["nombre"]
+    encabezado = f"Table {nombre} [headercolor: {color}] {{" if color else f"Table {nombre} {{"
+    lineas = [encabezado, "  id integer [pk, increment]"]
+
+    for campo in entidad["campos"]:
+        tipo_raw = campo["tipo_raw"]
+        tipo = DBML_TIPO_MAP.get(tipo_raw, "varchar")
+        atributos = []
+        if campo["requerido"]:
+            atributos.append("not null")
+        if tipo_raw in _TIPOS_FK and campo["modelo_fk"]:
+            atributos.append(f'ref: > {campo["modelo_fk"]}.id')
+        nota = campo["verbose_name"]
+        if nota and nota != campo["nombre"]:
+            atributos.append(f'note: "{_dbml_escapar(nota)}"')
+        sufijo = f" [{', '.join(atributos)}]" if atributos else ""
+        lineas.append(f'  {campo["nombre"]} {tipo}{sufijo}')
+
+    if entidad.get("descripcion"):
+        lineas.append(f'  Note: "{_dbml_escapar(entidad["descripcion"])}"')
+
+    lineas.append("}")
+    return "\n".join(lineas)
+
+
+def generar_dbml(data):
+    """DBML (lenguaje que usa dbdiagram.io/dbdocs.io) del esquema completo.
+
+    Se pega/importa a mano en dbdiagram.io -no hay API de escritura en el
+    plan gratuito-, pero así el diagrama se puede regenerar desde los modelos
+    reales en vez de mantenerse a mano y desincronizarse.
+    """
+    bloques = [
+        _dbml_tabla(entidad, color=grupo.get("color"))
+        for grupo in data["grupos"]
+        for entidad in grupo["entidades"]
+    ]
+
+    grupos_dbml = []
+    for grupo in data["grupos"]:
+        nombres_tablas = [entidad["nombre"] for entidad in grupo["entidades"]]
+        if not nombres_tablas:
+            continue
+        tablas = "\n".join(f"  {nombre}" for nombre in nombres_tablas)
+        grupos_dbml.append(f'TableGroup "{_dbml_escapar(grupo["nombre"])}" {{\n{tablas}\n}}')
+
+    return "\n\n".join(bloques + grupos_dbml) + "\n"
+
+
 def escribir_catalogo_assets(output_dir):
     data = generar_catalogo_data()
     output_dir.mkdir(parents=True, exist_ok=True)
 
     json_out = output_dir / "catalogo.json"
     js_out = output_dir / "catalogo.js"
+    dbml_out = output_dir / "colflux.dbml"
 
     json_out.write_text(
         json.dumps(data, ensure_ascii=False, indent=2, default=str),
@@ -361,5 +460,6 @@ def escribir_catalogo_assets(output_dir):
         "window.CATALOGO = " + json.dumps(data, ensure_ascii=False, default=str) + ";",
         encoding="utf-8",
     )
+    dbml_out.write_text(generar_dbml(data), encoding="utf-8")
 
-    return data, json_out, js_out
+    return data, json_out, js_out, dbml_out

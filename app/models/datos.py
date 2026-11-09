@@ -158,6 +158,15 @@ class FuenteDatos(TimestampedModel):
         ("completo", "Completo"),
         ("con_errores", "Con errores"),
     ]
+    # Mismas 4 metodologías de primer nivel que las cards de la vista
+    # Reportar (frontend/src/pages/Participacion.tsx) — decisión de equipo,
+    # 2026-11-02.
+    METODOLOGIA_CHOICES = [
+        ("flujos", "Flujos (CO2/CH4)"),
+        ("cos", "Carbono Orgánico del Suelo (COS)"),
+        ("biomasa", "Biomasa"),
+        ("mom", "Materia Orgánica Muerta (MOM)"),
+    ]
 
     proyecto = models.ForeignKey(
         "app.Proyecto", on_delete=models.SET_NULL, null=True, blank=True,
@@ -167,9 +176,16 @@ class FuenteDatos(TimestampedModel):
         Usuario, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="fuentes_datos", verbose_name="reportador",
     )
+    institucion = models.ForeignKey(
+        "app.Institucion", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="fuentes_datos", verbose_name="entidad",
+    )
 
     nombre = models.CharField("nombre", max_length=255)
     descripcion = models.TextField("descripción", blank=True)
+    metodologia = models.CharField(
+        "metodología", max_length=20, choices=METODOLOGIA_CHOICES, blank=True,
+    )
     tipo = models.CharField("tipo", max_length=20, choices=TIPO_CHOICES, default="excel")
     url = models.CharField("enlace o ruta al archivo", max_length=2048, blank=True)
     estado = models.CharField("estado", max_length=20, choices=ESTADO_CHOICES, default="pendiente")
@@ -348,11 +364,11 @@ class MapeoColumna(TimestampedModel):
         help_text="Valor usado para las filas vacías de esta columna cuando estrategia_nulos es 'manual'.",
     )
     tipo_cobertura = models.ForeignKey(
-        "app.TipoCobertura", on_delete=models.PROTECT, null=True, blank=True,
+        "app.ClasificacionTipo", on_delete=models.PROTECT, null=True, blank=True,
         related_name="mapeos_columna", verbose_name="tipo de cobertura",
-        help_text="Solo aplica cuando modelo_destino es 'Cobertura': etiqueta con qué sistema de "
-                   "clasificación (CLC, IPCC, IGBP, …) se guarda el valor de esta columna, ya que un "
-                   "sitio puede tener varias filas de Cobertura (una por columna/sistema de origen).",
+        help_text="Solo aplica cuando modelo_destino es 'CoberturaManual': etiqueta con qué sistema de "
+                   "clasificación (CLC, IPCC, IGBP, …) se guarda el valor de esta columna, ya que una "
+                   "unidad de muestreo puede tener varias filas de CoberturaManual (una por columna/sistema de origen).",
     )
     gas_fijo = models.CharField(
         "gas fijo", max_length=4, choices=GAS_CHOICES_MAPEO, blank=True,

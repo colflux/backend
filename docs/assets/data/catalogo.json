@@ -926,25 +926,134 @@
           ]
         },
         {
-          "nombre": "Sitio",
-          "verbose_name": "sitio",
-          "verbose_name_plural": "sitios",
-          "descripcion": "Sitio de estudio georreferenciado: ubicación, topografía, uso del suelo, cobertura, vegetación y disturbio asociados.",
-          "total_campos": 16,
+          "nombre": "Vereda",
+          "verbose_name": "vereda",
+          "verbose_name_plural": "veredas",
+          "descripcion": "Subdivisión rural (vereda) o urbana (manzana censal) de un municipio, según el MGN del DANE.",
+          "total_campos": 5,
           "campos": [
             {
-              "nombre": "codigo_metadatos",
-              "verbose_name": "código de metadatos",
-              "help_text": "Código del sitio en el sistema de metadatos externo, si aplica.",
+              "nombre": "nombre",
+              "verbose_name": "nombre",
+              "help_text": "",
               "tipo": "Texto",
               "tipo_raw": "CharField",
               "requerido": false,
               "automatico": false,
-              "max_length": 80,
+              "max_length": 160,
               "choices": [],
               "es_fk": false,
               "modelo_fk": null
             },
+            {
+              "nombre": "codigo_dane",
+              "verbose_name": "código DANE",
+              "help_text": "",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": true,
+              "automatico": false,
+              "max_length": 25,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "tipo",
+              "verbose_name": "tipo",
+              "help_text": "",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": true,
+              "automatico": false,
+              "max_length": 10,
+              "choices": [
+                {
+                  "valor": "vereda",
+                  "etiqueta": "Vereda"
+                },
+                {
+                  "valor": "manzana",
+                  "etiqueta": "Manzana censal"
+                }
+              ],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "municipio",
+              "verbose_name": "municipio",
+              "help_text": "",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": true,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "Municipio"
+            },
+            {
+              "nombre": "geom",
+              "verbose_name": "geometría",
+              "help_text": "",
+              "tipo": "MultiPolygonField",
+              "tipo_raw": "MultiPolygonField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            }
+          ]
+        },
+        {
+          "nombre": "SistemaReferencia",
+          "verbose_name": "sistema de referencia",
+          "verbose_name_plural": "sistemas de referencia",
+          "descripcion": "Sistema de referencia de coordenadas usado para georreferenciar sitios (WGS84, MAGNA-SIRGAS, …).",
+          "total_campos": 1,
+          "campos": [
+            {
+              "nombre": "nombre",
+              "verbose_name": "nombre",
+              "help_text": "",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": true,
+              "automatico": false,
+              "max_length": 20,
+              "choices": [
+                {
+                  "valor": "EPSG_4326",
+                  "etiqueta": "EPSG:4326 — WGS84"
+                },
+                {
+                  "valor": "EPSG_4686",
+                  "etiqueta": "EPSG:4686 — MAGNA-SIRGAS"
+                },
+                {
+                  "valor": "EPSG_4674",
+                  "etiqueta": "EPSG:4674 — SIRGAS2000"
+                },
+                {
+                  "valor": "Otro",
+                  "etiqueta": "Otro"
+                }
+              ],
+              "es_fk": false,
+              "modelo_fk": null
+            }
+          ]
+        },
+        {
+          "nombre": "Sitio",
+          "verbose_name": "sitio",
+          "verbose_name_plural": "sitios",
+          "descripcion": "Sitio de estudio georreferenciado: ubicación, topografía, uso del suelo, cobertura y vegetación asociados.",
+          "total_campos": 14,
+          "campos": [
             {
               "nombre": "nombre",
               "verbose_name": "nombre",
@@ -1248,19 +1357,6 @@
               "modelo_fk": "Vereda"
             },
             {
-              "nombre": "disturbio",
-              "verbose_name": "disturbio",
-              "help_text": "",
-              "tipo": "FK (relación)",
-              "tipo_raw": "ForeignKey",
-              "requerido": false,
-              "automatico": false,
-              "max_length": null,
-              "choices": [],
-              "es_fk": true,
-              "modelo_fk": "Disturbio"
-            },
-            {
               "nombre": "vegetacion",
               "verbose_name": "vegetacion",
               "help_text": "",
@@ -1309,7 +1405,7 @@
           "verbose_name": "unidad de muestreo",
           "verbose_name_plural": "unidades de muestreo",
           "descripcion": "Lugar/objeto desde el cual se toma la muestra. Su tipo sale del catálogo.",
-          "total_campos": 7,
+          "total_campos": 12,
           "campos": [
             {
               "nombre": "nombre",
@@ -1340,15 +1436,28 @@
             {
               "nombre": "unidad_experimental",
               "verbose_name": "unidad experimental",
-              "help_text": "Unidad experimental a la que pertenece. Se resuelve sola con la que se creó o seleccionó en el paso anterior para la misma fila del archivo.",
+              "help_text": "Unidad experimental a la que pertenece. Se resuelve sola con la que se creó o seleccionó en el paso anterior para la misma fila del archivo — si la fuente no distingue unidad experimental de unidad de muestreo, el importador crea una unidad experimental igual, nunca se deja sin asignar (de ahí sale el proyecto: `unidad_experimental.proyecto`, siempre obligatorio).",
               "tipo": "FK (relación)",
               "tipo_raw": "ForeignKey",
-              "requerido": false,
+              "requerido": true,
               "automatico": true,
               "max_length": null,
               "choices": [],
               "es_fk": true,
               "modelo_fk": "UnidadExperimental"
+            },
+            {
+              "nombre": "codigo_metadato",
+              "verbose_name": "código de metadato",
+              "help_text": "Identificador de la unidad de muestreo en el sistema de metadatos externo de la fuente, si lo trae.",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": 255,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
             },
             {
               "nombre": "sitio",
@@ -1362,19 +1471,6 @@
               "choices": [],
               "es_fk": true,
               "modelo_fk": "Sitio"
-            },
-            {
-              "nombre": "fuente_datos",
-              "verbose_name": "fuente de datos",
-              "help_text": "",
-              "tipo": "FK (relación)",
-              "tipo_raw": "ForeignKey",
-              "requerido": false,
-              "automatico": true,
-              "max_length": null,
-              "choices": [],
-              "es_fk": true,
-              "modelo_fk": "FuenteDatos"
             },
             {
               "nombre": "fecha_instalacion",
@@ -1422,6 +1518,80 @@
               ],
               "es_fk": false,
               "modelo_fk": null
+            },
+            {
+              "nombre": "tipo_muestreo",
+              "verbose_name": "tipo de muestreo",
+              "help_text": "Si la unidad de muestreo fue seleccionada con un método probabilístico o no.",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": 20,
+              "choices": [
+                {
+                  "valor": "Probabilistico",
+                  "etiqueta": "Probabilístico"
+                },
+                {
+                  "valor": "No_probabilistico",
+                  "etiqueta": "No probabilístico"
+                }
+              ],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "diametro_anillo_cm",
+              "verbose_name": "diámetro del anillo (cm)",
+              "help_text": "",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "area_cm2",
+              "verbose_name": "área del anillo (cm²)",
+              "help_text": "",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "tiene_pozo_nivel_freatico",
+              "verbose_name": "tiene pozo de nivel freático",
+              "help_text": "Si existe infraestructura (pozo/piezómetro) para medir el nivel freático en esta unidad. El valor de la medición en sí vive en MuestraAmbiental.water_level.",
+              "tipo": "Booleano",
+              "tipo_raw": "BooleanField",
+              "requerido": true,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "microtopografia",
+              "verbose_name": "microtopografía",
+              "help_text": "",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "Microtopografia"
             }
           ]
         },
@@ -1430,7 +1600,7 @@
           "verbose_name": "unidad experimental",
           "verbose_name_plural": "unidades experimentales",
           "descripcion": "Unidad a la que se asigna/representa un tratamiento independiente. Agrupa una o varias unidades de muestreo (p. ej. un transecto dividido en puntos/plots, o varias parcelas).",
-          "total_campos": 4,
+          "total_campos": 5,
           "campos": [
             {
               "nombre": "proyecto",
@@ -1480,6 +1650,19 @@
               "requerido": false,
               "automatico": false,
               "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "tratamiento",
+              "verbose_name": "tratamiento",
+              "help_text": "Condición experimental que describe esta unidad (ej. \"con pastoreo\" vs. \"control\"), distinta del nombre/descripción.",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": 255,
               "choices": [],
               "es_fk": false,
               "modelo_fk": null
@@ -1685,24 +1868,17 @@
               "modelo_fk": null
             }
           ]
-        }
-      ]
-    },
-    {
-      "nombre": "Cobertura y Vegetación",
-      "icono": "🌿",
-      "color": "#0f8139",
-      "entidades": [
+        },
         {
-          "nombre": "TipoCobertura",
-          "verbose_name": "tipo de cobertura",
-          "verbose_name_plural": "tipos de cobertura",
-          "descripcion": "Catálogo de sistemas de clasificación de cobertura (CLC, IPCC, IGBP, Köppen, Suelo IPCC, nombre local).",
-          "total_campos": 2,
+          "nombre": "Microtopografia",
+          "verbose_name": "microtopografía",
+          "verbose_name_plural": "microtopografías",
+          "descripcion": "Catálogo de microtopografía (relieve a escala centimétrica): Hummock, Hollow, Pool, Lawns, Ditch. Reemplaza a MuestraAmbiental.microtopo: es un rasgo del terreno fijo por unidad de muestreo (no cambia de una lectura a otra), no una medición.",
+          "total_campos": 1,
           "campos": [
             {
-              "nombre": "codigo",
-              "verbose_name": "código",
+              "nombre": "nombre",
+              "verbose_name": "nombre",
               "help_text": "",
               "tipo": "Texto",
               "tipo_raw": "CharField",
@@ -1712,7 +1888,23 @@
               "choices": [],
               "es_fk": false,
               "modelo_fk": null
-            },
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "nombre": "Cobertura y Vegetación",
+      "icono": "🌿",
+      "color": "#0f8139",
+      "entidades": [
+        {
+          "nombre": "ClasificacionTipo",
+          "verbose_name": "tipo de clasificación",
+          "verbose_name_plural": "tipos de clasificación",
+          "descripcion": "Catálogo genérico de sistemas de clasificación (IPCC, CLC, IGBP, Coloquial, Suelo IPCC, Köppen, IDEAM, Disturbio, uso del suelo propio de Colflux, …), reemplaza los catálogos antes separados por dominio (TipoCobertura, TipoClasificacionEcosistema, Disturbio).",
+          "total_campos": 3,
+          "campos": [
             {
               "nombre": "nombre",
               "verbose_name": "nombre",
@@ -1721,7 +1913,58 @@
               "tipo_raw": "CharField",
               "requerido": true,
               "automatico": false,
-              "max_length": 120,
+              "max_length": 60,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "categoria",
+              "verbose_name": "categoría",
+              "help_text": "",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": true,
+              "automatico": false,
+              "max_length": 30,
+              "choices": [
+                {
+                  "valor": "Cobertura Vegetal",
+                  "etiqueta": "Cobertura Vegetal"
+                },
+                {
+                  "valor": "Suelo",
+                  "etiqueta": "Suelo"
+                },
+                {
+                  "valor": "Clima",
+                  "etiqueta": "Clima"
+                },
+                {
+                  "valor": "Ecosistema",
+                  "etiqueta": "Ecosistema"
+                },
+                {
+                  "valor": "Disturbio",
+                  "etiqueta": "Disturbio"
+                },
+                {
+                  "valor": "Uso Suelo",
+                  "etiqueta": "Uso Suelo"
+                }
+              ],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "descripcion",
+              "verbose_name": "descripción",
+              "help_text": "",
+              "tipo": "Texto largo",
+              "tipo_raw": "TextField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
               "choices": [],
               "es_fk": false,
               "modelo_fk": null
@@ -1729,15 +1972,15 @@
           ]
         },
         {
-          "nombre": "Cobertura",
-          "verbose_name": "cobertura",
-          "verbose_name_plural": "coberturas",
-          "descripcion": "Un valor de cobertura reportado para un sitio, según un sistema de clasificación. Un mismo sitio puede tener varias filas: una por sistema de clasificación, o varias del mismo sistema cuando distintas fuentes reportan valores en conflicto para el mismo sitio (no hay forma de saber cuál es \"el correcto\", así que se guardan todas en vez de que una pise a la otra).",
-          "total_campos": 3,
+          "nombre": "ValorClasificacionTipo",
+          "verbose_name": "valor de clasificación",
+          "verbose_name_plural": "valores de clasificación",
+          "descripcion": "Valor permitido dentro de un sistema de clasificación (ej. \"Forest Land\" en IPCC, \"Páramo\" en IDEAM, \"Fuego\" en Disturbio).",
+          "total_campos": 2,
           "campos": [
             {
-              "nombre": "sitio",
-              "verbose_name": "sitio",
+              "nombre": "tipo",
+              "verbose_name": "tipo",
               "help_text": "",
               "tipo": "FK (relación)",
               "tipo_raw": "ForeignKey",
@@ -1746,7 +1989,90 @@
               "max_length": null,
               "choices": [],
               "es_fk": true,
-              "modelo_fk": "Sitio"
+              "modelo_fk": "ClasificacionTipo"
+            },
+            {
+              "nombre": "valor",
+              "verbose_name": "valor",
+              "help_text": "",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": true,
+              "automatico": false,
+              "max_length": 160,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            }
+          ]
+        },
+        {
+          "nombre": "ClasificacionArea",
+          "verbose_name": "área de clasificación",
+          "verbose_name_plural": "áreas de clasificación",
+          "descripcion": "Área real (geometría) de un valor de clasificación — capa futura, sin datos hoy: reemplaza lo que hubieran sido CoberturaArea/EcosistemaArea por separado. Se llena cuando haya un mapa oficial (IDEAM/IAvH u otro) para digitalizar.",
+          "total_campos": 3,
+          "campos": [
+            {
+              "nombre": "tipo",
+              "verbose_name": "tipo",
+              "help_text": "",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": true,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "ClasificacionTipo"
+            },
+            {
+              "nombre": "valor",
+              "verbose_name": "valor",
+              "help_text": "",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": true,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "ValorClasificacionTipo"
+            },
+            {
+              "nombre": "geom",
+              "verbose_name": "geometría",
+              "help_text": "",
+              "tipo": "PolygonField",
+              "tipo_raw": "PolygonField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            }
+          ]
+        },
+        {
+          "nombre": "CoberturaManual",
+          "verbose_name": "cobertura",
+          "verbose_name_plural": "coberturas",
+          "descripcion": "Un valor de cobertura reportado para una unidad de muestreo, según un sistema de clasificación. Una misma unidad puede tener varias filas: una por sistema de clasificación, o varias del mismo sistema cuando distintas fuentes reportan valores en conflicto (no hay forma de saber cuál es \"el correcto\", así que se guardan todas en vez de que una pise a la otra). También así se reporta cobertura_vegetal_primaria/secundaria/terciaria: tres filas con tipo=Vegetación funcional y distinto orden_dominancia.",
+          "total_campos": 6,
+          "campos": [
+            {
+              "nombre": "unidad_muestreo",
+              "verbose_name": "unidad de muestreo",
+              "help_text": "",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": true,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "UnidadMuestreo"
             },
             {
               "nombre": "tipo",
@@ -1759,15 +2085,67 @@
               "max_length": null,
               "choices": [],
               "es_fk": true,
-              "modelo_fk": "TipoCobertura"
+              "modelo_fk": "ClasificacionTipo"
             },
             {
-              "nombre": "nombre",
-              "verbose_name": "nombre reportado",
+              "nombre": "valor",
+              "verbose_name": "valor",
+              "help_text": "Vacío si el texto de origen no matchea ningún valor conocido del catálogo (ver valor_texto).",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "ValorClasificacionTipo"
+            },
+            {
+              "nombre": "porcentaje",
+              "verbose_name": "% cobertura",
+              "help_text": "",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "orden_dominancia",
+              "verbose_name": "orden de dominancia",
               "help_text": "",
               "tipo": "Texto",
               "tipo_raw": "CharField",
-              "requerido": true,
+              "requerido": false,
+              "automatico": false,
+              "max_length": 12,
+              "choices": [
+                {
+                  "valor": "Primaria",
+                  "etiqueta": "Primaria"
+                },
+                {
+                  "valor": "Secundaria",
+                  "etiqueta": "Secundaria"
+                },
+                {
+                  "valor": "Terciaria",
+                  "etiqueta": "Terciaria"
+                }
+              ],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "valor_texto",
+              "verbose_name": "valor (texto original)",
+              "help_text": "Texto tal como llegó en el import. Se llena siempre; valor queda vacío si no matcheó ningún catálogo.",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
               "automatico": false,
               "max_length": 160,
               "choices": [],
@@ -1942,11 +2320,85 @@
         },
         {
           "nombre": "Disturbio",
-          "verbose_name": "disturbio",
-          "verbose_name_plural": "disturbios",
-          "descripcion": "Evento de disturbio que afecta un sitio (fuego, sequía, pastoreo, …), con fechas y estado actual del ecosistema.",
-          "total_campos": 10,
+          "verbose_name": "tipo de disturbio",
+          "verbose_name_plural": "tipos de disturbio",
+          "descripcion": "Catálogo de tipos de disturbio (fuego, sequía, pastoreo, …).",
+          "total_campos": 1,
           "campos": [
+            {
+              "nombre": "nombre",
+              "verbose_name": "nombre",
+              "help_text": "",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": true,
+              "automatico": false,
+              "max_length": 60,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            }
+          ]
+        },
+        {
+          "nombre": "UnidadMuestreoDisturbio",
+          "verbose_name": "disturbio de unidad de muestreo",
+          "verbose_name_plural": "disturbios de unidad de muestreo",
+          "descripcion": "Disturbio reportado para una unidad de muestreo (fechas, estado del ecosistema, si es el disturbio dominante).",
+          "total_campos": 15,
+          "campos": [
+            {
+              "nombre": "unidad_muestreo",
+              "verbose_name": "unidad de muestreo",
+              "help_text": "",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": true,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "UnidadMuestreo"
+            },
+            {
+              "nombre": "tipo",
+              "verbose_name": "tipo",
+              "help_text": "",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "ClasificacionTipo"
+            },
+            {
+              "nombre": "valor",
+              "verbose_name": "valor",
+              "help_text": "Vacío si el texto de origen no matchea ningún valor conocido del catálogo (ver valor_texto).",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "ValorClasificacionTipo"
+            },
+            {
+              "nombre": "valor_texto",
+              "verbose_name": "valor (texto original)",
+              "help_text": "Texto tal como llegó en el import. Se llena siempre; valor queda vacío si no matcheó ningún catálogo.",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": 160,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
             {
               "nombre": "descripcion",
               "verbose_name": "descripción",
@@ -2000,60 +2452,15 @@
               "modelo_fk": null
             },
             {
-              "nombre": "tipo",
-              "verbose_name": "tipo de disturbio",
+              "nombre": "fecha_reporte",
+              "verbose_name": "fecha de reporte",
               "help_text": "",
-              "tipo": "Texto",
-              "tipo_raw": "CharField",
-              "requerido": true,
+              "tipo": "Fecha",
+              "tipo_raw": "DateField",
+              "requerido": false,
               "automatico": false,
-              "max_length": 40,
-              "choices": [
-                {
-                  "valor": "Agricultura",
-                  "etiqueta": "Agricultura"
-                },
-                {
-                  "valor": "Sequia",
-                  "etiqueta": "Sequía"
-                },
-                {
-                  "valor": "Fuego",
-                  "etiqueta": "Fuego"
-                },
-                {
-                  "valor": "Silvicultura",
-                  "etiqueta": "Silvicultura"
-                },
-                {
-                  "valor": "Pastoreo",
-                  "etiqueta": "Pastoreo"
-                },
-                {
-                  "valor": "Evento_hidrologico",
-                  "etiqueta": "Evento hidrológico"
-                },
-                {
-                  "valor": "Cambio_en_cobertura_del_suelo",
-                  "etiqueta": "Cambio en cobertura del suelo"
-                },
-                {
-                  "valor": "Plagas_y_enfermedades",
-                  "etiqueta": "Plagas y enfermedades"
-                },
-                {
-                  "valor": "Tormenta_o_viento",
-                  "etiqueta": "Tormenta o viento"
-                },
-                {
-                  "valor": "Extremos_de_temperatura",
-                  "etiqueta": "Extremos de temperatura"
-                },
-                {
-                  "valor": "Sin_disturbio",
-                  "etiqueta": "Sin disturbio"
-                }
-              ],
+              "max_length": null,
+              "choices": [],
               "es_fk": false,
               "modelo_fk": null
             },
@@ -2169,6 +2576,207 @@
               "help_text": "Si el sitio está bajo alguna figura de reserva, parque, santuario, etc.",
               "tipo": "Texto largo",
               "tipo_raw": "TextField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "es_dominante",
+              "verbose_name": "es el disturbio dominante",
+              "help_text": "",
+              "tipo": "Booleano",
+              "tipo_raw": "BooleanField",
+              "requerido": true,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            }
+          ]
+        },
+        {
+          "nombre": "TipoClasificacionEcosistema",
+          "verbose_name": "tipo de clasificación de ecosistema",
+          "verbose_name_plural": "tipos de clasificación de ecosistema",
+          "descripcion": "Catálogo de sistemas de clasificación de ecosistema (hoy solo IDEAM; deja la puerta abierta a Holdridge, Ramsar, etc.).",
+          "total_campos": 1,
+          "campos": [
+            {
+              "nombre": "nombre",
+              "verbose_name": "nombre",
+              "help_text": "",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": true,
+              "automatico": false,
+              "max_length": 60,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            }
+          ]
+        },
+        {
+          "nombre": "ValorClasificacionEcosistema",
+          "verbose_name": "valor de clasificación de ecosistema",
+          "verbose_name_plural": "valores de clasificación de ecosistema",
+          "descripcion": "Valor permitido dentro de un sistema de clasificación de ecosistema (ej. \"Páramo\", \"Turbera\" en IDEAM). Lista tentativa, pendiente de confirmar con Martín (ecólogo) antes de tratarla como catálogo cerrado definitivo.",
+          "total_campos": 2,
+          "campos": [
+            {
+              "nombre": "tipo",
+              "verbose_name": "tipo de clasificación",
+              "help_text": "",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": true,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "TipoClasificacionEcosistema"
+            },
+            {
+              "nombre": "valor",
+              "verbose_name": "valor",
+              "help_text": "",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": true,
+              "automatico": false,
+              "max_length": 120,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            }
+          ]
+        },
+        {
+          "nombre": "EcosistemaManual",
+          "verbose_name": "ecosistema (dato digitado)",
+          "verbose_name_plural": "ecosistemas (dato digitado)",
+          "descripcion": "Ecosistema/zonificación reportado por el equipo de campo para una unidad de muestreo. Varias filas por unidad (una por sistema de clasificación) — mismo patrón que CoberturaManual. No incluye la capa geométrica oficial (ver docs de arquitectura): todavía no se tiene el shapefile/geopackage del Mapa de Ecosistemas IDEAM/IAvH.",
+          "total_campos": 4,
+          "campos": [
+            {
+              "nombre": "unidad_muestreo",
+              "verbose_name": "unidad de muestreo",
+              "help_text": "",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": true,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "UnidadMuestreo"
+            },
+            {
+              "nombre": "tipo",
+              "verbose_name": "tipo de clasificación",
+              "help_text": "",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "ClasificacionTipo"
+            },
+            {
+              "nombre": "valor",
+              "verbose_name": "valor",
+              "help_text": "Vacío si el texto de origen no matchea ningún valor conocido del catálogo (ver valor_texto).",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "ValorClasificacionTipo"
+            },
+            {
+              "nombre": "valor_texto",
+              "verbose_name": "valor (texto original)",
+              "help_text": "Texto tal como llegó en el import. Se llena siempre; valor queda vacío si no matcheó ningún catálogo.",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": 120,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            }
+          ]
+        },
+        {
+          "nombre": "FuenteExterna",
+          "verbose_name": "fuente externa",
+          "verbose_name_plural": "fuentes externas",
+          "descripcion": "Catálogo de fuentes externas de disturbio (fuego, pastoreo, cultivo, drenaje) cuya cercanía a una unidad de muestreo se reporta como distancia.",
+          "total_campos": 1,
+          "campos": [
+            {
+              "nombre": "nombre",
+              "verbose_name": "nombre",
+              "help_text": "",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": true,
+              "automatico": false,
+              "max_length": 40,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            }
+          ]
+        },
+        {
+          "nombre": "ExposicionExterna",
+          "verbose_name": "exposición externa",
+          "verbose_name_plural": "exposiciones externas",
+          "descripcion": "Qué tan cerca está una unidad de muestreo de una fuente de alteración ubicada en otro lugar (no un disturbio ocurrido en la unidad misma).",
+          "total_campos": 3,
+          "campos": [
+            {
+              "nombre": "unidad_muestreo",
+              "verbose_name": "unidad de muestreo",
+              "help_text": "",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": true,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "UnidadMuestreo"
+            },
+            {
+              "nombre": "fuente",
+              "verbose_name": "fuente externa",
+              "help_text": "",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": true,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "FuenteExterna"
+            },
+            {
+              "nombre": "distancia_m",
+              "verbose_name": "distancia (m)",
+              "help_text": "",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
               "requerido": false,
               "automatico": false,
               "max_length": null,
@@ -3441,6 +4049,238 @@
               "modelo_fk": null
             }
           ]
+        },
+        {
+          "nombre": "MuestraTorre",
+          "verbose_name": "muestra de torre",
+          "verbose_name_plural": "muestras de torre",
+          "descripcion": "Serie de una variable de torre EC (ej. flujo de CO₂, u*, NEE): mismo rol que `MuestraGEI`, pero para datos de torre en vez de cámaras manuales.",
+          "total_campos": 4,
+          "campos": [
+            {
+              "nombre": "torre",
+              "verbose_name": "torre",
+              "help_text": "",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": true,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "TorreEc"
+            },
+            {
+              "nombre": "fuente_datos",
+              "verbose_name": "fuente de datos",
+              "help_text": "",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "FuenteDatos"
+            },
+            {
+              "nombre": "tipo_variable",
+              "verbose_name": "variable",
+              "help_text": "",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": true,
+              "automatico": false,
+              "max_length": 30,
+              "choices": [
+                {
+                  "valor": "co2_flux",
+                  "etiqueta": "Flujo de CO₂"
+                },
+                {
+                  "valor": "ch4_flux",
+                  "etiqueta": "Flujo de CH₄"
+                },
+                {
+                  "valor": "h2o_flux",
+                  "etiqueta": "Flujo de H₂O"
+                },
+                {
+                  "valor": "h_flux",
+                  "etiqueta": "Calor sensible (H)"
+                },
+                {
+                  "valor": "le_flux",
+                  "etiqueta": "Calor latente (LE)"
+                },
+                {
+                  "valor": "tau",
+                  "etiqueta": "Esfuerzo cortante (Tau)"
+                },
+                {
+                  "valor": "ustar",
+                  "etiqueta": "Velocidad de fricción (u*)"
+                },
+                {
+                  "valor": "tke",
+                  "etiqueta": "Energía cinética turbulenta (TKE)"
+                },
+                {
+                  "valor": "monin_obukhov_length",
+                  "etiqueta": "Longitud de Monin-Obukhov (L)"
+                },
+                {
+                  "valor": "bowen_ratio",
+                  "etiqueta": "Razón de Bowen"
+                },
+                {
+                  "valor": "footprint_x_peak",
+                  "etiqueta": "Footprint x_peak"
+                },
+                {
+                  "valor": "footprint_x_70",
+                  "etiqueta": "Footprint x_70%"
+                },
+                {
+                  "valor": "footprint_x_90",
+                  "etiqueta": "Footprint x_90%"
+                },
+                {
+                  "valor": "air_temperature",
+                  "etiqueta": "Temperatura del aire"
+                },
+                {
+                  "valor": "air_pressure",
+                  "etiqueta": "Presión atmosférica"
+                },
+                {
+                  "valor": "relative_humidity",
+                  "etiqueta": "Humedad relativa"
+                },
+                {
+                  "valor": "vpd",
+                  "etiqueta": "Déficit de presión de vapor (VPD)"
+                },
+                {
+                  "valor": "air_density",
+                  "etiqueta": "Densidad del aire"
+                },
+                {
+                  "valor": "wind_speed",
+                  "etiqueta": "Velocidad del viento"
+                },
+                {
+                  "valor": "wind_dir",
+                  "etiqueta": "Dirección del viento"
+                },
+                {
+                  "valor": "nee_f",
+                  "etiqueta": "NEE con gap-filling"
+                },
+                {
+                  "valor": "reco",
+                  "etiqueta": "Respiración del ecosistema (Reco)"
+                },
+                {
+                  "valor": "gpp_f",
+                  "etiqueta": "Productividad primaria bruta (GPP)"
+                },
+                {
+                  "valor": "ustar_used",
+                  "etiqueta": "Umbral de u* usado en el filtrado"
+                }
+              ],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "unidad_medida",
+              "verbose_name": "unidad de medida",
+              "help_text": "",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "UnidadMedida"
+            }
+          ]
+        },
+        {
+          "nombre": "SubMuestraTorre",
+          "verbose_name": "submuestra de torre",
+          "verbose_name_plural": "submuestras de torre",
+          "descripcion": "Valor diario de una `MuestraTorre`: mismo rol que `SubmuestraGEI`, una fila por día en vez de por toma.",
+          "total_campos": 5,
+          "campos": [
+            {
+              "nombre": "muestra",
+              "verbose_name": "muestra",
+              "help_text": "",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": true,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "MuestraTorre"
+            },
+            {
+              "nombre": "fecha",
+              "verbose_name": "fecha",
+              "help_text": "",
+              "tipo": "Fecha",
+              "tipo_raw": "DateField",
+              "requerido": true,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "valor",
+              "verbose_name": "valor del flujo",
+              "help_text": "Valor promedio del día para la variable de la muestra (MuestraTorre.tipo_variable).",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "pct_calidad_buena",
+              "verbose_name": "% calidad buena",
+              "help_text": "% de filas semihorarias usadas en el promedio con flag de calidad 0 (bueno). Solo aplica a variables de Eddypro.",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "n_registros_validos",
+              "verbose_name": "registros válidos",
+              "help_text": "Cantidad de filas semihorarias que entraron al promedio de este día.",
+              "tipo": "PositiveSmallIntegerField",
+              "tipo_raw": "PositiveSmallIntegerField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            }
+          ]
         }
       ]
     },
@@ -3739,206 +4579,11 @@
           ]
         },
         {
-          "nombre": "MuestraAmbiental",
-          "verbose_name": "muestra ambiental",
-          "verbose_name_plural": "muestras ambientales",
-          "descripcion": "Contexto ambiental (biomet) asociado a una muestra de CO₂.",
-          "total_campos": 12,
-          "campos": [
-            {
-              "nombre": "fecha",
-              "verbose_name": "fecha",
-              "help_text": "Fecha de la lectura ambiental.",
-              "tipo": "Fecha",
-              "tipo_raw": "DateField",
-              "requerido": false,
-              "automatico": false,
-              "max_length": null,
-              "choices": [],
-              "es_fk": false,
-              "modelo_fk": null
-            },
-            {
-              "nombre": "hora",
-              "verbose_name": "hora",
-              "help_text": "Hora de la lectura ambiental.",
-              "tipo": "TimeField",
-              "tipo_raw": "TimeField",
-              "requerido": false,
-              "automatico": false,
-              "max_length": null,
-              "choices": [],
-              "es_fk": false,
-              "modelo_fk": null
-            },
-            {
-              "nombre": "momento",
-              "verbose_name": "momento",
-              "help_text": "Si la lectura corresponde al inicio o al final de la medición, cuando la fuente reporta un rango en vez de un único valor.",
-              "tipo": "Texto",
-              "tipo_raw": "CharField",
-              "requerido": false,
-              "automatico": false,
-              "max_length": 10,
-              "choices": [
-                {
-                  "valor": "inicio",
-                  "etiqueta": "Inicio"
-                },
-                {
-                  "valor": "final",
-                  "etiqueta": "Final"
-                }
-              ],
-              "es_fk": false,
-              "modelo_fk": null
-            },
-            {
-              "nombre": "soil_temp",
-              "verbose_name": "temperatura del suelo (°C)",
-              "help_text": "Temperatura del suelo, en grados Celsius.",
-              "tipo": "Decimal",
-              "tipo_raw": "DecimalField",
-              "requerido": false,
-              "automatico": false,
-              "max_length": null,
-              "choices": [],
-              "es_fk": false,
-              "modelo_fk": null
-            },
-            {
-              "nombre": "air_temp",
-              "verbose_name": "temperatura del aire (°C)",
-              "help_text": "Temperatura del aire, en grados Celsius.",
-              "tipo": "Decimal",
-              "tipo_raw": "DecimalField",
-              "requerido": false,
-              "automatico": false,
-              "max_length": null,
-              "choices": [],
-              "es_fk": false,
-              "modelo_fk": null
-            },
-            {
-              "nombre": "atm_press",
-              "verbose_name": "presión atmosférica (hPa)",
-              "help_text": "Presión atmosférica, en hectopascales (hPa).",
-              "tipo": "Decimal",
-              "tipo_raw": "DecimalField",
-              "requerido": false,
-              "automatico": false,
-              "max_length": null,
-              "choices": [],
-              "es_fk": false,
-              "modelo_fk": null
-            },
-            {
-              "nombre": "relat_humid",
-              "verbose_name": "humedad relativa (%)",
-              "help_text": "Humedad relativa del aire, en porcentaje.",
-              "tipo": "Decimal",
-              "tipo_raw": "DecimalField",
-              "requerido": false,
-              "automatico": false,
-              "max_length": null,
-              "choices": [],
-              "es_fk": false,
-              "modelo_fk": null
-            },
-            {
-              "nombre": "dew_point",
-              "verbose_name": "punto de rocío (°C)",
-              "help_text": "Punto de rocío, en grados Celsius.",
-              "tipo": "Decimal",
-              "tipo_raw": "DecimalField",
-              "requerido": false,
-              "automatico": false,
-              "max_length": null,
-              "choices": [],
-              "es_fk": false,
-              "modelo_fk": null
-            },
-            {
-              "nombre": "water_level",
-              "verbose_name": "nivel del agua (cm)",
-              "help_text": "Nivel del agua respecto a la superficie, en centímetros: positivo indica encharcamiento, negativo indica nivel freático por debajo de la superficie.",
-              "tipo": "Decimal",
-              "tipo_raw": "DecimalField",
-              "requerido": false,
-              "automatico": false,
-              "max_length": null,
-              "choices": [],
-              "es_fk": false,
-              "modelo_fk": null
-            },
-            {
-              "nombre": "microtopo",
-              "verbose_name": "microtopología (microtopography)",
-              "help_text": "Microtopografía del punto de medición.",
-              "tipo": "Texto",
-              "tipo_raw": "CharField",
-              "requerido": false,
-              "automatico": false,
-              "max_length": 10,
-              "choices": [
-                {
-                  "valor": "Hummock",
-                  "etiqueta": "Hummock (cojines)"
-                },
-                {
-                  "valor": "Hollow",
-                  "etiqueta": "Hollow (depresiones húmedas)"
-                },
-                {
-                  "valor": "Pool",
-                  "etiqueta": "Pool (charcos / sobre agua)"
-                },
-                {
-                  "valor": "Lawns",
-                  "etiqueta": "Lawns (lugares planos)"
-                },
-                {
-                  "valor": "Ditch",
-                  "etiqueta": "Ditch (zanja / canal)"
-                }
-              ],
-              "es_fk": false,
-              "modelo_fk": null
-            },
-            {
-              "nombre": "unidad_muestreo",
-              "verbose_name": "unidad de muestreo",
-              "help_text": "",
-              "tipo": "FK (relación)",
-              "tipo_raw": "ForeignKey",
-              "requerido": true,
-              "automatico": false,
-              "max_length": null,
-              "choices": [],
-              "es_fk": true,
-              "modelo_fk": "UnidadMuestreo"
-            },
-            {
-              "nombre": "fuente_datos",
-              "verbose_name": "fuente de datos",
-              "help_text": "",
-              "tipo": "FK (relación)",
-              "tipo_raw": "ForeignKey",
-              "requerido": false,
-              "automatico": true,
-              "max_length": null,
-              "choices": [],
-              "es_fk": true,
-              "modelo_fk": "FuenteDatos"
-            }
-          ]
-        },
-        {
           "nombre": "MuestraGEI",
           "verbose_name": "muestra GEI",
           "verbose_name_plural": "muestras GEI",
           "descripcion": "Evento de medición de flujo de gas de efecto invernadero (CO₂, CH₄ o N₂O): un equipo analizador conectado a un tubo.",
-          "total_campos": 5,
+          "total_campos": 6,
           "campos": [
             {
               "nombre": "tubo",
@@ -3949,6 +4594,19 @@
               "requerido": false,
               "automatico": false,
               "max_length": 80,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "chamber_vol",
+              "verbose_name": "volumen de la cámara",
+              "help_text": "Volumen de aire encerrado por la cámara/anillo, usado en el cálculo del flujo. Propiedad física de la cámara, no de cada toma.",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
               "choices": [],
               "es_fk": false,
               "modelo_fk": null
@@ -4145,6 +4803,187 @@
       ]
     },
     {
+      "nombre": "Muestra Ambiental",
+      "icono": "☀️",
+      "color": "#06b6d4",
+      "entidades": [
+        {
+          "nombre": "MuestraAmbiental",
+          "verbose_name": "muestra ambiental",
+          "verbose_name_plural": "muestras ambientales",
+          "descripcion": "Contexto ambiental (biomet) asociado a una muestra de CO₂.",
+          "total_campos": 12,
+          "campos": [
+            {
+              "nombre": "fecha",
+              "verbose_name": "fecha",
+              "help_text": "Fecha de la lectura ambiental.",
+              "tipo": "Fecha",
+              "tipo_raw": "DateField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "hora",
+              "verbose_name": "hora",
+              "help_text": "Hora de la lectura ambiental.",
+              "tipo": "TimeField",
+              "tipo_raw": "TimeField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "momento",
+              "verbose_name": "momento",
+              "help_text": "Si la lectura corresponde al inicio o al final de la medición, cuando la fuente reporta un rango en vez de un único valor.",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": 10,
+              "choices": [
+                {
+                  "valor": "inicio",
+                  "etiqueta": "Inicio"
+                },
+                {
+                  "valor": "final",
+                  "etiqueta": "Final"
+                }
+              ],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "soil_temp",
+              "verbose_name": "temperatura del suelo (°C)",
+              "help_text": "Temperatura del suelo, en grados Celsius.",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "air_temp",
+              "verbose_name": "temperatura del aire (°C)",
+              "help_text": "Temperatura del aire, en grados Celsius.",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "atm_press",
+              "verbose_name": "presión atmosférica (hPa)",
+              "help_text": "Presión atmosférica, en hectopascales (hPa).",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "relat_humid",
+              "verbose_name": "humedad relativa (%)",
+              "help_text": "Humedad relativa del aire, en porcentaje.",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "dew_point",
+              "verbose_name": "punto de rocío (°C)",
+              "help_text": "Punto de rocío, en grados Celsius.",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "water_level",
+              "verbose_name": "nivel del agua (cm)",
+              "help_text": "Nivel del agua respecto a la superficie, en centímetros: positivo indica encharcamiento, negativo indica nivel freático por debajo de la superficie.",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "ph",
+              "verbose_name": "pH",
+              "help_text": "pH del suelo o del agua en el punto de muestreo.",
+              "tipo": "Decimal",
+              "tipo_raw": "DecimalField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "unidad_muestreo",
+              "verbose_name": "unidad de muestreo",
+              "help_text": "",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": true,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "UnidadMuestreo"
+            },
+            {
+              "nombre": "fuente_datos",
+              "verbose_name": "fuente de datos",
+              "help_text": "",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": false,
+              "automatico": true,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "FuenteDatos"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "nombre": "Proyecto",
       "icono": "🗂️",
       "color": "#333faf",
@@ -4159,7 +4998,7 @@
             {
               "nombre": "nombre",
               "verbose_name": "nombre",
-              "help_text": "",
+              "help_text": "Nombre del proyecto de investigación o monitoreo al que pertenecen los datos.",
               "tipo": "Texto",
               "tipo_raw": "CharField",
               "requerido": true,
@@ -4397,7 +5236,7 @@
             {
               "nombre": "nombre",
               "verbose_name": "nombre",
-              "help_text": "",
+              "help_text": "Nombre de la institución (universidad, centro de investigación, entidad pública, …) a la que pertenecen los datos.",
               "tipo": "Texto",
               "tipo_raw": "CharField",
               "requerido": true,
@@ -4669,7 +5508,7 @@
           "verbose_name": "fuente de datos",
           "verbose_name_plural": "fuentes de datos",
           "descripcion": "Fuente de datos reportada a un proyecto (archivo Excel/CSV, shapefile, API, …) y su estado de procesamiento.",
-          "total_campos": 9,
+          "total_campos": 11,
           "campos": [
             {
               "nombre": "proyecto",
@@ -4698,6 +5537,19 @@
               "modelo_fk": "Usuario"
             },
             {
+              "nombre": "institucion",
+              "verbose_name": "entidad",
+              "help_text": "",
+              "tipo": "FK (relación)",
+              "tipo_raw": "ForeignKey",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
+              "choices": [],
+              "es_fk": true,
+              "modelo_fk": "Institucion"
+            },
+            {
               "nombre": "nombre",
               "verbose_name": "nombre",
               "help_text": "",
@@ -4720,6 +5572,36 @@
               "automatico": false,
               "max_length": null,
               "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "metodologia",
+              "verbose_name": "metodología",
+              "help_text": "",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": 20,
+              "choices": [
+                {
+                  "valor": "flujos",
+                  "etiqueta": "Flujos (CO2/CH4)"
+                },
+                {
+                  "valor": "cos",
+                  "etiqueta": "Carbono Orgánico del Suelo (COS)"
+                },
+                {
+                  "valor": "biomasa",
+                  "etiqueta": "Biomasa"
+                },
+                {
+                  "valor": "mom",
+                  "etiqueta": "Materia Orgánica Muerta (MOM)"
+                }
+              ],
               "es_fk": false,
               "modelo_fk": null
             },
@@ -5312,7 +6194,7 @@
             {
               "nombre": "tipo_cobertura",
               "verbose_name": "tipo de cobertura",
-              "help_text": "Solo aplica cuando modelo_destino es 'Cobertura': etiqueta con qué sistema de clasificación (CLC, IPCC, IGBP, …) se guarda el valor de esta columna, ya que un sitio puede tener varias filas de Cobertura (una por columna/sistema de origen).",
+              "help_text": "Solo aplica cuando modelo_destino es 'CoberturaManual': etiqueta con qué sistema de clasificación (CLC, IPCC, IGBP, …) se guarda el valor de esta columna, ya que una unidad de muestreo puede tener varias filas de CoberturaManual (una por columna/sistema de origen).",
               "tipo": "FK (relación)",
               "tipo_raw": "ForeignKey",
               "requerido": false,
@@ -5320,7 +6202,7 @@
               "max_length": null,
               "choices": [],
               "es_fk": true,
-              "modelo_fk": "TipoCobertura"
+              "modelo_fk": "ClasificacionTipo"
             },
             {
               "nombre": "gas_fijo",

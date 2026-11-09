@@ -6,7 +6,10 @@ from .base import TimestampedModel
 class Institucion(TimestampedModel):
     """Institución participante en los proyectos (universidad, centro de investigación, entidad pública, …)."""
 
-    nombre = models.CharField("nombre", max_length=255)
+    nombre = models.CharField(
+        "nombre", max_length=255,
+        help_text="Nombre de la institución (universidad, centro de investigación, entidad pública, …) a la que pertenecen los datos.",
+    )
     correo = models.EmailField("correo electrónico", blank=True)
 
     class Meta:
@@ -29,7 +32,9 @@ class Proyecto(TimestampedModel):
         ("Parcela", "Parcela"),
     ]
 
-    nombre = models.CharField("nombre", max_length=255)
+    nombre = models.CharField(
+        "nombre", max_length=255, help_text="Nombre del proyecto de investigación o monitoreo al que pertenecen los datos.",
+    )
     fecha_inicio = models.DateField("fecha de inicio", null=True, blank=True)
     fecha_fin = models.DateField("fecha de fin", null=True, blank=True)
     coordinador = models.CharField("coordinador", max_length=255, blank=True)

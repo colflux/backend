@@ -3,53 +3,57 @@ from django.db import models
 from .base import TimestampedModel
 
 
-class TipoCobertura(TimestampedModel):
-    """Catálogo de sistemas de clasificación de cobertura (CLC, IPCC, IGBP, Köppen, Suelo IPCC, nombre local)."""
+class CoberturaManual(TimestampedModel):
+    """Un valor de cobertura reportado para una unidad de muestreo, según un sistema de clasificación.
 
-    codigo = models.CharField("código", max_length=30, unique=True)
-    nombre = models.CharField("nombre", max_length=120)
-
-    class Meta:
-        verbose_name = "tipo de cobertura"
-        verbose_name_plural = "tipos de cobertura"
-        ordering = ["nombre"]
-
-    def __str__(self):
-        return self.nombre
-
-
-class Cobertura(TimestampedModel):
-    """Un valor de cobertura reportado para un sitio, según un sistema de clasificación.
-
-    Un mismo sitio puede tener varias filas: una por sistema de clasificación,
+    Una misma unidad puede tener varias filas: una por sistema de clasificación,
     o varias del mismo sistema cuando distintas fuentes reportan valores en
-    conflicto para el mismo sitio (no hay forma de saber cuál es "el
-    correcto", así que se guardan todas en vez de que una pise a la otra).
+    conflicto (no hay forma de saber cuál es "el correcto", así que se guardan
+    todas en vez de que una pise a la otra). También así se reporta
+    cobertura_vegetal_primaria/secundaria/terciaria: tres filas con
+    tipo=Vegetación funcional y distinto orden_dominancia.
     """
 
-    sitio = models.ForeignKey(
-        "app.Sitio", on_delete=models.CASCADE, related_name="coberturas", verbose_name="sitio",
+    unidad_muestreo = models.ForeignKey(
+        "app.UnidadMuestreo", on_delete=models.CASCADE, related_name="coberturas", verbose_name="unidad de muestreo",
     )
     tipo = models.ForeignKey(
-        TipoCobertura, on_delete=models.PROTECT, related_name="coberturas",
+        "app.ClasificacionTipo", on_delete=models.PROTECT, related_name="coberturas_reportadas",
         null=True, blank=True, verbose_name="tipo",
         help_text="Sistema de clasificación de este valor. Vacío si el valor de origen no matchea ningún sistema conocido.",
     )
-    nombre = models.CharField("nombre reportado", max_length=160)
+    valor = models.ForeignKey(
+        "app.ValorClasificacionTipo", on_delete=models.PROTECT, related_name="coberturas_reportadas",
+        null=True, blank=True, verbose_name="valor",
+        help_text="Vacío si el texto de origen no matchea ningún valor conocido del catálogo (ver valor_texto).",
+    )
+    ORDEN_DOMINANCIA_CHOICES = [
+        ("Primaria", "Primaria"),
+        ("Secundaria", "Secundaria"),
+        ("Terciaria", "Terciaria"),
+    ]
+    porcentaje = models.DecimalField("% cobertura", max_digits=5, decimal_places=2, null=True, blank=True)
+    orden_dominancia = models.CharField(
+        "orden de dominancia", max_length=12, choices=ORDEN_DOMINANCIA_CHOICES, blank=True,
+    )
+    valor_texto = models.CharField(
+        "valor (texto original)", max_length=160, blank=True,
+        help_text="Texto tal como llegó en el import. Se llena siempre; valor queda vacío si no matcheó ningún catálogo.",
+    )
 
     class Meta:
         verbose_name = "cobertura"
         verbose_name_plural = "coberturas"
-        ordering = ["sitio", "tipo"]
+        ordering = ["unidad_muestreo", "tipo"]
         constraints = [
             models.UniqueConstraint(
-                fields=["sitio", "tipo", "nombre"],
-                name="cobertura_unica_por_sitio_tipo_nombre",
+                fields=["unidad_muestreo", "tipo", "valor"],
+                name="cobertura_unica_por_unidad_tipo_valor",
             ),
         ]
 
     def __str__(self):
-        return f"{self.nombre} ({self.tipo or 'sin tipo'})"
+        return f"{self.valor} ({self.tipo or 'sin tipo'})"
 
 
 class Vegetacion(TimestampedModel):
@@ -93,21 +97,22 @@ class Vegetacion(TimestampedModel):
 
 
 class Disturbio(TimestampedModel):
-    """Evento de disturbio que afecta un sitio (fuego, sequía, pastoreo, …), con fechas y estado actual del ecosistema."""
+    """Catálogo de tipos de disturbio (fuego, sequía, pastoreo, …)."""
 
-    TIPO_CHOICES = [
-        ("Agricultura", "Agricultura"),
-        ("Sequia", "Sequía"),
-        ("Fuego", "Fuego"),
-        ("Silvicultura", "Silvicultura"),
-        ("Pastoreo", "Pastoreo"),
-        ("Evento_hidrologico", "Evento hidrológico"),
-        ("Cambio_en_cobertura_del_suelo", "Cambio en cobertura del suelo"),
-        ("Plagas_y_enfermedades", "Plagas y enfermedades"),
-        ("Tormenta_o_viento", "Tormenta o viento"),
-        ("Extremos_de_temperatura", "Extremos de temperatura"),
-        ("Sin_disturbio", "Sin disturbio"),
-    ]
+    nombre = models.CharField("nombre", max_length=60, unique=True)
+
+    class Meta:
+        verbose_name = "tipo de disturbio"
+        verbose_name_plural = "tipos de disturbio"
+        ordering = ["nombre"]
+
+    def __str__(self):
+        return self.nombre
+
+
+class UnidadMuestreoDisturbio(TimestampedModel):
+    """Disturbio reportado para una unidad de muestreo (fechas, estado del ecosistema, si es el disturbio dominante)."""
+
     ESTADO_CHOICES = [
         ("Intacto", "Intacto"),
         ("Ligeramente_degradado", "Ligeramente degradado"),
@@ -131,11 +136,28 @@ class Disturbio(TimestampedModel):
         ("Artificial_Urbano", "Artificial / Urbano (superficie no natural)"),
     ]
 
+    unidad_muestreo = models.ForeignKey(
+        "app.UnidadMuestreo", on_delete=models.CASCADE, related_name="disturbios",
+        verbose_name="unidad de muestreo",
+    )
+    tipo = models.ForeignKey(
+        "app.ClasificacionTipo", on_delete=models.PROTECT, related_name="disturbios_unidad",
+        null=True, blank=True, verbose_name="tipo",
+    )
+    valor = models.ForeignKey(
+        "app.ValorClasificacionTipo", on_delete=models.PROTECT, related_name="disturbios_unidad",
+        null=True, blank=True, verbose_name="valor",
+        help_text="Vacío si el texto de origen no matchea ningún valor conocido del catálogo (ver valor_texto).",
+    )
+    valor_texto = models.CharField(
+        "valor (texto original)", max_length=160, blank=True,
+        help_text="Texto tal como llegó en el import. Se llena siempre; valor queda vacío si no matcheó ningún catálogo.",
+    )
     descripcion = models.TextField("descripción", blank=True)
     fecha_inicio = models.DateField("fecha de inicio", null=True, blank=True)
     fecha_fin = models.DateField("fecha de fin", null=True, blank=True)
     incertidumbre_anios = models.PositiveIntegerField("incertidumbre (años)", null=True, blank=True)
-    tipo = models.CharField("tipo de disturbio", max_length=40, choices=TIPO_CHOICES, default="Sin_disturbio")
+    fecha_reporte = models.DateField("fecha de reporte", null=True, blank=True)
     anios_disturbio = models.PositiveIntegerField("años de disturbio", null=True, blank=True)
     anios_desde_fin = models.PositiveIntegerField("años desde fin del disturbio", null=True, blank=True)
     estado_actual = models.CharField("estado actual", max_length=30, choices=ESTADO_CHOICES, blank=True)
@@ -147,11 +169,54 @@ class Disturbio(TimestampedModel):
         "protección legal", blank=True,
         help_text="Si el sitio está bajo alguna figura de reserva, parque, santuario, etc.",
     )
+    es_dominante = models.BooleanField("es el disturbio dominante", default=False)
 
     class Meta:
-        verbose_name = "disturbio"
-        verbose_name_plural = "disturbios"
-        indexes = [models.Index(fields=["tipo"])]
+        verbose_name = "disturbio de unidad de muestreo"
+        verbose_name_plural = "disturbios de unidad de muestreo"
+        ordering = ["unidad_muestreo", "tipo"]
 
     def __str__(self):
-        return f"{self.get_tipo_display()} — {self.fecha_inicio or 'sin fecha'}"
+        return f"{self.valor or self.valor_texto} — {self.unidad_muestreo} ({self.fecha_inicio or 'sin fecha'})"
+
+
+class FuenteExterna(TimestampedModel):
+    """Catálogo de fuentes externas de disturbio (fuego, pastoreo, cultivo, drenaje) cuya cercanía a una unidad de muestreo se reporta como distancia."""
+
+    nombre = models.CharField("nombre", max_length=40, unique=True)
+
+    class Meta:
+        verbose_name = "fuente externa"
+        verbose_name_plural = "fuentes externas"
+        ordering = ["nombre"]
+
+    def __str__(self):
+        return self.nombre
+
+
+class ExposicionExterna(TimestampedModel):
+    """Qué tan cerca está una unidad de muestreo de una fuente de alteración ubicada en otro lugar (no un disturbio ocurrido en la unidad misma)."""
+
+    unidad_muestreo = models.ForeignKey(
+        "app.UnidadMuestreo", on_delete=models.CASCADE, related_name="exposiciones_externas",
+        verbose_name="unidad de muestreo",
+    )
+    fuente = models.ForeignKey(
+        FuenteExterna, on_delete=models.PROTECT, related_name="exposiciones",
+        verbose_name="fuente externa",
+    )
+    distancia_m = models.DecimalField("distancia (m)", max_digits=10, decimal_places=2, null=True, blank=True)
+
+    class Meta:
+        verbose_name = "exposición externa"
+        verbose_name_plural = "exposiciones externas"
+        ordering = ["unidad_muestreo", "fuente"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["unidad_muestreo", "fuente"],
+                name="exposicion_externa_unica_por_unidad_fuente",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.fuente} — {self.distancia_m} m ({self.unidad_muestreo})"
