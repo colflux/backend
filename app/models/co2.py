@@ -91,13 +91,6 @@ class TipoMuestra(TimestampedModel):
 class MuestraAmbiental(TimestampedModel):
     """Contexto ambiental (biomet) asociado a una muestra de CO₂."""
 
-    MICROTOPO_CHOICES = [
-        ("Hummock", "Hummock (cojines)"),
-        ("Hollow", "Hollow (depresiones húmedas)"),
-        ("Pool", "Pool (charcos / sobre agua)"),
-        ("Lawns", "Lawns (lugares planos)"),
-        ("Ditch", "Ditch (zanja / canal)"),
-    ]
     MOMENTO_CHOICES = [
         ("inicio", "Inicio"),
         ("final", "Final"),
@@ -141,9 +134,9 @@ class MuestraAmbiental(TimestampedModel):
         "nivel del agua (cm)", max_digits=6, decimal_places=2, null=True, blank=True,
         help_text="Nivel del agua respecto a la superficie, en centímetros: positivo indica encharcamiento, negativo indica nivel freático por debajo de la superficie.",
     )
-    microtopo = models.CharField(
-        "microtopología (microtopography)", max_length=10, choices=MICROTOPO_CHOICES, blank=True,
-        help_text="Microtopografía del punto de medición.",
+    ph = models.DecimalField(
+        "pH", max_digits=4, decimal_places=2, null=True, blank=True,
+        help_text="pH del suelo o del agua en el punto de muestreo.",
     )
     # Obligatorio: sin unidad de muestreo no se sabe a qué lugar corresponde
     # la lectura. Permite cargar clima de forma independiente de una
@@ -183,6 +176,10 @@ class MuestraGEI(TimestampedModel):
     tubo = models.CharField(
         "tubo", max_length=80, blank=True,
         help_text="Identificador del tubo/cámara conectado al equipo para esta medición.",
+    )
+    chamber_vol = models.DecimalField(
+        "volumen de la cámara", max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Volumen de aire encerrado por la cámara/anillo, usado en el cálculo del flujo. Propiedad física de la cámara, no de cada toma.",
     )
     gas = models.CharField(
         "gas", max_length=4, choices=TipoMuestra.GAS_CHOICES, blank=True,

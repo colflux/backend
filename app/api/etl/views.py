@@ -23,9 +23,13 @@ from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
 from app.api.permisos import requiere_nivel
-from app.models import CargaArchivo, FuenteDatos, MapeoColumna, Proyecto, TipoCobertura
+from app.models import (
+    CargaArchivo, ClasificacionTipo, FuenteDatos, MapeoColumna, MuestraTorre, Proyecto, SubMuestraTorre,
+    TorreEc, ValorClasificacionEcosistema, ValorClasificacionTipo,
+)
 
 from app.catalogo.generator import COLOR_POR_MODELO, GRUPOS_CATALOGO, campo_to_catalogo, fk_choices
+from app.api.etl.preprocesamiento_torre import agregar_y_aplanar_eddypro, leer_crudo_eddypro
 
 logger = logging.getLogger(__name__)
 
@@ -44,23 +48,36 @@ logger = logging.getLogger(__name__)
 # - Excluye "Publicaciones": es metadato bibliográfico del proyecto, no
 #   datos fila por fila del archivo. Al quitarla, "Unidad Experimental"
 #   queda como primera sección real del wizard.
-# - Excluye temporalmente "Suelo", "Torre EC y Flujos", "Proyecto" y
-#   "Usuarios, Roles y ETL": todavía no se está mapeando/importando esas
-#   entidades desde el ETL. "Cobertura y Vegetación" se habilitó: Sitio ya
-#   tiene FK a Cobertura/Vegetacion/Disturbio y _orden_topologico() las
-#   ordena antes que Sitio por esa FK sin importar la posición de la sección
-#   en este listado, así que el auto-link entre modelos de la misma fila
-#   (ver _procesar_filas) funciona igual que con Unidad Muestreo→Parcela.
-#   Quitar de esta lista cuando se retome cada una.
+# - Excluye temporalmente "Suelo", "Proyecto" y "Usuarios, Roles y ETL":
+#   todavía no se está mapeando/importando esas entidades desde el ETL.
+#   "Cobertura y Vegetación" se habilitó: Sitio ya tiene FK a
+#   Cobertura/Vegetacion/Disturbio y _orden_topologico() las ordena antes
+#   que Sitio por esa FK sin importar la posición de la sección en este
+#   listado, así que el auto-link entre modelos de la misma fila (ver
+#   _procesar_filas) funciona igual que con Unidad Muestreo→Parcela.
+#   Quitar "Suelo"/"Proyecto"/"Usuarios, Roles y ETL" de esta lista cuando
+#   se retome cada una.
+# - Excluye "Torre EC y Flujos": a diferencia de las demás metodologías, los
+#   archivos de Eddypro siempre traen las mismas columnas en el mismo orden
+#   (ver `app/api/etl/preprocesamiento_torre.py`), así que no tiene sentido
+#   pedirle a alguien que las mapee a mano -se importan con `importar_torre`,
+#   un flujo dedicado y sin mapeo que escribe directo en
+#   `MuestraTorre`/`SubMuestraTorre`-.
 _GRUPOS_EXCLUIDOS_TEMPORAL = (
     "Suelo",
-    "Torre EC y Flujos",
     "Proyecto",
     "Usuarios, Roles y ETL",
 )
+_GRUPOS_EXCLUIDOS_SIEMPRE = (
+    "Torre EC y Flujos",
+)
 SECCIONES_ETL = []
 for _grupo in GRUPOS_CATALOGO:
-    if _grupo["nombre"] in ("Geografía", "Publicaciones") or _grupo["nombre"] in _GRUPOS_EXCLUIDOS_TEMPORAL:
+    if (
+        _grupo["nombre"] in ("Geografía", "Publicaciones")
+        or _grupo["nombre"] in _GRUPOS_EXCLUIDOS_TEMPORAL
+        or _grupo["nombre"] in _GRUPOS_EXCLUIDOS_SIEMPRE
+    ):
         continue
     if _grupo["nombre"] == "Unidad de Muestreo y Experimental":
         SECCIONES_ETL.append({
@@ -95,15 +112,21 @@ for _grupo in GRUPOS_CATALOGO:
             "icono": "📍",
             "entidades": ["Sitio"],
         })
-        # Clima (MuestraAmbiental) se saca de "Muestras GEI" para poder
-        # cargarse solo, sin depender de tener también datos de GEI en el
-        # mismo archivo — solo necesita que ya exista la Unidad de Muestreo
-        # a la que se va a vincular, por eso va justo después de "Sitio".
+        # Muestra Ambiental (grupo propio en GRUPOS_CATALOGO, antes vivía
+        # dentro de "Muestras GEI") se inserta acá, justo después de
+        # "Sitio", para poder cargarse sola sin depender de tener también
+        # datos de GEI en el mismo archivo — solo necesita que ya exista la
+        # Unidad de Muestreo a la que se va a vincular. Se arma a mano en
+        # vez de dejar que el loop genérico la agregue en su posición real
+        # (después de "Muestras GEI"), que rompería este orden de
+        # dependencia — por eso el grupo se salta más abajo.
         SECCIONES_ETL.append({
-            "nombre": "Clima",
+            "nombre": "Muestra Ambiental",
             "icono": "🌦️",
             "entidades": ["MuestraAmbiental"],
         })
+    elif _grupo["nombre"] == "Muestra Ambiental":
+        continue
     elif _grupo["nombre"] == "Muestras GEI":
         # UnidadMedida, Equipo y TipoMuestra no se muestran como sección
         # propia: son catálogos que se cargan aparte, no datos fila por fila
@@ -117,13 +140,33 @@ for _grupo in GRUPOS_CATALOGO:
             "entidades": [e for e in _grupo["entidades"] if e not in _EXCLUIDAS_MUESTRAS_GEI],
         })
     elif _grupo["nombre"] == "Cobertura y Vegetación":
-        # TipoCobertura no se muestra como sección propia: es un catálogo
-        # cerrado (CLC, IPCC, IGBP, …) que no se carga fila por fila, se
-        # selecciona por mapeo (ver MapeoColumna.tipo_cobertura) — mismo
-        # criterio que UnidadMuestreoTipo/UnidadMedida más arriba.
+        # ClasificacionTipo/ValorClasificacionTipo/ClasificacionArea no se
+        # muestran como sección propia: son el catálogo genérico (CLC, IPCC,
+        # IGBP, …) que no se carga fila por fila — el sistema de clasificación
+        # se selecciona por mapeo (ver MapeoColumna.tipo_cobertura) y el valor
+        # se resuelve/crea solo a partir del texto de la columna mapeada (ver
+        # _procesar_fila_cobertura), no se mapea como su propia entidad.
+        # Disturbio tampoco: mismo criterio, se resuelve/crea a partir del
+        # texto de la columna mapeada en DisturbioManual (ver
+        # _procesar_fila_disturbio). TipoClasificacionEcosistema/
+        # ValorClasificacionEcosistema/EcosistemaManual/FuenteExterna/
+        # ExposicionExterna se excluyen igual: solo están en este grupo para
+        # el color/diccionario del Excel (ver _COLUMNAS_PIVOTE_METADATO_GEI),
+        # el wizard todavía no tiene su propio `_procesar_fila_*`.
+        # DisturbioManual también se excluye -deshabilitado a
+        # propósito-: su campo `disturbio` se reemplazó por `tipo`/`valor`
+        # (FK al catálogo genérico ClasificacionTipo/ValorClasificacionTipo,
+        # migración 0119_clasificacion_generica), pero `_procesar_fila_disturbio`
+        # sigue escribiendo con el kwarg viejo `disturbio` -> TypeError en
+        # cuanto se mapee una columna a esta entidad. Reactivar cuando
+        # `_procesar_fila_disturbio` se actualice al nuevo esquema.
         SECCIONES_ETL.append({
             **_grupo,
-            "entidades": [e for e in _grupo["entidades"] if e != "TipoCobertura"],
+            "entidades": [e for e in _grupo["entidades"] if e not in (
+                "ClasificacionTipo", "ValorClasificacionTipo", "ClasificacionArea", "Disturbio",
+                "TipoClasificacionEcosistema", "ValorClasificacionEcosistema", "EcosistemaManual",
+                "FuenteExterna", "ExposicionExterna", "DisturbioManual",
+            )],
         })
     else:
         SECCIONES_ETL.append(_grupo)
@@ -516,6 +559,22 @@ def upload_archivo(request, fuente_id):
     archivo_subido = request.FILES.get("archivo")
     hoja_solicitada = (request.POST.get("hoja") or "").strip()
 
+    # Fila (1-indexada, tal como la ve el usuario en Excel) donde en
+    # realidad empieza la tabla -se usa cuando el EDA detecta demasiadas
+    # columnas "Unnamed" y el usuario confirma dónde está el encabezado
+    # real, para releer la hoja activa con ese header en vez del default
+    # (fila 1)-. Solo aplica a `hoja_activa`: las demás hojas del archivo
+    # se siguen leyendo con su propio encabezado por defecto.
+    header_fila_raw = (request.POST.get("header_fila") or "").strip()
+    header_fila = None
+    if header_fila_raw:
+        try:
+            header_fila = int(header_fila_raw)
+            if header_fila < 1:
+                raise ValueError
+        except ValueError:
+            return JsonResponse({"error": "La fila de encabezado debe ser un número entero mayor o igual a 1."}, status=400)
+
     try:
         if archivo_subido:
             path_archivo = _guardar_archivo_subido(fuente, archivo_subido)
@@ -529,7 +588,7 @@ def upload_archivo(request, fuente_id):
         carga = CargaArchivo.objects.create(fuente=fuente)
 
         if nombre_archivo.endswith(".csv"):
-            df = _leer_csv(path_archivo)
+            df = _leer_csv(path_archivo, header=(header_fila - 1) if header_fila else 0)
             sheets = []
             hoja_activa = ""
             total_filas = len(df)
@@ -553,7 +612,7 @@ def upload_archivo(request, fuente_id):
                         hoja_activa = sheet_name
                         break
 
-            df = pd.read_excel(path_archivo, sheet_name=hoja_activa)
+            df = pd.read_excel(path_archivo, sheet_name=hoja_activa, header=(header_fila - 1) if header_fila else 0)
             total_filas = len(df)
             columnas = _columnas_desde_dataframe(df)
             wb.close()
@@ -645,6 +704,7 @@ def upload_archivo(request, fuente_id):
             "carga_id": carga.pk,
             "sheets": sheets,
             "hoja_activa": hoja_activa,
+            "header_fila": header_fila,
             "total_filas": total_filas,
             "columnas": columnas,
             "mapeos": mapeos_previos_por_hoja.get(hoja_activa, []),
@@ -672,6 +732,110 @@ def upload_archivo(request, fuente_id):
         }, status=500)
 
 
+@csrf_exempt
+@requiere_nivel("reportador")
+def importar_torre(request, fuente_id):
+    """Importa de una sola vez el archivo crudo de Eddypro (semihorario,
+    ancho) de una torre: lo agrega a diario y lo aplana a formato largo (ver
+    `app/api/etl/preprocesamiento_torre.py`) y lo guarda directo en
+    `MuestraTorre`/`SubMuestraTorre`, sin pasar por el wizard genérico de
+    mapeo/validación/preview -la salida de Eddypro siempre trae las mismas
+    columnas en el mismo orden, así que el destino de cada una ya se conoce
+    de antemano (ver `agregar_y_aplanar_eddypro`); pedirle al usuario que
+    mapee columna por columna, o navegar secciones de otras metodologías
+    (Unidad Experimental, Sitio, ...) que no aplican a este archivo, es
+    trabajo de más-.
+    """
+    if request.method != "POST":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+
+    try:
+        fuente = FuenteDatos.objects.get(pk=fuente_id)
+    except FuenteDatos.DoesNotExist:
+        return JsonResponse({"error": "Fuente de datos no encontrada"}, status=404)
+
+    torre_id_raw = (request.POST.get("torre_id") or "").strip()
+    if not torre_id_raw:
+        return JsonResponse({"error": "Falta indicar la torre (torre_id)."}, status=400)
+    try:
+        torre = TorreEc.objects.get(pk=int(torre_id_raw))
+    except (ValueError, TorreEc.DoesNotExist):
+        return JsonResponse({"error": "Torre no encontrada."}, status=400)
+
+    archivo_subido = request.FILES.get("archivo")
+    if not archivo_subido:
+        return JsonResponse({"error": "Falta el archivo crudo de Eddypro."}, status=400)
+
+    try:
+        df_crudo = leer_crudo_eddypro(archivo_subido)
+        df_largo = agregar_y_aplanar_eddypro(df_crudo, torre.pk)
+    except Exception as exc:
+        logger.exception("Error preprocesando archivo de torre para la fuente %s", fuente_id)
+        return JsonResponse({
+            "error": (
+                "No se pudo preprocesar el archivo de Eddypro. Verifica que sea la salida "
+                "'full_output'/'adv' sin modificar (con sus 3 filas de encabezado tal cual "
+                f"las exporta el software). Detalle técnico: {exc}"
+            )
+        }, status=400)
+
+    df_largo = df_largo.dropna(subset=["valor"])
+    if df_largo.empty:
+        return JsonResponse({
+            "error": "El archivo no trajo ningún valor válido (todo quedó vacío tras descartar datos de mala calidad)."
+        }, status=400)
+
+    with transaction.atomic():
+        carga = CargaArchivo.objects.create(
+            fuente=fuente, estado="importado", total_filas=len(df_largo),
+        )
+
+        # Un update_or_create por fila (~3000 filas típicas) es un viaje de
+        # ida y vuelta a la RDS remota por fila -con esa latencia, se come
+        # el timeout de gunicorn (60s) antes de terminar-. Se arma todo en
+        # memoria y se escribe en un solo bulk_create con upsert.
+        pks_muestra = []
+        nuevas_submuestras = []
+        for tipo_variable, grupo in df_largo.groupby("tipo_variable"):
+            muestra, _ = MuestraTorre.objects.get_or_create(
+                torre=torre, tipo_variable=tipo_variable, fuente_datos=fuente,
+            )
+            pks_muestra.append(muestra.pk)
+            for fila in grupo.itertuples(index=False):
+                nuevas_submuestras.append(SubMuestraTorre(
+                    muestra=muestra, fecha=fila.fecha, valor=fila.valor,
+                    pct_calidad_buena=None if pd.isna(fila.pct_calidad_buena) else fila.pct_calidad_buena,
+                    n_registros_validos=None if pd.isna(fila.n_registros_validos) else int(fila.n_registros_validos),
+                ))
+
+        SubMuestraTorre.objects.bulk_create(
+            nuevas_submuestras, batch_size=1000,
+            update_conflicts=True, unique_fields=["muestra", "fecha"],
+            update_fields=["valor", "pct_calidad_buena", "n_registros_validos"],
+        )
+        pks_submuestra = list(
+            SubMuestraTorre.objects.filter(muestra_id__in=pks_muestra).values_list("pk", flat=True)
+        )
+
+        carga.pks_importados = {
+            "MuestraTorre": sorted(set(pks_muestra)),
+            "SubMuestraTorre": sorted(set(pks_submuestra)),
+        }
+        carga.save(update_fields=["pks_importados"])
+
+        if fuente.estado != "completo":
+            fuente.estado = "completo"
+            fuente.save(update_fields=["estado"])
+
+    return JsonResponse({
+        "carga_id": carga.pk,
+        "variables_importadas": len(pks_muestra),
+        "dias_importados": int(df_largo["fecha"].nunique()),
+        "fecha_min": str(df_largo["fecha"].min()),
+        "fecha_max": str(df_largo["fecha"].max()),
+    }, json_dumps_params={"ensure_ascii": False})
+
+
 def campos_destino(request):
     # Antes esta vista incluía las instancias existentes de cada campo FK
     # (incluir_instancias_fk=True), lo que dispara una consulta a la BD por
@@ -694,22 +858,50 @@ def campos_destino(request):
                     continue
                 if field.name in ("id", "created_at", "updated_at"):
                     continue
-                # Cobertura.sitio se auto-vincula al Sitio de la misma fila (igual
-                # que Parcela -> UnidadMuestreo) y Cobertura.tipo se resuelve
-                # aparte, desde el selector "tipo_cobertura" del mapeo (ver
-                # _procesar_fila_cobertura): no tiene sentido ofrecerlos como
-                # campo_destino normal, un solo MapeoColumna de Cobertura ya no
-                # produce una única fila por modelo/fila de origen.
-                if nombre == "Cobertura" and field.name in ("sitio", "tipo"):
+                # CoberturaManual.unidad_muestreo se auto-vincula a la Unidad de
+                # Muestreo de la misma fila (igual que Parcela -> UnidadMuestreo)
+                # y CoberturaManual.tipo se resuelve aparte, desde el selector
+                # "tipo_cobertura" del mapeo (ver _procesar_fila_cobertura): no
+                # tiene sentido ofrecerlos como campo_destino normal. "valor" sí
+                # queda seleccionable: es el destino al que el usuario mapea la
+                # columna con el texto reportado (ver _procesar_fila_cobertura,
+                # que lo resuelve/crea como ValorClasificacionTipo en vez de
+                # guardarlo como texto libre).
+                if nombre == "CoberturaManual" and field.name in ("unidad_muestreo", "tipo"):
                     continue
-                # UnidadMuestreo.sitio se vincula solo (igual que Cobertura.sitio
-                # arriba): al guardar la sección Sitio, _procesar_filas la
-                # reprocesa junto con Unidad Experimental/Unidad de Muestreo y
-                # engancha por la fila del archivo, sin que el usuario mapee una
-                # columna acá.
+                # DisturbioManual.unidad_muestreo se auto-vincula a la
+                # Unidad de Muestreo de la misma fila (mismo criterio que
+                # CoberturaManual.unidad_muestreo arriba). DisturbioManual.tipo
+                # se auto-vincula también, al ClasificacionTipo fijo "Disturbio"
+                # (a diferencia de Cobertura, acá solo hay un sistema de
+                # clasificación posible, no se le pide elegir al usuario).
+                if nombre == "DisturbioManual" and field.name in ("unidad_muestreo", "tipo"):
+                    continue
+                # UnidadMuestreo.sitio se vincula solo (igual que
+                # CoberturaManual.unidad_muestreo arriba): al guardar la sección
+                # Sitio, _procesar_filas la reprocesa junto con Unidad
+                # Experimental/Unidad de Muestreo y engancha por la fila del
+                # archivo, sin que el usuario mapee una columna acá.
                 if nombre == "UnidadMuestreo" and field.name == "sitio":
                     continue
-                campos.append(campo_to_catalogo(field, nombre_modelo=nombre))
+                campo_catalogo = campo_to_catalogo(field, nombre_modelo=nombre)
+                # CoberturaManual.valor es un FK a ValorClasificacionTipo, pero
+                # el wizard lo debe tratar como texto libre (igual que el viejo
+                # Cobertura.nombre): la columna de origen trae el valor
+                # reportado, no la referencia a una fila ya existente -
+                # _procesar_fila_cobertura resuelve/crea el
+                # ValorClasificacionTipo solo.
+                if nombre == "CoberturaManual" and field.name == "valor":
+                    campo_catalogo.update({"tipo": "string", "tipo_raw": "CharField", "es_fk": False, "modelo_fk": None, "max_length": 160})
+                # DisturbioManual.valor es un FK a ValorClasificacionTipo,
+                # pero el wizard lo debe tratar como texto libre (mismo criterio
+                # que CoberturaManual.valor arriba): la columna de origen trae
+                # el nombre del disturbio reportado, no la referencia a una
+                # fila ya existente - _procesar_fila_disturbio resuelve/crea
+                # el ValorClasificacionTipo solo.
+                if nombre == "DisturbioManual" and field.name == "valor":
+                    campo_catalogo.update({"tipo": "string", "tipo_raw": "CharField", "es_fk": False, "modelo_fk": None, "max_length": 160})
+                campos.append(campo_catalogo)
             if campos:
                 modelos[nombre] = campos
                 grupos[nombre] = {
@@ -721,9 +913,14 @@ def campos_destino(request):
                 orden_modelo += 1
 
     # Para el selector "sistema de clasificación" que el wizard muestra junto
-    # a Cobertura.nombre (ver _procesar_fila_cobertura): se manda acá, junto
-    # con el resto de los metadatos de mapeo, para no agregar un fetch aparte.
-    tipos_cobertura = list(TipoCobertura.objects.values("id", "codigo", "nombre"))
+    # a CoberturaManual.valor (ver _procesar_fila_cobertura): se manda acá,
+    # junto con el resto de los metadatos de mapeo, para no agregar un fetch
+    # aparte. "codigo" se mantiene por compatibilidad con el contrato que ya
+    # consume el frontend (TipoCobertura.codigo) — ahora es ClasificacionTipo.nombre.
+    tipos_cobertura = [
+        {"id": ct["id"], "codigo": ct["nombre"], "nombre": ct["nombre"]}
+        for ct in ClasificacionTipo.objects.filter(categoria="Cobertura Vegetal").values("id", "nombre")
+    ]
 
     return JsonResponse(
         {"modelos": modelos, "grupos": grupos, "tipos_cobertura": tipos_cobertura},
@@ -974,7 +1171,7 @@ def mapeo_carga(request, fuente_id, carga_id):
                         )
                 tipo_cobertura_raw = item.get("tipo_cobertura")
                 tipo_cobertura_id = None
-                if modelo_destino == "Cobertura" and not _es_vacio(tipo_cobertura_raw):
+                if modelo_destino == "CoberturaManual" and not _es_vacio(tipo_cobertura_raw):
                     try:
                         tipo_cobertura_id = int(tipo_cobertura_raw)
                     except (TypeError, ValueError):
@@ -1573,13 +1770,13 @@ def _validar_obligatorios_unidad_experimental(mapeos, modelos_incluidos, total_f
 def _validar_obligatorios_muestra_ambiental(mapeos, modelos_incluidos, total_filas, hoja=None):
     """MuestraAmbiental.unidad_muestreo es NOT NULL en el modelo (a
     diferencia de MuestraGEI.unidad_muestreo, que es opcional) — sin este
-    check, una hoja donde solo se mapeó algún campo de Clima (p. ej. por
-    sugerencia automática de nombre de columna) pero nunca se completó la
-    sección "Clima" explícitamente, revienta con un IntegrityError crudo de
-    Postgres al momento de guardar en vez de un mensaje entendible. Pasa
-    sobre todo cuando la sección "Clima" se marcó "sin datos" u opcional:
-    eso no borra mapeos sueltos que ya se hayan guardado para este modelo en
-    esta hoja."""
+    check, una hoja donde solo se mapeó algún campo de Muestra Ambiental
+    (p. ej. por sugerencia automática de nombre de columna) pero nunca se
+    completó la sección "Muestra Ambiental" explícitamente, revienta con un
+    IntegrityError crudo de Postgres al momento de guardar en vez de un
+    mensaje entendible. Pasa sobre todo cuando la sección "Muestra
+    Ambiental" se marcó "sin datos" u opcional: eso no borra mapeos sueltos
+    que ya se hayan guardado para este modelo en esta hoja."""
     if "MuestraAmbiental" not in modelos_incluidos:
         return None
 
@@ -1882,6 +2079,11 @@ _CAMPOS_IDENTIDAD = {
     # casi nunca viene cargada hoy, así que la mayoría de las filas caen en
     # _MODELOS_EVENTO en vez de acá).
     "MuestraAmbiental": ("fecha", "hora", "fuente_datos"),
+    # Mismo criterio que MuestraAmbiental: una submuestra de torre se
+    # identifica por su MuestraTorre (sesión torre+variable+fuente, ver
+    # MuestraGEI más abajo) + fecha, igual que su UniqueConstraint en el
+    # modelo (SubMuestraTorre.unique_together).
+    "SubMuestraTorre": ("muestra", "fecha"),
     # Sin esto, get_or_create(**kwargs) usa TODOS los campos mapeados de
     # Sitio como filtro: apenas una carga nueva mapea un campo que las
     # cargas anteriores no mapeaban (p. ej. tipo_localizacion, o ahora
@@ -2183,21 +2385,24 @@ def _procesar_fila_gei_flujo(
                     }
 
 
-def _procesar_fila_cobertura(df, fila_idx, mapeos, sitio, resumen_modelos, pks_por_modelo, detalle, cache_objetos):
-    """Resuelve los mapeos de Cobertura para una fila: a diferencia de
+def _procesar_fila_cobertura(df, fila_idx, mapeos, unidad_muestreo, resumen_modelos, pks_por_modelo, detalle, cache_objetos):
+    """Resuelve los mapeos de CoberturaManual para una fila: a diferencia de
     _procesar_filas (que fusiona todos los mapeos de un modelo en un único
-    kwargs), acá cada MapeoColumna con campo_destino="nombre" produce su
-    propia fila de Cobertura, etiquetada con el `tipo_cobertura` fijo de ese
-    mapeo (ver comentario en MapeoColumna.tipo_cobertura). `sitio` siempre es
-    el Sitio ya resuelto para esta misma fila -no se mapea manualmente,
-    mismo criterio que Parcela -> UnidadMuestreo-."""
-    Cobertura = apps.get_model("app", "Cobertura")
+    kwargs), acá cada MapeoColumna con campo_destino="valor" produce su
+    propia fila de CoberturaManual, etiquetada con el `tipo_cobertura` fijo de
+    ese mapeo (ver comentario en MapeoColumna.tipo_cobertura). `unidad_muestreo`
+    siempre es la UnidadMuestreo ya resuelta para esta misma fila -no se mapea
+    manualmente, mismo criterio que Parcela -> UnidadMuestreo-. El texto de la
+    columna se resuelve/crea como ValorClasificacionTipo (catálogo genérico),
+    no se guarda solo como texto libre."""
+    CoberturaManual = apps.get_model("app", "CoberturaManual")
+    ValorClasificacionTipo = apps.get_model("app", "ValorClasificacionTipo")
 
-    if sitio is None:
+    if unidad_muestreo is None:
         return
 
     for mapeo in mapeos:
-        if mapeo.campo_destino != "nombre":
+        if mapeo.campo_destino != "valor":
             continue
 
         if mapeo.transformacion == "constante":
@@ -2212,24 +2417,133 @@ def _procesar_fila_cobertura(df, fila_idx, mapeos, sitio, resumen_modelos, pks_p
         if _es_vacio(valor):
             continue
 
-        campos_cobertura = {"sitio": sitio, "tipo": mapeo.tipo_cobertura, "nombre": str(valor)}
-        clave = _clave_cache_objeto("Cobertura", campos_cobertura)
+        clave_valor = _clave_cache_objeto("ValorClasificacionTipo", {"tipo": mapeo.tipo_cobertura, "valor": str(valor)})
+        valor_obj = cache_objetos.get(clave_valor) if clave_valor is not None else None
+        if valor_obj is None:
+            valor_obj, _creado_valor = ValorClasificacionTipo.objects.get_or_create(tipo=mapeo.tipo_cobertura, valor=str(valor))
+            if clave_valor is not None:
+                cache_objetos[clave_valor] = valor_obj
+
+        campos_cobertura = {
+            "unidad_muestreo": unidad_muestreo, "tipo": mapeo.tipo_cobertura,
+            "valor": valor_obj, "valor_texto": str(valor),
+        }
+        clave = _clave_cache_objeto("CoberturaManual", campos_cobertura)
         if clave is not None and clave in cache_objetos:
             obj, creado = cache_objetos[clave], False
         else:
-            obj, creado = Cobertura.objects.get_or_create(**campos_cobertura)
+            obj, creado = CoberturaManual.objects.get_or_create(
+                unidad_muestreo=unidad_muestreo, tipo=mapeo.tipo_cobertura, valor=valor_obj,
+                defaults={"valor_texto": str(valor)},
+            )
             if clave is not None:
                 cache_objetos[clave] = obj
-        resumen_modelos["Cobertura"]["creados" if creado else "reutilizados"] += 1
-        pks_por_modelo.setdefault("Cobertura", set()).add(obj.pk)
+        resumen_modelos["CoberturaManual"]["creados" if creado else "reutilizados"] += 1
+        pks_por_modelo.setdefault("CoberturaManual", set()).add(obj.pk)
 
         if detalle is not None:
-            bucket = detalle.setdefault("Cobertura", {})
+            bucket = detalle.setdefault("CoberturaManual", {})
             if obj.pk not in bucket and len(bucket) < _PREVIEW_MAX_POR_MODELO:
                 bucket[obj.pk] = {
                     "accion": "creado" if creado else "reutilizado",
                     "campos": _representar_kwargs({
-                        "sitio": sitio, "tipo": mapeo.tipo_cobertura, "nombre": valor,
+                        "unidad_muestreo": unidad_muestreo, "tipo": mapeo.tipo_cobertura, "valor": valor,
+                    }),
+                }
+
+
+def _procesar_fila_disturbio(df, fila_idx, mapeos, unidad_muestreo, resumen_modelos, pks_por_modelo, detalle, cache_objetos):
+    """Resuelve los mapeos de DisturbioManual para una fila: igual
+    criterio que _procesar_fila_cobertura, cada MapeoColumna con
+    campo_destino="valor" produce su propia fila de DisturbioManual
+    (una unidad de muestreo puede reportar más de un disturbio).
+    `unidad_muestreo` siempre es la UnidadMuestreo ya resuelta para esta
+    misma fila -no se mapea manualmente, mismo criterio que
+    CoberturaManual.unidad_muestreo-. A diferencia de Cobertura, acá solo hay
+    un sistema de clasificación posible (`ClasificacionTipo(nombre="Disturbio",
+    categoria="Disturbio")`, sembrado en la migración 0119): no se le pide
+    elegir al usuario, se resuelve fijo. El texto de la columna se
+    resuelve/crea como ValorClasificacionTipo (catálogo) bajo ese tipo fijo.
+    El resto de los mapeos (fechas, estado, protección legal, etc.) se arman
+    una vez por fila y se aplican como defaults comunes a cada fila de
+    disturbio que produzca esa misma fila del archivo."""
+    DisturbioManual = apps.get_model("app", "DisturbioManual")
+    ClasificacionTipoModelo = apps.get_model("app", "ClasificacionTipo")
+    ValorClasificacionTipo = apps.get_model("app", "ValorClasificacionTipo")
+
+    if unidad_muestreo is None:
+        return
+
+    mapeos_disturbio = [m for m in mapeos if m.campo_destino == "valor"]
+    mapeos_resto = [m for m in mapeos if m.campo_destino != "valor"]
+
+    if not mapeos_disturbio:
+        return
+
+    clave_tipo = ("ClasificacionTipo", "Disturbio")
+    tipo_disturbio = cache_objetos.get(clave_tipo)
+    if tipo_disturbio is None:
+        tipo_disturbio = ClasificacionTipoModelo.objects.get(nombre="Disturbio", categoria="Disturbio")
+        cache_objetos[clave_tipo] = tipo_disturbio
+
+    defaults_comunes = {}
+    for mapeo in mapeos_resto:
+        field = DisturbioManual._meta.get_field(mapeo.campo_destino)
+        if mapeo.transformacion == "constante":
+            valor = None if _es_vacio(mapeo.valor_constante) else mapeo.valor_constante
+        else:
+            val_crudo = df[mapeo.columna_origen].iloc[fila_idx]
+            try:
+                valor = _resolver_valor_columna(val_crudo, mapeo)
+            except ValueError:
+                continue
+        if valor is None:
+            continue
+        try:
+            defaults_comunes[mapeo.campo_destino] = _coercionar_valor(valor, field)
+        except (ValueError, TypeError):
+            continue
+
+    for mapeo in mapeos_disturbio:
+        if mapeo.transformacion == "constante":
+            valor = None if _es_vacio(mapeo.valor_constante) else mapeo.valor_constante
+        else:
+            val_crudo = df[mapeo.columna_origen].iloc[fila_idx]
+            try:
+                valor = _resolver_valor_columna(val_crudo, mapeo)
+            except ValueError:
+                continue
+
+        if _es_vacio(valor):
+            continue
+
+        clave_valor = _clave_cache_objeto("ValorClasificacionTipo", {"tipo": tipo_disturbio, "valor": str(valor)})
+        valor_obj = cache_objetos.get(clave_valor) if clave_valor is not None else None
+        if valor_obj is None:
+            valor_obj, _creado_valor = ValorClasificacionTipo.objects.get_or_create(tipo=tipo_disturbio, valor=str(valor))
+            if clave_valor is not None:
+                cache_objetos[clave_valor] = valor_obj
+
+        campos_clave = {"unidad_muestreo": unidad_muestreo, "tipo": tipo_disturbio, "valor": valor_obj}
+        clave = _clave_cache_objeto("DisturbioManual", campos_clave)
+        if clave is not None and clave in cache_objetos:
+            obj, creado = cache_objetos[clave], False
+        else:
+            obj, creado = DisturbioManual.objects.get_or_create(
+                **campos_clave, defaults={**defaults_comunes, "valor_texto": str(valor)},
+            )
+            if clave is not None:
+                cache_objetos[clave] = obj
+        resumen_modelos["DisturbioManual"]["creados" if creado else "reutilizados"] += 1
+        pks_por_modelo.setdefault("DisturbioManual", set()).add(obj.pk)
+
+        if detalle is not None:
+            bucket = detalle.setdefault("DisturbioManual", {})
+            if obj.pk not in bucket and len(bucket) < _PREVIEW_MAX_POR_MODELO:
+                bucket[obj.pk] = {
+                    "accion": "creado" if creado else "reutilizado",
+                    "campos": _representar_kwargs({
+                        "unidad_muestreo": unidad_muestreo, "tipo": tipo_disturbio, "valor": valor, **defaults_comunes,
                     }),
                 }
 
@@ -2261,7 +2575,7 @@ def _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos, captur
     pks_por_modelo = {}
     # Memoiza get_or_create() de esta corrida para el branch "genérico" (ver
     # más abajo): filas repetidas con los mismos valores (p. ej. el mismo
-    # TipoCobertura en muchas filas) no necesitan un round-trip a la BD cada
+    # ClasificacionTipo en muchas filas) no necesitan un round-trip a la BD cada
     # una. No se usa para _MODELOS_EVENTO (cada fila es una medición real
     # distinta a propósito) ni para los modelos con identidad propia (donde
     # "última fila gana" sobre los demás campos y cachear cambiaría ese
@@ -2285,14 +2599,25 @@ def _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos, captur
         # Caso especial: a diferencia del resto de los modelos, una fila de
         # origen puede traer varias columnas de Cobertura (CLC, IPCC, IGBP,
         # Köppen, nombre local, Suelo IPCC), y cada una se vuelve una fila de
-        # Cobertura DISTINTA -no se fusionan en una sola instancia como el
-        # resto de este loop-, todas ligadas al Sitio de esa misma fila. Se
-        # deja fila por fila (ya memoizado vía cache_objetos, y Cobertura no
-        # suele ser el cuello de botella).
-        if modelo == "Cobertura":
+        # CoberturaManual DISTINTA -no se fusionan en una sola instancia como
+        # el resto de este loop-, todas ligadas a la UnidadMuestreo de esa
+        # misma fila. Se deja fila por fila (ya memoizado vía cache_objetos, y
+        # CoberturaManual no suele ser el cuello de botella).
+        if modelo == "CoberturaManual":
             for fila_idx in range(total_filas):
                 _procesar_fila_cobertura(
-                    df, fila_idx, mapeos, resueltos.get("Sitio", {}).get(fila_idx),
+                    df, fila_idx, mapeos, resueltos.get("UnidadMuestreo", {}).get(fila_idx),
+                    resumen_modelos, pks_por_modelo, detalle, cache_objetos,
+                )
+            continue
+
+        # Mismo caso especial que CoberturaManual: cada fila puede traer más
+        # de un disturbio reportado (una columna por disturbio), y el FK
+        # "disturbio" se resuelve/crea desde texto en vez de mapearse por pk.
+        if modelo == "DisturbioManual":
+            for fila_idx in range(total_filas):
+                _procesar_fila_disturbio(
+                    df, fila_idx, mapeos, resueltos.get("UnidadMuestreo", {}).get(fila_idx),
                     resumen_modelos, pks_por_modelo, detalle, cache_objetos,
                 )
             continue
@@ -2341,9 +2666,6 @@ def _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos, captur
             )
             if kwargs is None:
                 continue
-
-            if modelo == "UnidadMuestreo":
-                kwargs.setdefault("fuente_datos", carga.fuente)
 
             if modelo == "UnidadExperimental":
                 kwargs.setdefault("proyecto", carga.fuente.proyecto)
@@ -3017,42 +3339,113 @@ _VISTAS_DESNORMALIZADAS = {
         "orden": ["fecha", "muestra_id", "n_toma"],
         "cadena": [
             ("UnidadExperimental", ["muestra", "unidad_muestreo", "unidad_experimental"]),
+            ("Proyecto", ["muestra", "unidad_muestreo", "unidad_experimental", "proyecto"]),
             ("Equipo", ["muestra", "analizador"]),
             ("UnidadMuestreo", ["muestra", "unidad_muestreo"]),
+            ("UnidadMuestreoTipo", ["muestra", "unidad_muestreo", "tipo"]),
+            ("Microtopografia", ["muestra", "unidad_muestreo", "microtopografia"]),
             ("SubmuestraGEI", []),
             ("MuestraGEI", ["muestra"]),
             ("UnidadMedida", ["muestra", "unidad_medida"]),
             ("Parcela", ["muestra", "unidad_muestreo", "parcela"]),
             ("Sitio", ["muestra", "unidad_muestreo", "sitio"]),
+            ("SistemaReferencia", ["muestra", "unidad_muestreo", "sitio", "sistema_referencia"]),
+            ("Vereda", ["muestra", "unidad_muestreo", "sitio", "vereda"]),
+            ("Municipio", ["muestra", "unidad_muestreo", "sitio", "vereda", "municipio"]),
+            ("Departamento", ["muestra", "unidad_muestreo", "sitio", "vereda", "municipio", "departamento"]),
+            ("Region", ["muestra", "unidad_muestreo", "sitio", "vereda", "municipio", "departamento", "region"]),
         ],
-        # Parcela y Sitio quedan en la cadena (se necesitan para el
-        # select_related y para el filtro por sitio_id del geoportal — ver
-        # `ruta_sitio` en `_preparar_vista_pks`), pero esta hoja ya no
-        # muestra su detalle: eso vive en la pestaña "Unidad
-        # Muestreo-Experimental". Solo se dejan `UnidadMuestreo.nombre` y
-        # `UnidadExperimental.nombre` al inicio como referencia para cruzar
-        # con esa otra hoja. `código`, `descripción` y `magnitud` de
-        # UnidadMedida se colapsan en `simbolo` ("unidad del flujo");
-        # `Equipo.serial`/`descripción` quedan fuera porque en los datos
-        # reales de IDEAM siempre están vacíos (ver revisar-datos-ideam.md).
+        # `código`, `descripción` y `magnitud` de UnidadMedida se colapsan en
+        # `simbolo` ("unidad del flujo"); `Equipo.serial`/`descripción`
+        # quedan fuera porque en los datos reales de IDEAM siempre están
+        # vacíos (ver revisar-datos-ideam.md). Sitio/UnidadMuestreo/
+        # UnidadExperimental/Parcela sí muestran su detalle acá (desde
+        # 2026-11-06): la hoja aparte "Unidad Muestreo-Experimental" que
+        # tenía este detalle se eliminó el 2026-11-02 sin trasladarlo a
+        # Metadato, dejando esos atributos (altitud, pendiente, topografía,
+        # tipo de unidad de muestreo, forma, tratamiento, etc.) fuera de la
+        # plantilla descargable — ver Historial en
+        # context/tasks/backlog/subida-descarga-formato-metadato-dato-por-metodologia.md.
+        # Todos los alias de esta vista usan snake_case (solo "_", sin
+        # espacios/acentos/mayúsculas salvo siglas como IPCC/CLC/IGBP) —
+        # decisión de equipo, 2026-11-06: la plantilla de Flujos CO2 se lee
+        # en minúscula_con_guion_bajo de punta a punta, tanto si el nombre
+        # sale del `verbose_name` real del campo en Django como si es alias.
         "campos": {
-            "UnidadMuestreo": {"incluir": ["nombre"], "alias": {"nombre": "nombre unidad de muestreo"}},
-            "UnidadExperimental": {"incluir": ["nombre"], "alias": {"nombre": "nombre unidad experimental"}},
-            "UnidadMedida": {"incluir": ["simbolo"]},
+            # compartimento: 0 unidades de muestreo reales lo usan hoy (campo
+            # opcional para cuando una misma parcela se subdivide por
+            # reservorio de carbono) — se excluye de la hoja Metadato por
+            # decisión de equipo (2026-11-09), el campo del modelo no se toca.
+            "UnidadMuestreo": {"excluir": ["compartimento"], "alias": {
+                "nombre": "nombre_unidad_muestreo",
+                "codigo_metadato": "codigo_metadato",
+                "tipo_muestreo": "tipo_muestreo",
+                "diametro_anillo_cm": "diametro_anillo",
+                "area_cm2": "tamano_unidad_muestreo_cm2",
+                "tiene_pozo_nivel_freatico": "pozo_nivel_freatico",
+                "fecha_instalacion": "fecha_instalacion_unidad_muestreo",
+            }},
+            "UnidadExperimental": {"alias": {
+                "nombre": "nombre_unidad_experimental",
+                "tratamiento": "tratamiento",
+                "descripcion": "descripcion_unidad_experimental",
+            }},
+            "UnidadMuestreoTipo": {"incluir": ["nombre"], "alias": {"nombre": "tipo_unidad_muestreo"}},
+            "Microtopografia": {"incluir": ["nombre"], "alias": {"nombre": "microtopografia"}},
+            # Proyecto solo se usa para el join hacia UnidadExperimental.proyecto
+            # (regla de obligatoriedad) — se excluyó nombre_proyecto de la hoja
+            # Metadato por decisión de equipo (2026-11-09).
+            "Proyecto": {"incluir": []},
+            "UnidadMedida": {"incluir": ["simbolo"], "alias": {"simbolo": "unidad_flujo"}},
             "Equipo": {"incluir": ["modelo"]},
+            "MuestraGEI": {"alias": {"chamber_vol": "volumen_camara"}},
             # n_toma: nunca llega poblado desde IDEAM (100% NULL, confirmado
             # en CO2 y CH4) — se queda en el modelo (lo usa el orden interno
             # y la regla de autollenado de horas) pero no aporta nada visible
             # en esta hoja, así que no se muestra.
-            "SubmuestraGEI": {"excluir": ["n_toma"]},
-            "Parcela": {"incluir": []},
-            "Sitio": {"incluir": ["latitud", "longitud"]},
+            "SubmuestraGEI": {"excluir": ["n_toma"], "alias": {
+                "fecha": "fecha_toma",
+                "hora": "hora_toma",
+                "condicion_luz": "condicion_luz",
+                "valor": "valor_flujo",
+            }},
+            "Parcela": {"incluir": ["forma"], "alias": {"forma": "forma_unidad_muestreo"}},
+            # Sitio.nombre excluido de la hoja Metadato por decisión de equipo
+            # (2026-11-09) — la identificación de la fila queda en
+            # codigo_metadato/nombre_unidad_muestreo, no en el nombre del sitio.
+            "Sitio": {"excluir": ["nombre"], "alias": {
+                "tipo_localizacion": "tipo_localizacion",
+                "altitud": "altitud_msnm",
+                "topografia": "topografia",
+                "uso_actual": "uso_actual",
+                "propiedad_tierra": "propiedad_tierra",
+            }},
+            "SistemaReferencia": {"incluir": ["nombre"], "alias": {"nombre": "sistema_referencia"}},
+            # Vereda/Municipio/Departamento/Region: columnas eliminadas de la hoja
+            # Metadato por decisión de equipo (2026-11-09) — quedan en la cadena
+            # solo por si algo más necesita resolver esa relación (join), sin
+            # mostrarse como columna.
+            "Vereda": {"incluir": []},
+            "Municipio": {"incluir": []},
+            "Departamento": {"incluir": []},
+            "Region": {"incluir": []},
         },
-        # Unidad experimental, unidad muestral y coordenadas primero, como
-        # en el resto de hojas de metodología (MOM/COS/Biomasa) — el resto
-        # de columnas de esta hoja (analizador, fecha, hora, condición de
-        # luz, valor del flujo, ...) queda después, en su orden natural.
-        "orden_columnas": _ORDEN_COLUMNAS_METODOLOGIA,
+        # Orden de la hoja Metadato (ver plantilla-metadato-dato-co2-camaras.md):
+        # identificación del sitio/proyecto primero, geografía, localización,
+        # topografía y atributos de la unidad de muestreo/experimental — el
+        # resto de columnas de esta hoja (analizador, fecha, hora, condición
+        # de luz, valor del flujo, ...) queda después, en su orden natural.
+        "orden_columnas": [
+            "UnidadExperimental.nombre", "UnidadMuestreo.nombre", "UnidadMuestreo.codigo_metadato",
+            "Proyecto.nombre",
+            "Region.nombre", "Departamento.nombre", "Municipio.nombre", "Vereda.nombre",
+            "Sitio.nombre", "Sitio.tipo_localizacion",
+            "Sitio.latitud", "Sitio.longitud", "SistemaReferencia.nombre",
+            "Sitio.altitud", "Sitio.pendiente", "Sitio.topografia", "Sitio.uso_actual",
+            "UnidadMuestreo.tipo_muestreo", "UnidadMuestreoTipo.nombre", "UnidadMuestreo.area_cm2",
+            "Parcela.forma", "Microtopografia.nombre", "UnidadMuestreo.diametro_anillo_cm",
+            "UnidadExperimental.tratamiento", "UnidadMuestreo.tiene_pozo_nivel_freatico",
+        ],
     },
     "unidad_muestreo": {
         "modelo_base": "UnidadMuestreo",
@@ -3147,6 +3540,27 @@ _VISTAS_DESNORMALIZADAS = {
         ],
         "campos": _CAMPOS_METODOLOGIA,
         "orden_columnas": _ORDEN_COLUMNAS_METODOLOGIA,
+    },
+    # Base "SubMuestraTorre" (una fila por torre+variable+día), mismo rol que
+    # "submuestra_gei" pero para torres EC — no pasa por UnidadExperimental
+    # (las torres no tienen ese concepto), así que no aparece en la vista por
+    # proyecto (`_preparar_vista_proyecto` corta temprano si no hay
+    # UnidadExperimental en la cadena), solo en la vista por carga.
+    "torre": {
+        "modelo_base": "SubMuestraTorre",
+        "orden": ["muestra__torre_id", "muestra__tipo_variable", "fecha"],
+        "cadena": [
+            ("SubMuestraTorre", []),
+            ("MuestraTorre", ["muestra"]),
+            ("TorreEc", ["muestra", "torre"]),
+            ("UnidadMedida", ["muestra", "unidad_medida"]),
+            ("Sitio", ["muestra", "torre", "sitio"]),
+        ],
+        "campos": {
+            "TorreEc": {"incluir": []},
+            "UnidadMedida": {"incluir": ["simbolo"]},
+            "Sitio": {"incluir": ["latitud", "longitud"]},
+        },
     },
 }
 
@@ -3386,11 +3800,12 @@ def _fila_desde_objeto(obj, cadena, campos_por_modelo=None):
     return fila
 
 
-def _respuesta_datos_vista(request, vista, columnas, qs, advertencia_sin_datos):
+def _respuesta_datos_vista(request, vista, columnas, qs, advertencia_sin_datos, facetas=None):
     if qs is None:
         return JsonResponse({
             "total": 0, "columnas": [], "filas": [], "vistas": list(_VISTAS_DESNORMALIZADAS.keys()),
             "advertencia": advertencia_sin_datos,
+            **({"facetas": facetas} if facetas is not None else {}),
         }, json_dumps_params={"ensure_ascii": False})
 
     try:
@@ -3414,7 +3829,45 @@ def _respuesta_datos_vista(request, vista, columnas, qs, advertencia_sin_datos):
         "columnas": columnas,
         "filas": filas,
         "vistas": list(_VISTAS_DESNORMALIZADAS.keys()),
+        **({"facetas": facetas} if facetas is not None else {}),
     }, json_dumps_params={"ensure_ascii": False})
+
+
+# Vistas para las que "Datos cargados" muestra, además de las columnas, una
+# fila de pestañas por valor de una columna clave (ej. variable de torre EC)
+# -el front necesita saber qué valores existen DE VERDAD en la carga, no solo
+# el catálogo completo de choices del modelo, porque no todas las cargas
+# traen todas las variables-.
+_FACETAS_VISTA = {
+    "torre": "MuestraTorre.tipo_variable",
+}
+
+
+def _facetas_vista_carga(carga, vista, nombre_vista):
+    """Valores distintos presentes en esta carga para la columna de faceta
+    de la vista (ver `_FACETAS_VISTA`), ignorando cualquier filtro de texto
+    ya aplicado sobre esa misma columna -así la fila de pestañas no se
+    reduce a una sola opción apenas el usuario elige una-."""
+    clave_faceta = _FACETAS_VISTA.get(nombre_vista)
+    if clave_faceta is None:
+        return None
+
+    pks = (carga.pks_importados or {}).get(vista["modelo_base"], [])
+    if not pks:
+        return []
+
+    _columnas, ruta_orm_por_clave, _ruta_sitio, _ruta_ue = _metadatos_vista(vista)
+    ruta_orm = ruta_orm_por_clave.get(clave_faceta)
+    if ruta_orm is None:
+        return []
+
+    # No se usa .distinct() en el queryset: el ordering por default del
+    # modelo mete una columna extra al SELECT DISTINCT y lo vuelve inútil
+    # (cada fila queda "distinta" por esa columna aunque el valor que nos
+    # interesa se repita) -se deduplica en Python en su lugar-.
+    ModeloBase = apps.get_model("app", vista["modelo_base"])
+    valores = ModeloBase.objects.filter(pk__in=pks).values_list("__".join(ruta_orm), flat=True)
+    return sorted({v for v in valores if v})
 
 
 def datos_carga(request, fuente_id, carga_id):
@@ -3431,6 +3884,7 @@ def datos_carga(request, fuente_id, carga_id):
     return _respuesta_datos_vista(
         request, vista, columnas, qs,
         f"Esta carga todavía no tiene {vista['modelo_base']} importado.",
+        facetas=_facetas_vista_carga(carga, vista, nombre_vista),
     )
 
 
@@ -3469,6 +3923,7 @@ _HOJAS_EXPORT = [
     {"nombre_vista": "mom", "gas": None, "hoja": "MOM"},
     {"nombre_vista": "cos", "gas": None, "hoja": "COS"},
     {"nombre_vista": "biomasa", "gas": None, "hoja": "Biomasa"},
+    {"nombre_vista": "torre", "gas": None, "hoja": "Torre EC"},
 ]
 
 _TIPOS_DATO_LEGIBLES = {
@@ -3484,6 +3939,40 @@ _TIPOS_DATO_LEGIBLES = {
 
 def _tipo_dato_legible(field):
     return _TIPOS_DATO_LEGIBLES.get(field.get_internal_type(), field.get_internal_type())
+
+
+# Suponemos la suite de clasificación de cobertura a partir del sufijo de
+# `clave` (ver `_COLUMNAS_PIVOTE_METADATO_GEI`): la mayoría coincide con el
+# `nombre` real del ClasificacionTipo, salvo estos tres casos.
+_SUFIJO_TIPO_COBERTURA = {
+    "nombre_comun": "Coloquial",
+    "veg_pri": "Vegetacion_funcional",
+    "veg_sec": "Vegetacion_funcional",
+    "veg_ter": "Vegetacion_funcional",
+}
+
+
+def _valores_permitidos_catalogo(clave, modelo_nombre, campo_nombre):
+    """Para las columnas de cobertura/ecosistema/disturbio el campo real
+    (`ValorClasificacionTipo.valor`, `ValorClasificacionEcosistema.valor`)
+    es texto libre, así que no tiene `choices` de Django — pero como ya
+    sabemos a qué catálogo corresponde cada columna (por su `clave`, ver
+    `_COLUMNAS_PIVOTE_METADATO_GEI`), podemos listar los valores ya cargados
+    en ese catálogo igual, para orientar a quien llena la plantilla. Devuelve
+    (valores, sistema): `sistema` es el nombre del sistema de clasificación
+    del que salen esos valores (ej. "IPCC", "IDEAM", "Disturbio"); se usa
+    para completar la columna "Descripción" cuando el campo real no trae
+    `help_text` propio."""
+    if modelo_nombre == "ValorClasificacionEcosistema" and campo_nombre == "valor":
+        return sorted(
+            ValorClasificacionEcosistema.objects.filter(tipo__nombre="IDEAM").values_list("valor", flat=True)
+        ), "IDEAM"
+    if modelo_nombre == "ValorClasificacionTipo" and campo_nombre == "valor":
+        sufijo = clave.split("__", 1)[1] if "__" in clave else None
+        nombre_tipo = _SUFIJO_TIPO_COBERTURA.get(sufijo, sufijo)
+        qs = ValorClasificacionTipo.objects.filter(tipo__nombre=nombre_tipo) if nombre_tipo else ValorClasificacionTipo.objects.all()
+        return sorted(qs.values_list("valor", flat=True)), nombre_tipo
+    return None, None
 
 
 def _dataframe_diccionario_datos(hojas):
@@ -3518,12 +4007,20 @@ def _dataframe_diccionario_datos(hojas):
             modelo_cls = apps.get_model("app", modelo_nombre)
             f = modelo_cls._meta.get_field(campo_nombre)
             valores_permitidos = ", ".join(str(label) for _valor, label in f.choices) if getattr(f, "choices", None) else ""
+            sistema_clasificacion = None
+            if not valores_permitidos:
+                catalogo, sistema_clasificacion = _valores_permitidos_catalogo(columna["clave"], modelo_nombre, campo_nombre)
+                if catalogo:
+                    valores_permitidos = ", ".join(catalogo)
+            descripcion = str(f.help_text) if f.help_text else (
+                f"Sistema de clasificación: {sistema_clasificacion}." if sistema_clasificacion else ""
+            )
             filas.append({
                 "": "",
                 "Pestaña": nombre_hoja,
                 "Campo": columna["verbose_name"] or columna["campo"],
                 "Tipo de dato": _tipo_dato_legible(f),
-                "Descripción": str(f.help_text) if f.help_text else "",
+                "Descripción": descripcion,
                 "Entidad.atributo (Modelo de Datos COLFLUX)": f"{modelo_nombre}.{campo_nombre}",
                 "Valores permitidos (si aplica)": valores_permitidos,
             })
@@ -3671,25 +4168,286 @@ def exportar_proyecto(request, proyecto_id):
     return response
 
 
-# Hojas de la plantilla de reporte: "Unidad Muestreo-Experimental" da el
-# contexto (dónde/qué unidad) que necesitan todas las demás, y luego una hoja
-# por metodología que hoy se puede cargar fila por fila vía ETL (Flujos vive
-# como dos hojas, CO2 y CH4, porque `importar_carga` necesita el gas
-# resuelto por hoja -ver SECCIONES_ETL/_HOJAS_EXPORT arriba-, no porque el
-# diccionario de atributos cambie entre una y otra). Clima/Suelo-protocolo
-# quedan fuera a propósito: no fueron pedidas y Suelo-protocolo ni siquiera
-# es cargable por ETL hoy (ver _GRUPOS_EXCLUIDOS_TEMPORAL).
+# Hojas de la plantilla de reporte: una hoja por metodología que hoy se
+# puede cargar fila por fila vía ETL.
+#
+# Alcance acotado a propósito (decisión de equipo, 2026-11-02): por ahora la
+# plantilla descargable solo cubre Flujos CO2 (ni CH4 ni MOM/COS/Biomasa),
+# que es la metodología/gas que ya se validó end-to-end con el equipo de
+# datos. Para agregar CH4 o las demás metodologías, sumar sus entradas acá.
+#
+# No hay hoja aparte de "Unidad Muestreo-Experimental": el contexto de dónde
+# y qué unidad (identificador, sitio) es información de cómo se midió, así
+# que vive dentro de la hoja Metadato, no en una hoja propia (decisión de
+# equipo, 2026-11-02).
+#
+# Flujos CO2 además separa metadato (contexto fijo de la unidad de muestreo:
+# unidad experimental/muestreo, sitio, geografía, topografía) de dato (todo lo
+# propio de MuestraGEI/SubmuestraGEI: tubo, gas, volumen de cámara,
+# analizador, unidad de medida, y lo medido por toma — fecha, hora, momento,
+# condición de luz, valor) — decisión de equipo, criterio "dueño del modelo"
+# (2026-11-09, revierte el criterio anterior "varía por toma vs. fijo por
+# instalación" usado hasta esa fecha), ver
+# docs/arquitectura/plantilla-metadato-dato-co2-camaras.md en el repo
+# `context`.
 _HOJAS_PLANTILLA = [
-    {"nombre_vista": "unidad_muestreo", "hoja": "Unidad Muestreo-Experimental"},
-    {"nombre_vista": "submuestra_gei", "hoja": "Flujos - CO2"},
-    {"nombre_vista": "submuestra_gei", "hoja": "Flujos - CH4"},
-    {"nombre_vista": "mom", "hoja": "MOM"},
-    {"nombre_vista": "cos", "hoja": "COS"},
-    {"nombre_vista": "biomasa", "hoja": "Biomasa"},
+    {"nombre_vista": "submuestra_gei", "hoja": "Flujos CO2 - Metadato", "seccion": "metadato"},
+    {"nombre_vista": "submuestra_gei", "hoja": "Flujos CO2 - Dato", "seccion": "dato"},
+]
+
+# Modelos cuyas columnas describen cómo se midió (van en la hoja Metadato) en
+# vez de qué se midió (hoja Dato), para la vista "submuestra_gei".
+# MuestraGEI/SubmuestraGEI (y lo que cuelga de MuestraGEI por FK: Equipo,
+# UnidadMedida) van enteros a Dato — Metadato queda a nivel de unidad de
+# muestreo, sin distinguir tubo/gas/serie. `UnidadMuestreo.nombre` se repite
+# en Dato (`_LLAVE_REFERENCIA_GEI`) como referencia para cruzar cada fila de
+# dato con su fila de metadato.
+_MODELOS_METADATO_GEI = {
+    "UnidadExperimental", "UnidadMuestreo", "Sitio",
+    "Proyecto", "UnidadMuestreoTipo", "Microtopografia", "Parcela",
+    "SistemaReferencia", "Vereda", "Municipio", "Departamento", "Region",
+}
+_LLAVE_REFERENCIA_GEI = {"UnidadMuestreo.codigo_metadato"}
+
+# Columnas de cobertura/disturbio/ecosistema/exposición externa (modelos
+# implementados el 2026-11-03, ver context/docs/arquitectura/modelo-*.md):
+# cuelgan por FK inversa desde UnidadMuestreo, así que no las puede traer la
+# cadena de FKs hacia adelante que usa `_VISTAS_DESNORMALIZADAS` (ver
+# `_campos_planos`). Van acá como columnas fijas solo para que la plantilla
+# DESCARGABLE (plantilla_vacia) ya traiga todos los encabezados reales —
+# la lógica de pivoteo para que `exportar_carga`/`datos_carga` also
+# completen estas columnas con datos reales sigue pendiente (una fila de
+# UnidadMuestreo puede tener N filas de cada una de estas entidades, no se
+# puede aplanar 1:1 como el resto de columnas).
+# ClasificacionTipo(categoria="Uso Suelo", nombre="Uso_actual_colflux")
+# existe en el catálogo pero NO se agrega acá como columna — tiene
+# exactamente los mismos 12 valores que Sitio.USO_ACTUAL_CHOICES (columna
+# "uso_actual" más abajo), es el mismo vocabulario duplicado en dos lugares
+# del modelo. Decisión de equipo (2026-11-09): no agregar una columna
+# "uso_actual_IPCC" redundante; el catálogo queda sin usar por ahora, candidato
+# a limpieza futura.
+_COLUMNAS_PIVOTE_METADATO_GEI = [
+    {"clave": "ValorClasificacionEcosistema.valor", "modelo": "ValorClasificacionEcosistema", "campo": "valor", "verbose_name": "ecosistema_IDEAM"},
+    {"clave": "ValorClasificacionTipo.valor__IPCC", "modelo": "ValorClasificacionTipo", "campo": "valor", "verbose_name": "cobertura_IPCC"},
+    {"clave": "ValorClasificacionTipo.valor__CLC", "modelo": "ValorClasificacionTipo", "campo": "valor", "verbose_name": "cobertura_CLC"},
+    {"clave": "ValorClasificacionTipo.valor__IGBP", "modelo": "ValorClasificacionTipo", "campo": "valor", "verbose_name": "cobertura_IGBP"},
+    {"clave": "ValorClasificacionTipo.valor__nombre_comun", "modelo": "ValorClasificacionTipo", "campo": "valor", "verbose_name": "cobertura_Nombre_Local"},
+    {"clave": "ValorClasificacionTipo.valor__Suelo_IPCC", "modelo": "ValorClasificacionTipo", "campo": "valor", "verbose_name": "uso_suelo_IPCC"},
+    {"clave": "ValorClasificacionTipo.valor__Disturbio", "modelo": "ValorClasificacionTipo", "campo": "valor", "verbose_name": "tipo_disturbio"},
+    {"clave": "DisturbioManual.anios_disturbio", "modelo": "DisturbioManual", "campo": "anios_disturbio", "verbose_name": "anios_disturbio"},
+    {"clave": "DisturbioManual.anios_desde_fin", "modelo": "DisturbioManual", "campo": "anios_desde_fin", "verbose_name": "anios_desde_fin_disturbio"},
+    {"clave": "EcosistemaManual.estado_conservacion", "modelo": "EcosistemaManual", "campo": "estado_conservacion", "verbose_name": "estado_conservacion"},
+    {"clave": "EcosistemaManual.proteccion_legal", "modelo": "EcosistemaManual", "campo": "proteccion_legal", "verbose_name": "proteccion_legal"},
+    {"clave": "DisturbioManual.es_dominante", "modelo": "DisturbioManual", "campo": "es_dominante", "verbose_name": "disturbio_dominante"},
+    {"clave": "ValorClasificacionTipo.valor__veg_pri", "modelo": "ValorClasificacionTipo", "campo": "valor", "verbose_name": "cobertura_vegetal_primaria"},
+    {"clave": "CoberturaManual.porcentaje__pri", "modelo": "CoberturaManual", "campo": "porcentaje", "verbose_name": "porc_cobertura_vegetal_primaria"},
+    {"clave": "ValorClasificacionTipo.valor__veg_sec", "modelo": "ValorClasificacionTipo", "campo": "valor", "verbose_name": "cobertura_vegetal_secundaria"},
+    {"clave": "CoberturaManual.porcentaje__sec", "modelo": "CoberturaManual", "campo": "porcentaje", "verbose_name": "porc_cobertura_vegetal_secundaria"},
+    {"clave": "ValorClasificacionTipo.valor__veg_ter", "modelo": "ValorClasificacionTipo", "campo": "valor", "verbose_name": "cobertura_vegetal_terciaria"},
+    {"clave": "CoberturaManual.porcentaje__ter", "modelo": "CoberturaManual", "campo": "porcentaje", "verbose_name": "porc_cobertura_vegetal_terciaria"},
+    {"clave": "ExposicionExterna.distancia_m__drenaje", "modelo": "ExposicionExterna", "campo": "distancia_m", "verbose_name": "distancia_drenaje"},
+    {"clave": "ExposicionExterna.distancia_m__fuego", "modelo": "ExposicionExterna", "campo": "distancia_m", "verbose_name": "distancia_fuego"},
+    {"clave": "ExposicionExterna.distancia_m__pastoreo", "modelo": "ExposicionExterna", "campo": "distancia_m", "verbose_name": "distancia_pastoreo"},
+    {"clave": "ExposicionExterna.distancia_m__cultivo", "modelo": "ExposicionExterna", "campo": "distancia_m", "verbose_name": "distancia_cultivo"},
+]
+
+# Columnas de clima (MuestraAmbiental) agregadas como atributos opcionales de la
+# hoja "Flujos CO2 - Dato" (2026-11-09, ver
+# context/tasks/backlog/plantilla-flujos-co2-clima-misma-hoja.md): solo encabezados
+# por ahora — MuestraAmbiental tiene su propia FK a UnidadMuestreo (paralela a
+# MuestraGEI, no cuelga de SubmuestraGEI), así que no la trae la cadena de FKs hacia
+# adelante que usa `_VISTAS_DESNORMALIZADAS["submuestra_gei"]`. Van acá fijas, mismo
+# patrón que `_COLUMNAS_PIVOTE_METADATO_GEI`. La lógica para que
+# `importar_carga`/`exportar_carga` creen/completen el `MuestraAmbiental` enlazado
+# (misma unidad_muestreo/fecha/hora de la fila) queda pendiente — por ahora la carga
+# de clima sigue siendo independiente, estas columnas solo reservan el lugar en la
+# plantilla para cuando una fuente las traiga junto con el flujo.
+#
+# `anillo` (2026-11-09): mismo caso que las columnas de clima —
+# `UnidadMuestreo.diametro_anillo_cm` es un atributo fijo de la unidad de muestreo (va
+# en la hoja Metadato con el alias "diametro_anillo"), pero el equipo de datos también
+# lo quiere repetido en la hoja Dato con el nombre de columna del archivo fuente real
+# (`anillo`), para no tener que cruzar con Metadato al leer un archivo de cámaras. Se
+# lista acá en vez de en la cadena normal porque ya existe ahí con otro alias/sección —
+# no es necesario traerlo de nuevo por FK, solo exponerlo con distinto verbose_name en
+# esta hoja. `microtopo` se agregó también acá el 2026-11-09 pero se sacó el mismo día
+# a pedido del equipo — queda solo en Metadato (`Microtopografia.nombre`).
+_COLUMNAS_PIVOTE_DATO_GEI = [
+    {"clave": "UnidadMuestreo.diametro_anillo_cm", "modelo": "UnidadMuestreo", "campo": "diametro_anillo_cm", "verbose_name": "anillo"},
+    {"clave": "MuestraAmbiental.soil_temp", "modelo": "MuestraAmbiental", "campo": "soil_temp", "verbose_name": "soil_temp"},
+    {"clave": "MuestraAmbiental.air_temp", "modelo": "MuestraAmbiental", "campo": "air_temp", "verbose_name": "air_temp"},
+    {"clave": "MuestraAmbiental.atm_press", "modelo": "MuestraAmbiental", "campo": "atm_press", "verbose_name": "atm_press"},
+    {"clave": "MuestraAmbiental.relat_humid", "modelo": "MuestraAmbiental", "campo": "relat_humid", "verbose_name": "relat_humid"},
+    {"clave": "MuestraAmbiental.dew_point", "modelo": "MuestraAmbiental", "campo": "dew_point", "verbose_name": "dew_point"},
+    {"clave": "MuestraAmbiental.water_level", "modelo": "MuestraAmbiental", "campo": "water_level", "verbose_name": "water_level_cm"},
+    {"clave": "MuestraAmbiental.ph", "modelo": "MuestraAmbiental", "campo": "ph", "verbose_name": "pH"},
+]
+
+# Orden completo de la hoja "Flujos CO2 - Dato" en la plantilla descargable, según
+# el listado de 20 atributos acordado con el equipo de datos (2026-11-09) —
+# reemplaza `nombre_unidad_muestreo` por `codigo_metadato` como columna de
+# referencia hacia Metadato (ver `_LLAVE_REFERENCIA_GEI`).
+_ORDEN_COLUMNAS_DATO_GEI_PLANTILLA = [
+    "UnidadMuestreo.codigo_metadato",
+    "Equipo.modelo",
+    "MuestraGEI.gas",
+    "MuestraGEI.chamber_vol",
+    "UnidadMuestreo.diametro_anillo_cm",
+    "MuestraGEI.tubo",
+    "SubmuestraGEI.fecha",
+    "SubmuestraGEI.hora",
+    "SubmuestraGEI.momento",
+    "SubmuestraGEI.condicion_luz",
+    "SubmuestraGEI.valor",
+    "UnidadMedida.simbolo",
+    "MuestraAmbiental.soil_temp",
+    "MuestraAmbiental.air_temp",
+    "MuestraAmbiental.atm_press",
+    "MuestraAmbiental.relat_humid",
+    "MuestraAmbiental.dew_point",
+    "MuestraAmbiental.water_level",
+    "MuestraAmbiental.ph",
+]
+
+# Orden completo de la hoja "Flujos CO2 - Metadato" en la plantilla
+# descargable: combina las columnas reales (ver `orden_columnas` de la vista
+# "submuestra_gei") con las columnas de pivoteo de arriba, en el orden del
+# listado de 44 atributos acordado con el equipo de datos (2026-11-09).
+_ORDEN_COLUMNAS_METADATO_GEI_PLANTILLA = [
+    "UnidadMuestreo.codigo_metadato",
+    "UnidadExperimental.nombre", "UnidadExperimental.descripcion",
+    "UnidadMuestreo.nombre",
+    "Sitio.latitud", "Sitio.longitud", "SistemaReferencia.nombre", "Sitio.tipo_localizacion",
+    "Sitio.altitud", "Sitio.pendiente", "Sitio.topografia",
+    "UnidadMuestreo.fecha_instalacion",
+    "UnidadMuestreo.tipo_muestreo", "UnidadMuestreoTipo.nombre", "Parcela.forma", "UnidadMuestreo.area_cm2",
+    "Microtopografia.nombre",
+    "UnidadMuestreo.diametro_anillo_cm", "UnidadMuestreo.tiene_pozo_nivel_freatico",
+    "UnidadExperimental.tratamiento",
+    "Sitio.intervenido", "Sitio.propiedad_tierra", "Sitio.uso_actual",
+    "EcosistemaManual.proteccion_legal",
+    "ValorClasificacionTipo.valor__Disturbio", "DisturbioManual.es_dominante",
+    "DisturbioManual.anios_disturbio", "DisturbioManual.anios_desde_fin",
+    "ValorClasificacionTipo.valor__Suelo_IPCC",
+    "ValorClasificacionEcosistema.valor",
+    "EcosistemaManual.estado_conservacion",
+    "ValorClasificacionTipo.valor__IPCC", "ValorClasificacionTipo.valor__CLC", "ValorClasificacionTipo.valor__IGBP",
+    "ValorClasificacionTipo.valor__nombre_comun",
+    "ValorClasificacionTipo.valor__veg_pri", "CoberturaManual.porcentaje__pri",
+    "ValorClasificacionTipo.valor__veg_sec", "CoberturaManual.porcentaje__sec",
+    "ValorClasificacionTipo.valor__veg_ter", "CoberturaManual.porcentaje__ter",
+    "ExposicionExterna.distancia_m__drenaje", "ExposicionExterna.distancia_m__fuego",
+    "ExposicionExterna.distancia_m__pastoreo", "ExposicionExterna.distancia_m__cultivo",
 ]
 
 
-@requiere_nivel("reportador")
+def _columnas_seccion_gei(columnas, seccion):
+    if seccion == "metadato":
+        return [c for c in columnas if c["modelo"] in _MODELOS_METADATO_GEI]
+    return [c for c in columnas if c["modelo"] not in _MODELOS_METADATO_GEI or c["clave"] in _LLAVE_REFERENCIA_GEI]
+
+
+def _hojas_plantilla_vacia():
+    """Arma la lista `[(nombre_hoja, df, columnas), ...]` de la plantilla
+    descargable (una hoja por metodología, solo encabezados), reutilizada
+    tanto por `plantilla_vacia` (descarga el .xlsx) como por
+    `plantilla_detalle` (devuelve el mismo contenido como JSON para mostrarlo
+    en pantalla sin descargar nada)."""
+    hojas = []
+    for hoja_def in _HOJAS_PLANTILLA:
+        vista = _VISTAS_DESNORMALIZADAS[hoja_def["nombre_vista"]]
+        columnas = _columnas_de_vista(vista)
+        if hoja_def.get("seccion"):
+            columnas = _columnas_seccion_gei(columnas, hoja_def["seccion"])
+        if hoja_def.get("seccion") == "metadato":
+            columnas = _reordenar_columnas(
+                columnas + _COLUMNAS_PIVOTE_METADATO_GEI, _ORDEN_COLUMNAS_METADATO_GEI_PLANTILLA
+            )
+        if hoja_def.get("seccion") == "dato":
+            columnas = _reordenar_columnas(
+                columnas + _COLUMNAS_PIVOTE_DATO_GEI, _ORDEN_COLUMNAS_DATO_GEI_PLANTILLA
+            )
+        encabezados = [c["verbose_name"] or c["campo"] for c in columnas]
+        df = pd.DataFrame(columns=encabezados)
+        hojas.append((hoja_def["hoja"][:31], df, columnas))
+    return hojas
+
+
+def _sugerir_mapeos_automaticos(carga):
+    """Para cada hoja del archivo subido cuyo nombre coincide EXACTO con una
+    hoja de `_HOJAS_PLANTILLA`, intenta armar el mapeo 1:1 completo
+    comparando los encabezados del archivo contra los de
+    `_hojas_plantilla_vacia()` (misma función que arma la plantilla
+    descargable) -así un archivo que ya sale de esa descarga, sin tocar los
+    encabezados, se puede mapear sin pasar por el asistente manual-.
+
+    Una columna de destino "ambigua" (mismo modelo+campo repetido con
+    distinto `verbose_name`, ej. `ValorClasificacionTipo.valor` para
+    cobertura_IPCC/CLC/IGBP/...) necesita un dato extra (`tipo_cobertura`)
+    que no se puede inferir solo del nombre de columna -esas hojas quedan
+    con `ok: False` y el usuario sigue con el asistente manual-.
+
+    Las hojas del archivo que no matchean ningún nombre de `_HOJAS_PLANTILLA`
+    se omiten del resultado -no es un error, el usuario puede no haber
+    subido todas las metodologías en este archivo-.
+    """
+    hojas_plantilla_def = {h["hoja"]: h for h in _HOJAS_PLANTILLA}
+    columnas_por_hoja_plantilla = {nombre: columnas for nombre, _df, columnas in _hojas_plantilla_vacia()}
+
+    resultado = {}
+    for hoja_archivo, info in (carga.hojas or {}).items():
+        if hoja_archivo not in hojas_plantilla_def:
+            continue
+        columnas_plantilla = columnas_por_hoja_plantilla.get(hoja_archivo, [])
+
+        conteo_modelo_campo = defaultdict(int)
+        por_verbose_name = {}
+        for c in columnas_plantilla:
+            conteo_modelo_campo[(c["modelo"], c["campo"])] += 1
+            por_verbose_name.setdefault((c["verbose_name"] or c["campo"]).strip(), c)
+
+        mapeos = []
+        sin_match = []
+        ambiguas = []
+        for col_raw in info.get("columnas_raw", []):
+            nombre = str(col_raw.get("nombre") or "").strip()
+            columna = por_verbose_name.get(nombre)
+            if columna is None:
+                sin_match.append(nombre)
+                continue
+            if conteo_modelo_campo[(columna["modelo"], columna["campo"])] > 1:
+                ambiguas.append(nombre)
+                continue
+            mapeos.append({
+                "columna_origen": nombre,
+                "modelo_destino": columna["modelo"],
+                "campo_destino": columna["campo"],
+                "transformacion": "directo",
+            })
+
+        if sin_match or ambiguas:
+            resultado[hoja_archivo] = {"ok": False, "columnas_sin_match": sin_match, "columnas_ambiguas": ambiguas}
+        else:
+            resultado[hoja_archivo] = {"ok": True, "mapeos": mapeos}
+    return resultado
+
+
+def mapeo_automatico(request, fuente_id, carga_id):
+    """Sugerencia de mapeo 1:1 por hoja para una carga cuyo archivo ya trae
+    los encabezados exactos de la plantilla descargable -ver
+    `_sugerir_mapeos_automaticos`-. Solo lectura: el frontend decide si
+    aplicarla posteando cada hoja `ok` al endpoint de mapeo normal
+    (`mapeo_carga`) y disparando la importación."""
+    try:
+        carga = CargaArchivo.objects.get(pk=carga_id, fuente_id=fuente_id)
+    except CargaArchivo.DoesNotExist:
+        return JsonResponse({"error": "Carga no encontrada"}, status=404)
+    if request.method != "GET":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+
+    return JsonResponse({"hojas": _sugerir_mapeos_automaticos(carga)}, json_dumps_params={"ensure_ascii": False})
+
+
 def plantilla_vacia(request):
     """Plantilla de Excel para reportar datos: una hoja por metodología
     (Unidad Muestreo-Experimental, Flujos CO2/CH4, MOM, COS, Biomasa) con
@@ -3700,13 +4458,7 @@ def plantilla_vacia(request):
     queda sincronizada con el modelo de datos real sin mantenimiento aparte:
     si un campo se agrega/renombra/cambia de tipo en Django, la próxima
     descarga ya sale actualizada."""
-    hojas = []
-    for hoja_def in _HOJAS_PLANTILLA:
-        vista = _VISTAS_DESNORMALIZADAS[hoja_def["nombre_vista"]]
-        columnas = _columnas_de_vista(vista)
-        encabezados = [c["verbose_name"] or c["campo"] for c in columnas]
-        df = pd.DataFrame(columns=encabezados)
-        hojas.append((hoja_def["hoja"][:31], df, columnas))
+    hojas = _hojas_plantilla_vacia()
 
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
@@ -3722,3 +4474,33 @@ def plantilla_vacia(request):
     )
     response["Content-Disposition"] = 'attachment; filename="plantilla_colflux.xlsx"'
     return response
+
+
+def plantilla_detalle(request):
+    """Mismo contenido que la hoja "Diccionario de datos" de `plantilla_vacia`
+    (una fila por columna real de cada hoja de la plantilla, con su
+    descripción y el modelo/campo de donde sale), pero como JSON agrupado por
+    hoja, para mostrarlo en una vista de detalle sin tener que descargar el
+    Excel. Reutiliza `_hojas_plantilla_vacia`/`_dataframe_diccionario_datos`,
+    así que queda sincronizado con la plantilla descargable sin mantenimiento
+    aparte."""
+    hojas = _hojas_plantilla_vacia()
+    df, colores = _dataframe_diccionario_datos(hojas)
+
+    resultado = []
+    for nombre_hoja, _df, _columnas in hojas:
+        filas_hoja = df[df["Pestaña"] == nombre_hoja]
+        atributos = [
+            {
+                "campo": fila["Campo"],
+                "tipoDato": fila["Tipo de dato"],
+                "descripcion": fila["Descripción"],
+                "entidadAtributo": fila["Entidad.atributo (Modelo de Datos COLFLUX)"],
+                "valoresPermitidos": fila["Valores permitidos (si aplica)"],
+                "color": colores[idx],
+            }
+            for idx, fila in zip(filas_hoja.index, filas_hoja.to_dict("records"))
+        ]
+        resultado.append({"hoja": nombre_hoja, "atributos": atributos})
+
+    return JsonResponse({"hojas": resultado})

@@ -1,7 +1,8 @@
 from rest_framework import serializers
 
+from app.api.institucion.serializers import InstitucionSerializer
 from app.api.proyecto.serializers import ProyectoResumenSerializer
-from app.models import FuenteDatos, Proyecto, Usuario
+from app.models import FuenteDatos, Institucion, Proyecto, Usuario
 
 
 class FuenteDatosSerializer(serializers.ModelSerializer):
@@ -9,6 +10,14 @@ class FuenteDatosSerializer(serializers.ModelSerializer):
     proyecto_id = serializers.PrimaryKeyRelatedField(
         queryset=Proyecto.objects.all(),
         source="proyecto",
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
+    institucion = InstitucionSerializer(read_only=True)
+    institucion_id = serializers.PrimaryKeyRelatedField(
+        queryset=Institucion.objects.all(),
+        source="institucion",
         write_only=True,
         required=False,
         allow_null=True,
@@ -22,6 +31,7 @@ class FuenteDatosSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
+    metodologia_label = serializers.CharField(source="get_metodologia_display", read_only=True)
     tipo_label = serializers.CharField(source="get_tipo_display", read_only=True)
     estado_label = serializers.CharField(source="get_estado_display", read_only=True)
     fecha_datos = serializers.DateField(source="fecha_recepcion", read_only=True)
@@ -34,6 +44,8 @@ class FuenteDatosSerializer(serializers.ModelSerializer):
             "id",
             "nombre",
             "descripcion",
+            "metodologia",
+            "metodologia_label",
             "tipo",
             "tipo_label",
             "url",
@@ -44,6 +56,8 @@ class FuenteDatosSerializer(serializers.ModelSerializer):
             "responsable_id_write",
             "proyecto",
             "proyecto_id",
+            "institucion",
+            "institucion_id",
             "sitio",
             "fecha_datos",
             "notas",

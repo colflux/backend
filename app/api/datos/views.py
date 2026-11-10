@@ -22,6 +22,14 @@ class FuenteDatosViewSet(DataPortalModelViewSet):
             qs = qs.filter(proyecto_id=proyecto_id)
         return qs
 
+    def perform_create(self, serializer):
+        # El responsable ya no se elige a mano en el formulario: es quien
+        # está autenticado (decisión de equipo, 2026-11-02). La entidad sí
+        # se puede elegir, pero si no se manda queda la del usuario.
+        usuario = getattr(self.request.user, "usuario", None)
+        institucion = serializer.validated_data.get("institucion") or getattr(usuario, "institucion", None)
+        serializer.save(reportador=usuario, institucion=institucion)
+
     def perform_update(self, serializer):
         if serializer.instance.estado == "completo":
             raise ValidationError("Esta fuente ya tiene datos cargados: no se puede editar.")

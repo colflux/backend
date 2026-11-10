@@ -2,17 +2,24 @@ from .base import TimestampedModel
 
 from .geo import Departamento, Municipio, Region, SistemaReferencia, Vereda
 
-from .cobertura import Cobertura, Disturbio, TipoCobertura, Vegetacion
+from .clasificacion import ClasificacionArea, ClasificacionTipo, ValorClasificacionTipo
+
+from .cobertura import (
+    CoberturaManual, Disturbio, ExposicionExterna, FuenteExterna,
+    DisturbioManual, Vegetacion,
+)
+
+from .ecosistema import EcosistemaManual, TipoClasificacionEcosistema, ValorClasificacionEcosistema
 
 from .sitio import (
-    MonitoreoParcela, Parcela, Sitio, Transecto,
+    MonitoreoParcela, Microtopografia, Parcela, Sitio, Transecto,
     UnidadExperimental, UnidadMuestreo, UnidadMuestreoTipo,
 )
 
 from .proyecto import Institucion, Proyecto, ProyectoInstitucion, ProyectoUsuario
 
 from .torre import (
-    ConfiguracionSensorGas, MuestraTorre, SubmuestraEddy, SubmuestraReddy,
+    ConfiguracionSensorGas, MuestraTorre, SubMuestraTorre,
     TorreEc, TorreFuenteEnergia,
 )
 
@@ -41,11 +48,20 @@ __all__ = [
     "Region",
     "SistemaReferencia",
     "Vereda",
+    # Clasificación genérica (reemplaza catálogos separados de Cobertura/Ecosistema/Disturbio)
+    "ClasificacionTipo",
+    "ValorClasificacionTipo",
+    "ClasificacionArea",
     # Cobertura / Disturbio / Vegetación
-    "Cobertura",
-    "TipoCobertura",
+    "CoberturaManual",
     "Disturbio",
+    "DisturbioManual",
     "Vegetacion",
+    "FuenteExterna",
+    "ExposicionExterna",
+    "TipoClasificacionEcosistema",
+    "ValorClasificacionEcosistema",
+    "EcosistemaManual",
     # Sitio
     "MonitoreoParcela",
     "Parcela",
@@ -54,6 +70,7 @@ __all__ = [
     "UnidadMuestreoTipo",
     "UnidadMuestreo",
     "UnidadExperimental",
+    "Microtopografia",
     # Proyecto
     "Institucion",
     "Proyecto",
@@ -64,8 +81,7 @@ __all__ = [
     "TorreEc",
     "TorreFuenteEnergia",
     "MuestraTorre",
-    "SubmuestraEddy",
-    "SubmuestraReddy",
+    "SubMuestraTorre",
     # Suelo
     "CaracterizacionMuestreoSuelo",
     "MonitoreoSuelo",

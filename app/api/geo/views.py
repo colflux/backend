@@ -6,8 +6,8 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 
 from app.models import (
-    Cobertura, Departamento, Disturbio, Municipio, MuestraBiomasa, Region, Sitio, SubmuestraGEI, SubmuestraSuelo,
-    UnidadMuestreo, Vereda,
+    CoberturaManual, Departamento, EcosistemaManual, Municipio, MuestraBiomasa, Region, Sitio, SubmuestraGEI,
+    SubmuestraSuelo, UnidadMuestreo, Vereda,
 )
 
 # Config por categoría de dato: qué modelo agregar y por qué cadena de FKs
@@ -702,7 +702,7 @@ _DIMENSIONES_CATEGORICAS = (
 )
 
 _CONDICION_LUZ_LABELS = dict(SubmuestraGEI.CONDICION_LUZ_CHOICES)
-_ESTADO_CONSERVACION_LABELS = dict(Disturbio.ESTADO_CONSERVACION_CHOICES)
+_ESTADO_CONSERVACION_LABELS = dict(EcosistemaManual.ESTADO_CONSERVACION_CHOICES)
 
 # Config por dimensión: campo por el que se agrupa. "ecosistema" no es un
 # campo directo -se anota vía Subquery antes de agregar-.
@@ -711,7 +711,7 @@ _CAMPO_ID_POR_DIMENSION = {
     "unidad_experimental": "muestra__unidad_muestreo__unidad_experimental_id",
     "analizador": "muestra__analizador_id",
     "condicion_luz": "condicion_luz",
-    "estado_conservacion": "muestra__unidad_muestreo__sitio__disturbio__estado_conservacion",
+    "estado_conservacion": "muestra__unidad_muestreo__ecosistemas_manuales__estado_conservacion",
     "ecosistema": "ecosistema",
 }
 
@@ -725,12 +725,15 @@ def resumen_categorico(request):
     proyecto, departamento, municipio, vereda, región, sitio). Igual que
     resumen_geografico, agrega en la base de datos (GROUP BY), no en Python.
 
-    "ecosistema" usa la primera Cobertura reportada del sitio (ordenada por
-    tipo de clasificación y nombre, vía Subquery) como aproximación: un
-    sitio puede tener varias filas de Cobertura -una por sistema de
-    clasificación CLC/IPCC/IGBP/etc., o duplicados en conflicto entre
-    fuentes- y no hay un campo de vigencia para elegir "la" cobertura
-    vigente. A validar con el equipo si hace falta un criterio más preciso."""
+    "ecosistema" usa la primera CoberturaManual reportada del sitio (ordenada
+    por tipo de clasificación y valor, vía Subquery) como aproximación: un
+    sitio puede tener varias unidades de muestreo con varias filas de
+    CoberturaManual cada una -una por sistema de clasificación
+    CLC/IPCC/IGBP/etc., o duplicados en conflicto entre fuentes- y no hay un
+    campo de vigencia para elegir "la" cobertura vigente. Pendiente: cuando
+    haya datos reales en EcosistemaManual (ver modelo-ecosistema.md), este
+    cálculo debería repuntar ahí en vez de usar CoberturaManual como proxy.
+    A validar con el equipo si hace falta un criterio más preciso."""
     dimension = request.GET.get("dimension")
     if dimension not in _DIMENSIONES_CATEGORICAS:
         return JsonResponse(
@@ -744,10 +747,10 @@ def resumen_categorico(request):
 
     if dimension == "ecosistema":
         cobertura_sub = (
-            Cobertura.objects
-            .filter(sitio_id=OuterRef("muestra__unidad_muestreo__sitio_id"))
-            .order_by("tipo_id", "nombre")
-            .values("nombre")[:1]
+            CoberturaManual.objects
+            .filter(unidad_muestreo_id=OuterRef("muestra__unidad_muestreo_id"))
+            .order_by("tipo_id", "valor__valor")
+            .values("valor__valor")[:1]
         )
         qs = qs.annotate(ecosistema=Subquery(cobertura_sub))
 

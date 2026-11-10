@@ -8,7 +8,6 @@ class SitioForm(forms.ModelForm):
         model = Sitio
         fields = [
             "nombre",
-            "codigo_metadatos",
             "latitud",
             "longitud",
             "sistema_referencia",

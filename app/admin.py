@@ -1,14 +1,15 @@
 from django.contrib import admin
 
 from .models import (
-    Autor, CaracterizacionMuestreoSuelo, Cobertura,
+    Autor, CaracterizacionMuestreoSuelo, CoberturaManual,
     FuenteDatos, Institucion, RolUsuario, Usuario,
     ConfiguracionSensorGas, Departamento, Disturbio, Equipo,
-    MonitoreoParcela, MonitoreoSuelo, Municipio,
+    MonitoreoParcela, MonitoreoSuelo, Municipio, MuestraTorre,
     Parcela, Proyecto, ProyectoInstitucion, ProyectoUsuario, Publicacion, PublicacionAutor,
-    PublicacionSitio, Region, ResultadoPublicacion, Sitio,
-    SistemaReferencia, TipoCobertura, TorreEc, TorreFuenteEnergia, Transecto,
-    UnidadExperimental, UnidadMuestreo, UnidadMuestreoTipo, Vegetacion,
+    PublicacionSitio, Region, ResultadoPublicacion, Sitio, SubMuestraTorre,
+    SistemaReferencia, TorreEc, TorreFuenteEnergia, Transecto,
+    UnidadExperimental, UnidadMuestreo, DisturbioManual, UnidadMuestreoTipo,
+    Vegetacion,
 )
 
 
@@ -35,23 +36,17 @@ class SistemaReferenciaAdmin(admin.ModelAdmin):
     list_display = ("nombre",)
 
 
-@admin.register(TipoCobertura)
-class TipoCoberturaAdmin(admin.ModelAdmin):
-    list_display = ("nombre", "codigo")
-    search_fields = ("nombre", "codigo")
-
-
-class CoberturaInline(admin.TabularInline):
-    model = Cobertura
+class CoberturaManualInline(admin.TabularInline):
+    model = CoberturaManual
     extra = 0
 
 
-@admin.register(Cobertura)
-class CoberturaAdmin(admin.ModelAdmin):
-    list_display = ("sitio", "tipo", "nombre")
-    list_filter = ("tipo",)
-    search_fields = ("nombre", "sitio__nombre")
-    raw_id_fields = ("sitio",)
+@admin.register(CoberturaManual)
+class CoberturaManualAdmin(admin.ModelAdmin):
+    list_display = ("unidad_muestreo", "tipo", "valor", "porcentaje", "orden_dominancia")
+    list_filter = ("tipo", "orden_dominancia")
+    search_fields = ("unidad_muestreo__nombre",)
+    raw_id_fields = ("unidad_muestreo",)
 
 
 @admin.register(Vegetacion)
@@ -62,17 +57,29 @@ class VegetacionAdmin(admin.ModelAdmin):
 
 @admin.register(Disturbio)
 class DisturbioAdmin(admin.ModelAdmin):
-    list_display = ("tipo", "estado_actual", "fecha_inicio", "fecha_fin")
-    list_filter = ("tipo", "estado_actual")
+    list_display = ("nombre",)
+    search_fields = ("nombre",)
+
+
+class DisturbioManualInline(admin.TabularInline):
+    model = DisturbioManual
+    extra = 0
+
+
+@admin.register(DisturbioManual)
+class DisturbioManualAdmin(admin.ModelAdmin):
+    list_display = ("unidad_muestreo", "valor", "valor_texto", "estado_actual", "es_dominante", "fecha_inicio", "fecha_fin")
+    list_filter = ("valor", "estado_actual", "es_dominante")
+    search_fields = ("unidad_muestreo__nombre",)
+    raw_id_fields = ("unidad_muestreo",)
 
 
 @admin.register(Sitio)
 class SitioAdmin(admin.ModelAdmin):
     list_display = ("nombre", "vereda", "latitud", "longitud", "uso_actual", "intervenido")
     list_filter = ("uso_actual", "propiedad_tierra", "pendiente")
-    search_fields = ("nombre", "codigo_metadatos")
-    raw_id_fields = ("vereda", "disturbio", "vegetacion", "sistema_referencia")
-    inlines = [CoberturaInline]
+    search_fields = ("nombre",)
+    raw_id_fields = ("vereda", "vegetacion", "sistema_referencia")
 
 
 @admin.register(UnidadMuestreoTipo)
@@ -91,10 +98,11 @@ class UnidadExperimentalAdmin(admin.ModelAdmin):
 
 @admin.register(UnidadMuestreo)
 class UnidadMuestreoAdmin(admin.ModelAdmin):
-    list_display = ("nombre", "tipo", "unidad_experimental")
+    list_display = ("nombre", "tipo", "unidad_experimental", "codigo_metadato")
     list_filter = ("tipo",)
-    search_fields = ("nombre",)
+    search_fields = ("nombre", "codigo_metadato")
     raw_id_fields = ("unidad_experimental",)
+    inlines = [CoberturaManualInline, DisturbioManualInline]
 
 
 @admin.register(Parcela)
@@ -167,6 +175,22 @@ class EquipoAdmin(admin.ModelAdmin):
 class ConfiguracionSensorGasAdmin(admin.ModelAdmin):
     list_display = ("torre", "gas", "longitud_tubo", "diametro_tubo")
     list_filter = ("gas",)
+
+
+@admin.register(MuestraTorre)
+class MuestraTorreAdmin(admin.ModelAdmin):
+    list_display = ("torre", "tipo_variable", "fuente_datos", "unidad_medida")
+    list_filter = ("tipo_variable", "torre")
+    raw_id_fields = ("torre", "fuente_datos")
+
+
+@admin.register(SubMuestraTorre)
+class SubMuestraTorreAdmin(admin.ModelAdmin):
+    list_display = ("muestra", "fecha", "valor", "pct_calidad_buena", "n_registros_validos")
+    list_filter = ("muestra__tipo_variable",)
+    search_fields = ("muestra__torre__sitio__nombre",)
+    raw_id_fields = ("muestra",)
+    date_hierarchy = "fecha"
 
 
 @admin.register(CaracterizacionMuestreoSuelo)

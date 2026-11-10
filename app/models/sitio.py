@@ -4,12 +4,11 @@ from django.db import models
 
 from .base import TimestampedModel
 from .geo import SistemaReferencia, Vereda
-from .cobertura import Disturbio, Vegetacion
-from .datos import FuenteDatos
+from .cobertura import Vegetacion
 
 
 class Sitio(TimestampedModel):
-    """Sitio de estudio georreferenciado: ubicación, topografía, uso del suelo, cobertura, vegetación y disturbio asociados."""
+    """Sitio de estudio georreferenciado: ubicación, topografía, uso del suelo, cobertura y vegetación asociados."""
 
     PENDIENTE_CHOICES = [
         ("plano", "Plano"),
@@ -54,10 +53,6 @@ class Sitio(TimestampedModel):
         ("inferida", "Inferida (sin coordenadas ni vereda/municipio de referencia)"),
     ]
 
-    codigo_metadatos = models.CharField(
-        "código de metadatos", max_length=80, blank=True,
-        help_text="Código del sitio en el sistema de metadatos externo, si aplica.",
-    )
     nombre = models.CharField("nombre", max_length=255, help_text="Nombre del sitio de estudio.")
 
     latitud = models.DecimalField(
@@ -105,7 +100,6 @@ class Sitio(TimestampedModel):
     )
 
     vereda = models.ForeignKey(Vereda, on_delete=models.PROTECT, related_name="sitios", null=True, blank=True)
-    disturbio = models.ForeignKey(Disturbio, on_delete=models.SET_NULL, related_name="sitios", null=True, blank=True)
     vegetacion = models.ForeignKey(Vegetacion, on_delete=models.SET_NULL, related_name="sitios", null=True, blank=True)
 
     class Meta:
@@ -123,6 +117,27 @@ class Sitio(TimestampedModel):
         if self.latitud is not None and self.longitud is not None:
             self.geom = Point(float(self.longitud), float(self.latitud), srid=4326)
         super().save(*args, **kwargs)
+
+
+class Microtopografia(TimestampedModel):
+    """Catálogo de microtopografía (relieve a escala centimétrica): Hummock, Hollow, Pool, Lawns, Ditch.
+
+    Reemplaza a MuestraAmbiental.microtopo: es un rasgo del terreno fijo por
+    unidad de muestreo (no cambia de una lectura a otra), no una medición.
+    """
+
+    nombre = models.CharField(
+        "nombre", max_length=30, unique=True,
+        help_text="Rasgo de microtopografía del terreno en la unidad de muestreo (ej. Hummock, Hollow, Pool, Lawns, Ditch).",
+    )
+
+    class Meta:
+        verbose_name = "microtopografía"
+        verbose_name_plural = "microtopografías"
+        ordering = ["nombre"]
+
+    def __str__(self):
+        return self.nombre
 
 
 class UnidadMuestreoTipo(TimestampedModel):
@@ -170,6 +185,10 @@ class UnidadExperimental(TimestampedModel):
         "descripción", blank=True,
         help_text="Notas adicionales sobre la unidad experimental.",
     )
+    tratamiento = models.CharField(
+        "tratamiento", max_length=255, blank=True,
+        help_text="Condición experimental que describe esta unidad (ej. \"con pastoreo\" vs. \"control\"), distinta del nombre/descripción.",
+    )
 
     class Meta:
         verbose_name = "unidad experimental"
@@ -214,11 +233,24 @@ class UnidadMuestreo(TimestampedModel):
     )
     unidad_experimental = models.ForeignKey(
         UnidadExperimental, on_delete=models.CASCADE, related_name="unidades_muestreo",
-        null=True, blank=True, verbose_name="unidad experimental",
+        verbose_name="unidad experimental",
         help_text=(
             "Unidad experimental a la que pertenece. Se resuelve sola con la que se creó o "
-            "seleccionó en el paso anterior para la misma fila del archivo."
+            "seleccionó en el paso anterior para la misma fila del archivo — si la fuente no "
+            "distingue unidad experimental de unidad de muestreo, el importador crea una "
+            "unidad experimental igual, nunca se deja sin asignar (de ahí sale el proyecto: "
+            "`unidad_experimental.proyecto`, siempre obligatorio)."
         ),
+    )
+    # Identifica la muestra en el sistema de metadatos externo de la fuente
+    # (ej. "IDEAM_Humedales_Flujos_PNN Chingaza_calostros_1"). No todas las
+    # fuentes lo traen: si falta, el importador lo construye como
+    # "{unidad_experimental}_{unidad_muestreo}". Es una relación de la
+    # muestra, no del sitio — varias unidades de muestreo pueden compartir
+    # sitio y tener códigos de metadato distintos.
+    codigo_metadato = models.CharField(
+        "código de metadato", max_length=255, blank=True,
+        help_text="Identificador de la unidad de muestreo en el sistema de metadatos externo de la fuente, si lo trae.",
     )
     sitio = models.ForeignKey(
         Sitio, on_delete=models.SET_NULL, related_name="unidades_muestreo",
@@ -227,10 +259,6 @@ class UnidadMuestreo(TimestampedModel):
             "Sitio de ubicación de esta unidad de muestreo. Se vincula solo al guardar la "
             "sección Sitio (por la fila del archivo), no se mapea acá."
         ),
-    )
-    fuente_datos = models.ForeignKey(
-        FuenteDatos, on_delete=models.SET_NULL, related_name="unidades_muestreo",
-        null=True, blank=True, verbose_name="fuente de datos",
     )
     fecha_instalacion = models.DateField(
         "fecha instalación unidad de muestreo", null=True, blank=True,
@@ -244,14 +272,68 @@ class UnidadMuestreo(TimestampedModel):
             "otra para suelo dentro de la misma unidad experimental). Déjalo vacío si no aplica."
         ),
     )
+    TIPO_MUESTREO_CHOICES = [
+        ("Probabilistico", "Probabilístico"),
+        ("No_probabilistico", "No probabilístico"),
+    ]
+    tipo_muestreo = models.CharField(
+        "tipo de muestreo", max_length=20, choices=TIPO_MUESTREO_CHOICES, blank=True,
+        help_text="Si la unidad de muestreo fue seleccionada con un método probabilístico o no.",
+    )
+    # El anillo/collar se instala una sola vez por unidad de muestreo y queda
+    # fijo toda la campaña (no es un atributo de cada MuestraGEI, que solo lo
+    # referencia vía `tubo`). area_cm2 se deriva de diametro_anillo_cm, mismo
+    # patrón que Parcela._calcular_area().
+    diametro_anillo_cm = models.DecimalField(
+        "diámetro del anillo (cm)", max_digits=8, decimal_places=2, null=True, blank=True,
+        help_text="Diámetro del anillo/cámara de muestreo de gases, en centímetros. De acá se deriva area_cm2.",
+    )
+    area_cm2 = models.DecimalField(
+        "área del anillo (cm²)", max_digits=10, decimal_places=2, null=True, blank=True, editable=False,
+        help_text="Área del anillo/cámara de muestreo, calculada automáticamente a partir de diametro_anillo_cm.",
+    )
+    tiene_pozo_nivel_freatico = models.BooleanField(
+        "tiene pozo de nivel freático", default=False,
+        help_text="Si existe infraestructura (pozo/piezómetro) para medir el nivel freático en esta unidad. El valor de la medición en sí vive en MuestraAmbiental.water_level.",
+    )
+    microtopografia = models.ForeignKey(
+        Microtopografia, on_delete=models.PROTECT, related_name="unidades_muestreo",
+        null=True, blank=True, verbose_name="microtopografía",
+    )
 
     class Meta:
         verbose_name = "unidad de muestreo"
         verbose_name_plural = "unidades de muestreo"
         ordering = ["nombre"]
+        # No unique_together a secas: codigo_metadato queda vacío en la
+        # mayoría de las unidades (fuentes que no lo traen), y varias de
+        # esas vacías sí pueden coexistir en la misma unidad experimental.
+        # Se escopa a unidad_experimental (no a proyecto: proyecto ya no es
+        # columna propia, se deriva de unidad_experimental.proyecto) — un
+        # choque de codigo_metadato entre unidades experimentales distintas
+        # del mismo proyecto queda para validar en el importador.
+        constraints = [
+            models.UniqueConstraint(
+                fields=["unidad_experimental", "codigo_metadato"],
+                condition=~models.Q(codigo_metadato=""),
+                name="unidadmuestreo_unidad_experimental_codigo_metadato_unico",
+            ),
+        ]
 
     def __str__(self):
         return self.nombre
+
+    def _calcular_area_cm2(self):
+        if self.diametro_anillo_cm is None:
+            return None
+        from decimal import Decimal
+
+        radio = self.diametro_anillo_cm / 2
+        return (Decimal("3.14159265") * radio * radio).quantize(Decimal("0.01"))
+
+    def save(self, *args, **kwargs):
+        self.area_cm2 = self._calcular_area_cm2()
+        super().save(*args, **kwargs)
 
 
 class Parcela(TimestampedModel):
@@ -276,7 +358,10 @@ class Parcela(TimestampedModel):
         UnidadMuestreo, on_delete=models.CASCADE, related_name="parcela",
         null=True, blank=True, verbose_name="unidad de muestreo",
     )
-    forma = models.CharField("forma", max_length=15, choices=FORMA_CHOICES, blank=True)
+    forma = models.CharField(
+        "forma", max_length=15, choices=FORMA_CHOICES, blank=True,
+        help_text="Forma geométrica de la parcela/unidad de muestreo, usada para calcular su área.",
+    )
     medida_largo = models.DecimalField("medida largo (m)", max_digits=10, decimal_places=2, null=True, blank=True)
     medida_ancho = models.DecimalField("medida ancho (m)", max_digits=10, decimal_places=2, null=True, blank=True)
     distancia = models.DecimalField("distancia / lado (m)", max_digits=10, decimal_places=2, null=True, blank=True)
