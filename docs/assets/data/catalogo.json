@@ -1018,7 +1018,7 @@
             {
               "nombre": "nombre",
               "verbose_name": "nombre",
-              "help_text": "",
+              "help_text": "Sistema de referencia de coordenadas en el que están expresadas latitud/longitud del sitio.",
               "tipo": "Texto",
               "tipo_raw": "CharField",
               "requerido": true,
@@ -1544,7 +1544,7 @@
             {
               "nombre": "diametro_anillo_cm",
               "verbose_name": "diámetro del anillo (cm)",
-              "help_text": "",
+              "help_text": "Diámetro del anillo/cámara de muestreo de gases, en centímetros. De acá se deriva area_cm2.",
               "tipo": "Decimal",
               "tipo_raw": "DecimalField",
               "requerido": false,
@@ -1557,7 +1557,7 @@
             {
               "nombre": "area_cm2",
               "verbose_name": "área del anillo (cm²)",
-              "help_text": "",
+              "help_text": "Área del anillo/cámara de muestreo, calculada automáticamente a partir de diametro_anillo_cm.",
               "tipo": "Decimal",
               "tipo_raw": "DecimalField",
               "requerido": false,
@@ -1692,7 +1692,7 @@
             {
               "nombre": "forma",
               "verbose_name": "forma",
-              "help_text": "",
+              "help_text": "Forma geométrica de la parcela/unidad de muestreo, usada para calcular su área.",
               "tipo": "Texto",
               "tipo_raw": "CharField",
               "requerido": false,
@@ -1879,7 +1879,7 @@
             {
               "nombre": "nombre",
               "verbose_name": "nombre",
-              "help_text": "",
+              "help_text": "Rasgo de microtopografía del terreno en la unidad de muestreo (ej. Hummock, Hollow, Pool, Lawns, Ditch).",
               "tipo": "Texto",
               "tipo_raw": "CharField",
               "requerido": true,
@@ -2103,7 +2103,7 @@
             {
               "nombre": "porcentaje",
               "verbose_name": "% cobertura",
-              "help_text": "",
+              "help_text": "Porcentaje de cobertura que representa este tipo de vegetación dentro de la unidad de muestreo (ver orden_dominancia para distinguir primaria/secundaria/terciaria).",
               "tipo": "Decimal",
               "tipo_raw": "DecimalField",
               "requerido": false,
@@ -2341,11 +2341,11 @@
           ]
         },
         {
-          "nombre": "UnidadMuestreoDisturbio",
+          "nombre": "DisturbioManual",
           "verbose_name": "disturbio de unidad de muestreo",
           "verbose_name_plural": "disturbios de unidad de muestreo",
-          "descripcion": "Disturbio reportado para una unidad de muestreo (fechas, estado del ecosistema, si es el disturbio dominante).",
-          "total_campos": 15,
+          "descripcion": "Disturbio reportado para una unidad de muestreo (fechas, estado del ecosistema, si es el disturbio dominante). Mismo patrón de nombre que CoberturaManual/EcosistemaManual (\"dato digitado\" por el equipo de campo); antes se llamaba UnidadMuestreoDisturbio.",
+          "total_campos": 13,
           "campos": [
             {
               "nombre": "unidad_muestreo",
@@ -2467,7 +2467,7 @@
             {
               "nombre": "anios_disturbio",
               "verbose_name": "años de disturbio",
-              "help_text": "",
+              "help_text": "Cantidad de años que duró o lleva el disturbio.",
               "tipo": "PositiveIntegerField",
               "tipo_raw": "PositiveIntegerField",
               "requerido": false,
@@ -2480,7 +2480,7 @@
             {
               "nombre": "anios_desde_fin",
               "verbose_name": "años desde fin del disturbio",
-              "help_text": "",
+              "help_text": "Cantidad de años transcurridos desde que terminó el disturbio (vacío si sigue activo).",
               "tipo": "PositiveIntegerField",
               "tipo_raw": "PositiveIntegerField",
               "requerido": false,
@@ -2537,56 +2537,9 @@
               "modelo_fk": null
             },
             {
-              "nombre": "estado_conservacion",
-              "verbose_name": "estado de conservación",
-              "help_text": "Estado del ecosistema frente a la presencia de manejo humano (taxonomía del vocabulario IDEAM).",
-              "tipo": "Texto",
-              "tipo_raw": "CharField",
-              "requerido": false,
-              "automatico": false,
-              "max_length": 20,
-              "choices": [
-                {
-                  "valor": "Natural",
-                  "etiqueta": "Natural (sin manejo humano significativo)"
-                },
-                {
-                  "valor": "Seminatural",
-                  "etiqueta": "Seminatural (manejo bajo, regeneración natural dominante)"
-                },
-                {
-                  "valor": "Manejado",
-                  "etiqueta": "Manejado (aprovechamiento, ganadería, agroforestería)"
-                },
-                {
-                  "valor": "Plantacion",
-                  "etiqueta": "Plantación (vegetación establecida y manejada)"
-                },
-                {
-                  "valor": "Artificial_Urbano",
-                  "etiqueta": "Artificial / Urbano (superficie no natural)"
-                }
-              ],
-              "es_fk": false,
-              "modelo_fk": null
-            },
-            {
-              "nombre": "proteccion_legal",
-              "verbose_name": "protección legal",
-              "help_text": "Si el sitio está bajo alguna figura de reserva, parque, santuario, etc.",
-              "tipo": "Texto largo",
-              "tipo_raw": "TextField",
-              "requerido": false,
-              "automatico": false,
-              "max_length": null,
-              "choices": [],
-              "es_fk": false,
-              "modelo_fk": null
-            },
-            {
               "nombre": "es_dominante",
               "verbose_name": "es el disturbio dominante",
-              "help_text": "",
+              "help_text": "Si es el disturbio/manejo principal reportado para la unidad de muestreo, cuando hay varios registrados.",
               "tipo": "Booleano",
               "tipo_raw": "BooleanField",
               "requerido": true,
@@ -2660,7 +2613,7 @@
           "verbose_name": "ecosistema (dato digitado)",
           "verbose_name_plural": "ecosistemas (dato digitado)",
           "descripcion": "Ecosistema/zonificación reportado por el equipo de campo para una unidad de muestreo. Varias filas por unidad (una por sistema de clasificación) — mismo patrón que CoberturaManual. No incluye la capa geométrica oficial (ver docs de arquitectura): todavía no se tiene el shapefile/geopackage del Mapa de Ecosistemas IDEAM/IAvH.",
-          "total_campos": 4,
+          "total_campos": 6,
           "campos": [
             {
               "nombre": "unidad_muestreo",
@@ -2710,6 +2663,53 @@
               "requerido": false,
               "automatico": false,
               "max_length": 120,
+              "choices": [],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "estado_conservacion",
+              "verbose_name": "estado de conservación",
+              "help_text": "Estado del ecosistema frente a la presencia de manejo humano (taxonomía del vocabulario IDEAM).",
+              "tipo": "Texto",
+              "tipo_raw": "CharField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": 20,
+              "choices": [
+                {
+                  "valor": "Natural",
+                  "etiqueta": "Natural (sin manejo humano significativo)"
+                },
+                {
+                  "valor": "Seminatural",
+                  "etiqueta": "Seminatural (manejo bajo, regeneración natural dominante)"
+                },
+                {
+                  "valor": "Manejado",
+                  "etiqueta": "Manejado (aprovechamiento, ganadería, agroforestería)"
+                },
+                {
+                  "valor": "Plantacion",
+                  "etiqueta": "Plantación (vegetación establecida y manejada)"
+                },
+                {
+                  "valor": "Artificial_Urbano",
+                  "etiqueta": "Artificial / Urbano (superficie no natural)"
+                }
+              ],
+              "es_fk": false,
+              "modelo_fk": null
+            },
+            {
+              "nombre": "proteccion_legal",
+              "verbose_name": "protección legal",
+              "help_text": "Si el sitio está bajo alguna figura de reserva, parque, santuario, etc.",
+              "tipo": "Texto largo",
+              "tipo_raw": "TextField",
+              "requerido": false,
+              "automatico": false,
+              "max_length": null,
               "choices": [],
               "es_fk": false,
               "modelo_fk": null
@@ -2774,7 +2774,7 @@
             {
               "nombre": "distancia_m",
               "verbose_name": "distancia (m)",
-              "help_text": "",
+              "help_text": "Distancia en metros desde la unidad de muestreo hasta la fuente externa indicada (ver fuente).",
               "tipo": "Decimal",
               "tipo_raw": "DecimalField",
               "requerido": false,

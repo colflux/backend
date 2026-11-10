@@ -44,7 +44,7 @@ GRUPOS_CATALOGO = [
         "color": "#0f8139",
         "entidades": [
             "ClasificacionTipo", "ValorClasificacionTipo", "ClasificacionArea",
-            "CoberturaManual", "Vegetacion", "Disturbio", "UnidadMuestreoDisturbio",
+            "CoberturaManual", "Vegetacion", "Disturbio", "DisturbioManual",
             "TipoClasificacionEcosistema", "ValorClasificacionEcosistema", "EcosistemaManual",
             "FuenteExterna", "ExposicionExterna",
         ],

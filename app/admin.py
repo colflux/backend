@@ -8,7 +8,7 @@ from .models import (
     Parcela, Proyecto, ProyectoInstitucion, ProyectoUsuario, Publicacion, PublicacionAutor,
     PublicacionSitio, Region, ResultadoPublicacion, Sitio, SubMuestraTorre,
     SistemaReferencia, TorreEc, TorreFuenteEnergia, Transecto,
-    UnidadExperimental, UnidadMuestreo, UnidadMuestreoDisturbio, UnidadMuestreoTipo,
+    UnidadExperimental, UnidadMuestreo, DisturbioManual, UnidadMuestreoTipo,
     Vegetacion,
 )
 
@@ -61,15 +61,15 @@ class DisturbioAdmin(admin.ModelAdmin):
     search_fields = ("nombre",)
 
 
-class UnidadMuestreoDisturbioInline(admin.TabularInline):
-    model = UnidadMuestreoDisturbio
+class DisturbioManualInline(admin.TabularInline):
+    model = DisturbioManual
     extra = 0
 
 
-@admin.register(UnidadMuestreoDisturbio)
-class UnidadMuestreoDisturbioAdmin(admin.ModelAdmin):
+@admin.register(DisturbioManual)
+class DisturbioManualAdmin(admin.ModelAdmin):
     list_display = ("unidad_muestreo", "valor", "valor_texto", "estado_actual", "es_dominante", "fecha_inicio", "fecha_fin")
-    list_filter = ("valor", "estado_actual", "estado_conservacion", "es_dominante")
+    list_filter = ("valor", "estado_actual", "es_dominante")
     search_fields = ("unidad_muestreo__nombre",)
     raw_id_fields = ("unidad_muestreo",)
 
@@ -102,7 +102,7 @@ class UnidadMuestreoAdmin(admin.ModelAdmin):
     list_filter = ("tipo",)
     search_fields = ("nombre", "codigo_metadato")
     raw_id_fields = ("unidad_experimental",)
-    inlines = [CoberturaManualInline, UnidadMuestreoDisturbioInline]
+    inlines = [CoberturaManualInline, DisturbioManualInline]
 
 
 @admin.register(Parcela)

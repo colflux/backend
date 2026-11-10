@@ -24,7 +24,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from app.api.permisos import requiere_nivel
 from app.models import (
-    CargaArchivo, ClasificacionTipo, Disturbio, FuenteDatos, MapeoColumna, MuestraTorre, Proyecto, SubMuestraTorre,
+    CargaArchivo, ClasificacionTipo, FuenteDatos, MapeoColumna, MuestraTorre, Proyecto, SubMuestraTorre,
     TorreEc, ValorClasificacionEcosistema, ValorClasificacionTipo,
 )
 
@@ -147,18 +147,25 @@ for _grupo in GRUPOS_CATALOGO:
         # se resuelve/crea solo a partir del texto de la columna mapeada (ver
         # _procesar_fila_cobertura), no se mapea como su propia entidad.
         # Disturbio tampoco: mismo criterio, se resuelve/crea a partir del
-        # texto de la columna mapeada en UnidadMuestreoDisturbio (ver
+        # texto de la columna mapeada en DisturbioManual (ver
         # _procesar_fila_disturbio). TipoClasificacionEcosistema/
         # ValorClasificacionEcosistema/EcosistemaManual/FuenteExterna/
         # ExposicionExterna se excluyen igual: solo están en este grupo para
         # el color/diccionario del Excel (ver _COLUMNAS_PIVOTE_METADATO_GEI),
         # el wizard todavía no tiene su propio `_procesar_fila_*`.
+        # DisturbioManual también se excluye -deshabilitado a
+        # propósito-: su campo `disturbio` se reemplazó por `tipo`/`valor`
+        # (FK al catálogo genérico ClasificacionTipo/ValorClasificacionTipo,
+        # migración 0119_clasificacion_generica), pero `_procesar_fila_disturbio`
+        # sigue escribiendo con el kwarg viejo `disturbio` -> TypeError en
+        # cuanto se mapee una columna a esta entidad. Reactivar cuando
+        # `_procesar_fila_disturbio` se actualice al nuevo esquema.
         SECCIONES_ETL.append({
             **_grupo,
             "entidades": [e for e in _grupo["entidades"] if e not in (
                 "ClasificacionTipo", "ValorClasificacionTipo", "ClasificacionArea", "Disturbio",
                 "TipoClasificacionEcosistema", "ValorClasificacionEcosistema", "EcosistemaManual",
-                "FuenteExterna", "ExposicionExterna",
+                "FuenteExterna", "ExposicionExterna", "DisturbioManual",
             )],
         })
     else:
@@ -862,13 +869,13 @@ def campos_destino(request):
                 # guardarlo como texto libre).
                 if nombre == "CoberturaManual" and field.name in ("unidad_muestreo", "tipo"):
                     continue
-                # UnidadMuestreoDisturbio.unidad_muestreo se auto-vincula a la
+                # DisturbioManual.unidad_muestreo se auto-vincula a la
                 # Unidad de Muestreo de la misma fila (mismo criterio que
-                # CoberturaManual.unidad_muestreo arriba). UnidadMuestreoDisturbio.tipo
+                # CoberturaManual.unidad_muestreo arriba). DisturbioManual.tipo
                 # se auto-vincula también, al ClasificacionTipo fijo "Disturbio"
                 # (a diferencia de Cobertura, acá solo hay un sistema de
                 # clasificación posible, no se le pide elegir al usuario).
-                if nombre == "UnidadMuestreoDisturbio" and field.name in ("unidad_muestreo", "tipo"):
+                if nombre == "DisturbioManual" and field.name in ("unidad_muestreo", "tipo"):
                     continue
                 # UnidadMuestreo.sitio se vincula solo (igual que
                 # CoberturaManual.unidad_muestreo arriba): al guardar la sección
@@ -886,13 +893,13 @@ def campos_destino(request):
                 # ValorClasificacionTipo solo.
                 if nombre == "CoberturaManual" and field.name == "valor":
                     campo_catalogo.update({"tipo": "string", "tipo_raw": "CharField", "es_fk": False, "modelo_fk": None, "max_length": 160})
-                # UnidadMuestreoDisturbio.valor es un FK a ValorClasificacionTipo,
+                # DisturbioManual.valor es un FK a ValorClasificacionTipo,
                 # pero el wizard lo debe tratar como texto libre (mismo criterio
                 # que CoberturaManual.valor arriba): la columna de origen trae
                 # el nombre del disturbio reportado, no la referencia a una
                 # fila ya existente - _procesar_fila_disturbio resuelve/crea
                 # el ValorClasificacionTipo solo.
-                if nombre == "UnidadMuestreoDisturbio" and field.name == "valor":
+                if nombre == "DisturbioManual" and field.name == "valor":
                     campo_catalogo.update({"tipo": "string", "tipo_raw": "CharField", "es_fk": False, "modelo_fk": None, "max_length": 160})
                 campos.append(campo_catalogo)
             if campos:
@@ -2446,9 +2453,9 @@ def _procesar_fila_cobertura(df, fila_idx, mapeos, unidad_muestreo, resumen_mode
 
 
 def _procesar_fila_disturbio(df, fila_idx, mapeos, unidad_muestreo, resumen_modelos, pks_por_modelo, detalle, cache_objetos):
-    """Resuelve los mapeos de UnidadMuestreoDisturbio para una fila: igual
+    """Resuelve los mapeos de DisturbioManual para una fila: igual
     criterio que _procesar_fila_cobertura, cada MapeoColumna con
-    campo_destino="valor" produce su propia fila de UnidadMuestreoDisturbio
+    campo_destino="valor" produce su propia fila de DisturbioManual
     (una unidad de muestreo puede reportar más de un disturbio).
     `unidad_muestreo` siempre es la UnidadMuestreo ya resuelta para esta
     misma fila -no se mapea manualmente, mismo criterio que
@@ -2460,7 +2467,7 @@ def _procesar_fila_disturbio(df, fila_idx, mapeos, unidad_muestreo, resumen_mode
     El resto de los mapeos (fechas, estado, protección legal, etc.) se arman
     una vez por fila y se aplican como defaults comunes a cada fila de
     disturbio que produzca esa misma fila del archivo."""
-    UnidadMuestreoDisturbio = apps.get_model("app", "UnidadMuestreoDisturbio")
+    DisturbioManual = apps.get_model("app", "DisturbioManual")
     ClasificacionTipoModelo = apps.get_model("app", "ClasificacionTipo")
     ValorClasificacionTipo = apps.get_model("app", "ValorClasificacionTipo")
 
@@ -2481,7 +2488,7 @@ def _procesar_fila_disturbio(df, fila_idx, mapeos, unidad_muestreo, resumen_mode
 
     defaults_comunes = {}
     for mapeo in mapeos_resto:
-        field = UnidadMuestreoDisturbio._meta.get_field(mapeo.campo_destino)
+        field = DisturbioManual._meta.get_field(mapeo.campo_destino)
         if mapeo.transformacion == "constante":
             valor = None if _es_vacio(mapeo.valor_constante) else mapeo.valor_constante
         else:
@@ -2518,20 +2525,20 @@ def _procesar_fila_disturbio(df, fila_idx, mapeos, unidad_muestreo, resumen_mode
                 cache_objetos[clave_valor] = valor_obj
 
         campos_clave = {"unidad_muestreo": unidad_muestreo, "tipo": tipo_disturbio, "valor": valor_obj}
-        clave = _clave_cache_objeto("UnidadMuestreoDisturbio", campos_clave)
+        clave = _clave_cache_objeto("DisturbioManual", campos_clave)
         if clave is not None and clave in cache_objetos:
             obj, creado = cache_objetos[clave], False
         else:
-            obj, creado = UnidadMuestreoDisturbio.objects.get_or_create(
+            obj, creado = DisturbioManual.objects.get_or_create(
                 **campos_clave, defaults={**defaults_comunes, "valor_texto": str(valor)},
             )
             if clave is not None:
                 cache_objetos[clave] = obj
-        resumen_modelos["UnidadMuestreoDisturbio"]["creados" if creado else "reutilizados"] += 1
-        pks_por_modelo.setdefault("UnidadMuestreoDisturbio", set()).add(obj.pk)
+        resumen_modelos["DisturbioManual"]["creados" if creado else "reutilizados"] += 1
+        pks_por_modelo.setdefault("DisturbioManual", set()).add(obj.pk)
 
         if detalle is not None:
-            bucket = detalle.setdefault("UnidadMuestreoDisturbio", {})
+            bucket = detalle.setdefault("DisturbioManual", {})
             if obj.pk not in bucket and len(bucket) < _PREVIEW_MAX_POR_MODELO:
                 bucket[obj.pk] = {
                     "accion": "creado" if creado else "reutilizado",
@@ -2607,7 +2614,7 @@ def _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos, captur
         # Mismo caso especial que CoberturaManual: cada fila puede traer más
         # de un disturbio reportado (una columna por disturbio), y el FK
         # "disturbio" se resuelve/crea desde texto en vez de mapearse por pk.
-        if modelo == "UnidadMuestreoDisturbio":
+        if modelo == "DisturbioManual":
             for fila_idx in range(total_filas):
                 _procesar_fila_disturbio(
                     df, fila_idx, mapeos, resueltos.get("UnidadMuestreo", {}).get(fila_idx),
@@ -3365,7 +3372,11 @@ _VISTAS_DESNORMALIZADAS = {
         # en minúscula_con_guion_bajo de punta a punta, tanto si el nombre
         # sale del `verbose_name` real del campo en Django como si es alias.
         "campos": {
-            "UnidadMuestreo": {"alias": {
+            # compartimento: 0 unidades de muestreo reales lo usan hoy (campo
+            # opcional para cuando una misma parcela se subdivide por
+            # reservorio de carbono) — se excluye de la hoja Metadato por
+            # decisión de equipo (2026-11-09), el campo del modelo no se toca.
+            "UnidadMuestreo": {"excluir": ["compartimento"], "alias": {
                 "nombre": "nombre_unidad_muestreo",
                 "codigo_metadato": "codigo_metadato",
                 "tipo_muestreo": "tipo_muestreo",
@@ -3381,7 +3392,10 @@ _VISTAS_DESNORMALIZADAS = {
             }},
             "UnidadMuestreoTipo": {"incluir": ["nombre"], "alias": {"nombre": "tipo_unidad_muestreo"}},
             "Microtopografia": {"incluir": ["nombre"], "alias": {"nombre": "microtopografia"}},
-            "Proyecto": {"incluir": ["nombre"], "alias": {"nombre": "nombre_proyecto"}},
+            # Proyecto solo se usa para el join hacia UnidadExperimental.proyecto
+            # (regla de obligatoriedad) — se excluyó nombre_proyecto de la hoja
+            # Metadato por decisión de equipo (2026-11-09).
+            "Proyecto": {"incluir": []},
             "UnidadMedida": {"incluir": ["simbolo"], "alias": {"simbolo": "unidad_flujo"}},
             "Equipo": {"incluir": ["modelo"]},
             "MuestraGEI": {"alias": {"chamber_vol": "volumen_camara"}},
@@ -3396,8 +3410,10 @@ _VISTAS_DESNORMALIZADAS = {
                 "valor": "valor_flujo",
             }},
             "Parcela": {"incluir": ["forma"], "alias": {"forma": "forma_unidad_muestreo"}},
-            "Sitio": {"alias": {
-                "nombre": "sitio",
+            # Sitio.nombre excluido de la hoja Metadato por decisión de equipo
+            # (2026-11-09) — la identificación de la fila queda en
+            # codigo_metadato/nombre_unidad_muestreo, no en el nombre del sitio.
+            "Sitio": {"excluir": ["nombre"], "alias": {
                 "tipo_localizacion": "tipo_localizacion",
                 "altitud": "altitud_msnm",
                 "topografia": "topografia",
@@ -3405,10 +3421,14 @@ _VISTAS_DESNORMALIZADAS = {
                 "propiedad_tierra": "propiedad_tierra",
             }},
             "SistemaReferencia": {"incluir": ["nombre"], "alias": {"nombre": "sistema_referencia"}},
-            "Vereda": {"incluir": ["nombre"], "alias": {"nombre": "vereda"}},
-            "Municipio": {"incluir": ["nombre"], "alias": {"nombre": "municipio"}},
-            "Departamento": {"incluir": ["nombre"], "alias": {"nombre": "departamento"}},
-            "Region": {"incluir": ["nombre"], "alias": {"nombre": "region_natural"}},
+            # Vereda/Municipio/Departamento/Region: columnas eliminadas de la hoja
+            # Metadato por decisión de equipo (2026-11-09) — quedan en la cadena
+            # solo por si algo más necesita resolver esa relación (join), sin
+            # mostrarse como columna.
+            "Vereda": {"incluir": []},
+            "Municipio": {"incluir": []},
+            "Departamento": {"incluir": []},
+            "Region": {"incluir": []},
         },
         # Orden de la hoja Metadato (ver plantilla-metadato-dato-co2-camaras.md):
         # identificación del sitio/proyecto primero, geografía, localización,
@@ -3934,18 +3954,15 @@ _SUFIJO_TIPO_COBERTURA = {
 
 def _valores_permitidos_catalogo(clave, modelo_nombre, campo_nombre):
     """Para las columnas de cobertura/ecosistema/disturbio el campo real
-    (`ValorClasificacionTipo.valor`, `ValorClasificacionEcosistema.valor`,
-    `Disturbio.nombre`) es texto libre, así que no tiene `choices` de
-    Django — pero como ya sabemos a qué catálogo corresponde cada columna
-    (por su `clave`, ver `_COLUMNAS_PIVOTE_METADATO_GEI`), podemos listar
-    los valores ya cargados en ese catálogo igual, para orientar a quien
-    llena la plantilla. Devuelve (valores, sistema): `sistema` es el nombre
-    del sistema de clasificación del que salen esos valores (ej. "IPCC",
-    "IDEAM"), o `None` si el catálogo no distingue por sistema (Disturbio) —
-    se usa para completar la columna "Descripción" cuando el campo real no
-    trae `help_text` propio."""
-    if modelo_nombre == "Disturbio" and campo_nombre == "nombre":
-        return sorted(Disturbio.objects.values_list("nombre", flat=True)), None
+    (`ValorClasificacionTipo.valor`, `ValorClasificacionEcosistema.valor`)
+    es texto libre, así que no tiene `choices` de Django — pero como ya
+    sabemos a qué catálogo corresponde cada columna (por su `clave`, ver
+    `_COLUMNAS_PIVOTE_METADATO_GEI`), podemos listar los valores ya cargados
+    en ese catálogo igual, para orientar a quien llena la plantilla. Devuelve
+    (valores, sistema): `sistema` es el nombre del sistema de clasificación
+    del que salen esos valores (ej. "IPCC", "IDEAM", "Disturbio"); se usa
+    para completar la columna "Descripción" cuando el campo real no trae
+    `help_text` propio."""
     if modelo_nombre == "ValorClasificacionEcosistema" and campo_nombre == "valor":
         return sorted(
             ValorClasificacionEcosistema.objects.filter(tipo__nombre="IDEAM").values_list("valor", flat=True)
@@ -4164,10 +4181,13 @@ def exportar_proyecto(request, proyecto_id):
 # que vive dentro de la hoja Metadato, no en una hoja propia (decisión de
 # equipo, 2026-11-02).
 #
-# Flujos CO2 además separa metadato (cómo se midió: unidad
-# experimental/muestreo, sitio, tubo, gas, analizador, unidad de medida) de
-# dato (lo medido por toma: fecha, hora, momento, condición de luz, valor) —
-# decisión de equipo del 2026-11-01, ver
+# Flujos CO2 además separa metadato (contexto fijo de la unidad de muestreo:
+# unidad experimental/muestreo, sitio, geografía, topografía) de dato (todo lo
+# propio de MuestraGEI/SubmuestraGEI: tubo, gas, volumen de cámara,
+# analizador, unidad de medida, y lo medido por toma — fecha, hora, momento,
+# condición de luz, valor) — decisión de equipo, criterio "dueño del modelo"
+# (2026-11-09, revierte el criterio anterior "varía por toma vs. fijo por
+# instalación" usado hasta esa fecha), ver
 # docs/arquitectura/plantilla-metadato-dato-co2-camaras.md en el repo
 # `context`.
 _HOJAS_PLANTILLA = [
@@ -4176,15 +4196,18 @@ _HOJAS_PLANTILLA = [
 ]
 
 # Modelos cuyas columnas describen cómo se midió (van en la hoja Metadato) en
-# vez de qué se midió (hoja Dato), para la vista "submuestra_gei". Las dos
-# claves de `_LLAVE_REFERENCIA_GEI` se repiten también en la hoja Dato como
-# referencia para cruzar cada fila de dato con su fila de metadato.
+# vez de qué se midió (hoja Dato), para la vista "submuestra_gei".
+# MuestraGEI/SubmuestraGEI (y lo que cuelga de MuestraGEI por FK: Equipo,
+# UnidadMedida) van enteros a Dato — Metadato queda a nivel de unidad de
+# muestreo, sin distinguir tubo/gas/serie. `UnidadMuestreo.nombre` se repite
+# en Dato (`_LLAVE_REFERENCIA_GEI`) como referencia para cruzar cada fila de
+# dato con su fila de metadato.
 _MODELOS_METADATO_GEI = {
-    "UnidadExperimental", "UnidadMuestreo", "Sitio", "MuestraGEI", "Equipo", "UnidadMedida",
+    "UnidadExperimental", "UnidadMuestreo", "Sitio",
     "Proyecto", "UnidadMuestreoTipo", "Microtopografia", "Parcela",
     "SistemaReferencia", "Vereda", "Municipio", "Departamento", "Region",
 }
-_LLAVE_REFERENCIA_GEI = {"UnidadMuestreo.nombre", "MuestraGEI.tubo"}
+_LLAVE_REFERENCIA_GEI = {"UnidadMuestreo.codigo_metadato"}
 
 # Columnas de cobertura/disturbio/ecosistema/exposición externa (modelos
 # implementados el 2026-11-03, ver context/docs/arquitectura/modelo-*.md):
@@ -4196,59 +4219,120 @@ _LLAVE_REFERENCIA_GEI = {"UnidadMuestreo.nombre", "MuestraGEI.tubo"}
 # completen estas columnas con datos reales sigue pendiente (una fila de
 # UnidadMuestreo puede tener N filas de cada una de estas entidades, no se
 # puede aplanar 1:1 como el resto de columnas).
+# ClasificacionTipo(categoria="Uso Suelo", nombre="Uso_actual_colflux")
+# existe en el catálogo pero NO se agrega acá como columna — tiene
+# exactamente los mismos 12 valores que Sitio.USO_ACTUAL_CHOICES (columna
+# "uso_actual" más abajo), es el mismo vocabulario duplicado en dos lugares
+# del modelo. Decisión de equipo (2026-11-09): no agregar una columna
+# "uso_actual_IPCC" redundante; el catálogo queda sin usar por ahora, candidato
+# a limpieza futura.
 _COLUMNAS_PIVOTE_METADATO_GEI = [
-    {"clave": "Institucion.nombre", "modelo": "Institucion", "campo": "nombre", "verbose_name": "nombre_entidad"},
     {"clave": "ValorClasificacionEcosistema.valor", "modelo": "ValorClasificacionEcosistema", "campo": "valor", "verbose_name": "ecosistema_IDEAM"},
     {"clave": "ValorClasificacionTipo.valor__IPCC", "modelo": "ValorClasificacionTipo", "campo": "valor", "verbose_name": "cobertura_IPCC"},
     {"clave": "ValorClasificacionTipo.valor__CLC", "modelo": "ValorClasificacionTipo", "campo": "valor", "verbose_name": "cobertura_CLC"},
     {"clave": "ValorClasificacionTipo.valor__IGBP", "modelo": "ValorClasificacionTipo", "campo": "valor", "verbose_name": "cobertura_IGBP"},
-    {"clave": "ValorClasificacionTipo.valor__nombre_comun", "modelo": "ValorClasificacionTipo", "campo": "valor", "verbose_name": "cobertura_nom_comun"},
-    {"clave": "ValorClasificacionTipo.valor__Suelo_IPCC", "modelo": "ValorClasificacionTipo", "campo": "valor", "verbose_name": "suelo_IPCC"},
-    {"clave": "Disturbio.nombre", "modelo": "Disturbio", "campo": "nombre", "verbose_name": "tipo_disturbio"},
-    {"clave": "UnidadMuestreoDisturbio.anios_disturbio", "modelo": "UnidadMuestreoDisturbio", "campo": "anios_disturbio", "verbose_name": "anios_disturbio"},
-    {"clave": "UnidadMuestreoDisturbio.anios_desde_fin", "modelo": "UnidadMuestreoDisturbio", "campo": "anios_desde_fin", "verbose_name": "anios_desde_fin_disturbio"},
-    {"clave": "UnidadMuestreoDisturbio.estado_conservacion", "modelo": "UnidadMuestreoDisturbio", "campo": "estado_conservacion", "verbose_name": "estado_conservacion"},
-    {"clave": "UnidadMuestreoDisturbio.proteccion_legal", "modelo": "UnidadMuestreoDisturbio", "campo": "proteccion_legal", "verbose_name": "proteccion_legal"},
-    {"clave": "UnidadMuestreoDisturbio.es_dominante", "modelo": "UnidadMuestreoDisturbio", "campo": "es_dominante", "verbose_name": "DOM_DIST_MGMT"},
+    {"clave": "ValorClasificacionTipo.valor__nombre_comun", "modelo": "ValorClasificacionTipo", "campo": "valor", "verbose_name": "cobertura_Nombre_Local"},
+    {"clave": "ValorClasificacionTipo.valor__Suelo_IPCC", "modelo": "ValorClasificacionTipo", "campo": "valor", "verbose_name": "uso_suelo_IPCC"},
+    {"clave": "ValorClasificacionTipo.valor__Disturbio", "modelo": "ValorClasificacionTipo", "campo": "valor", "verbose_name": "tipo_disturbio"},
+    {"clave": "DisturbioManual.anios_disturbio", "modelo": "DisturbioManual", "campo": "anios_disturbio", "verbose_name": "anios_disturbio"},
+    {"clave": "DisturbioManual.anios_desde_fin", "modelo": "DisturbioManual", "campo": "anios_desde_fin", "verbose_name": "anios_desde_fin_disturbio"},
+    {"clave": "EcosistemaManual.estado_conservacion", "modelo": "EcosistemaManual", "campo": "estado_conservacion", "verbose_name": "estado_conservacion"},
+    {"clave": "EcosistemaManual.proteccion_legal", "modelo": "EcosistemaManual", "campo": "proteccion_legal", "verbose_name": "proteccion_legal"},
+    {"clave": "DisturbioManual.es_dominante", "modelo": "DisturbioManual", "campo": "es_dominante", "verbose_name": "disturbio_dominante"},
     {"clave": "ValorClasificacionTipo.valor__veg_pri", "modelo": "ValorClasificacionTipo", "campo": "valor", "verbose_name": "cobertura_vegetal_primaria"},
-    {"clave": "CoberturaManual.porcentaje__pri", "modelo": "CoberturaManual", "campo": "porcentaje", "verbose_name": "porcentaje_cob_veg_pri"},
+    {"clave": "CoberturaManual.porcentaje__pri", "modelo": "CoberturaManual", "campo": "porcentaje", "verbose_name": "porc_cobertura_vegetal_primaria"},
     {"clave": "ValorClasificacionTipo.valor__veg_sec", "modelo": "ValorClasificacionTipo", "campo": "valor", "verbose_name": "cobertura_vegetal_secundaria"},
-    {"clave": "CoberturaManual.porcentaje__sec", "modelo": "CoberturaManual", "campo": "porcentaje", "verbose_name": "porcentaje_cob_veg_sec"},
+    {"clave": "CoberturaManual.porcentaje__sec", "modelo": "CoberturaManual", "campo": "porcentaje", "verbose_name": "porc_cobertura_vegetal_secundaria"},
     {"clave": "ValorClasificacionTipo.valor__veg_ter", "modelo": "ValorClasificacionTipo", "campo": "valor", "verbose_name": "cobertura_vegetal_terciaria"},
-    {"clave": "CoberturaManual.porcentaje__ter", "modelo": "CoberturaManual", "campo": "porcentaje", "verbose_name": "porcentaje_cob_veg_ter"},
+    {"clave": "CoberturaManual.porcentaje__ter", "modelo": "CoberturaManual", "campo": "porcentaje", "verbose_name": "porc_cobertura_vegetal_terciaria"},
     {"clave": "ExposicionExterna.distancia_m__drenaje", "modelo": "ExposicionExterna", "campo": "distancia_m", "verbose_name": "distancia_drenaje"},
     {"clave": "ExposicionExterna.distancia_m__fuego", "modelo": "ExposicionExterna", "campo": "distancia_m", "verbose_name": "distancia_fuego"},
     {"clave": "ExposicionExterna.distancia_m__pastoreo", "modelo": "ExposicionExterna", "campo": "distancia_m", "verbose_name": "distancia_pastoreo"},
     {"clave": "ExposicionExterna.distancia_m__cultivo", "modelo": "ExposicionExterna", "campo": "distancia_m", "verbose_name": "distancia_cultivo"},
 ]
 
+# Columnas de clima (MuestraAmbiental) agregadas como atributos opcionales de la
+# hoja "Flujos CO2 - Dato" (2026-11-09, ver
+# context/tasks/backlog/plantilla-flujos-co2-clima-misma-hoja.md): solo encabezados
+# por ahora — MuestraAmbiental tiene su propia FK a UnidadMuestreo (paralela a
+# MuestraGEI, no cuelga de SubmuestraGEI), así que no la trae la cadena de FKs hacia
+# adelante que usa `_VISTAS_DESNORMALIZADAS["submuestra_gei"]`. Van acá fijas, mismo
+# patrón que `_COLUMNAS_PIVOTE_METADATO_GEI`. La lógica para que
+# `importar_carga`/`exportar_carga` creen/completen el `MuestraAmbiental` enlazado
+# (misma unidad_muestreo/fecha/hora de la fila) queda pendiente — por ahora la carga
+# de clima sigue siendo independiente, estas columnas solo reservan el lugar en la
+# plantilla para cuando una fuente las traiga junto con el flujo.
+#
+# `anillo` (2026-11-09): mismo caso que las columnas de clima —
+# `UnidadMuestreo.diametro_anillo_cm` es un atributo fijo de la unidad de muestreo (va
+# en la hoja Metadato con el alias "diametro_anillo"), pero el equipo de datos también
+# lo quiere repetido en la hoja Dato con el nombre de columna del archivo fuente real
+# (`anillo`), para no tener que cruzar con Metadato al leer un archivo de cámaras. Se
+# lista acá en vez de en la cadena normal porque ya existe ahí con otro alias/sección —
+# no es necesario traerlo de nuevo por FK, solo exponerlo con distinto verbose_name en
+# esta hoja. `microtopo` se agregó también acá el 2026-11-09 pero se sacó el mismo día
+# a pedido del equipo — queda solo en Metadato (`Microtopografia.nombre`).
+_COLUMNAS_PIVOTE_DATO_GEI = [
+    {"clave": "UnidadMuestreo.diametro_anillo_cm", "modelo": "UnidadMuestreo", "campo": "diametro_anillo_cm", "verbose_name": "anillo"},
+    {"clave": "MuestraAmbiental.soil_temp", "modelo": "MuestraAmbiental", "campo": "soil_temp", "verbose_name": "soil_temp"},
+    {"clave": "MuestraAmbiental.air_temp", "modelo": "MuestraAmbiental", "campo": "air_temp", "verbose_name": "air_temp"},
+    {"clave": "MuestraAmbiental.atm_press", "modelo": "MuestraAmbiental", "campo": "atm_press", "verbose_name": "atm_press"},
+    {"clave": "MuestraAmbiental.relat_humid", "modelo": "MuestraAmbiental", "campo": "relat_humid", "verbose_name": "relat_humid"},
+    {"clave": "MuestraAmbiental.dew_point", "modelo": "MuestraAmbiental", "campo": "dew_point", "verbose_name": "dew_point"},
+    {"clave": "MuestraAmbiental.water_level", "modelo": "MuestraAmbiental", "campo": "water_level", "verbose_name": "water_level_cm"},
+    {"clave": "MuestraAmbiental.ph", "modelo": "MuestraAmbiental", "campo": "ph", "verbose_name": "pH"},
+]
+
+# Orden completo de la hoja "Flujos CO2 - Dato" en la plantilla descargable, según
+# el listado de 20 atributos acordado con el equipo de datos (2026-11-09) —
+# reemplaza `nombre_unidad_muestreo` por `codigo_metadato` como columna de
+# referencia hacia Metadato (ver `_LLAVE_REFERENCIA_GEI`).
+_ORDEN_COLUMNAS_DATO_GEI_PLANTILLA = [
+    "UnidadMuestreo.codigo_metadato",
+    "Equipo.modelo",
+    "MuestraGEI.gas",
+    "MuestraGEI.chamber_vol",
+    "UnidadMuestreo.diametro_anillo_cm",
+    "MuestraGEI.tubo",
+    "SubmuestraGEI.fecha",
+    "SubmuestraGEI.hora",
+    "SubmuestraGEI.momento",
+    "SubmuestraGEI.condicion_luz",
+    "SubmuestraGEI.valor",
+    "UnidadMedida.simbolo",
+    "MuestraAmbiental.soil_temp",
+    "MuestraAmbiental.air_temp",
+    "MuestraAmbiental.atm_press",
+    "MuestraAmbiental.relat_humid",
+    "MuestraAmbiental.dew_point",
+    "MuestraAmbiental.water_level",
+    "MuestraAmbiental.ph",
+]
+
 # Orden completo de la hoja "Flujos CO2 - Metadato" en la plantilla
 # descargable: combina las columnas reales (ver `orden_columnas` de la vista
 # "submuestra_gei") con las columnas de pivoteo de arriba, en el orden del
-# listado de atributos acordado con el equipo de datos.
+# listado de 44 atributos acordado con el equipo de datos (2026-11-09).
 _ORDEN_COLUMNAS_METADATO_GEI_PLANTILLA = [
-    # codigo_metadato + ubicación (latitud/longitud/sistema de referencia) van
-    # primero: son los datos obligatorios para cargar — el resto de atributos
-    # (identificación, geografía administrativa, topografía, ...) va después.
     "UnidadMuestreo.codigo_metadato",
-    "Sitio.latitud", "Sitio.longitud", "SistemaReferencia.nombre",
-    "Institucion.nombre",
-    "Proyecto.nombre",
-    "UnidadExperimental.nombre", "UnidadMuestreo.nombre",
-    "Region.nombre", "Departamento.nombre", "Municipio.nombre", "Vereda.nombre",
-    "Sitio.nombre", "Sitio.tipo_localizacion",
+    "UnidadExperimental.nombre", "UnidadExperimental.descripcion",
+    "UnidadMuestreo.nombre",
+    "Sitio.latitud", "Sitio.longitud", "SistemaReferencia.nombre", "Sitio.tipo_localizacion",
     "Sitio.altitud", "Sitio.pendiente", "Sitio.topografia",
+    "UnidadMuestreo.fecha_instalacion",
+    "UnidadMuestreo.tipo_muestreo", "UnidadMuestreoTipo.nombre", "Parcela.forma", "UnidadMuestreo.area_cm2",
+    "Microtopografia.nombre",
+    "UnidadMuestreo.diametro_anillo_cm", "UnidadMuestreo.tiene_pozo_nivel_freatico",
+    "UnidadExperimental.tratamiento",
+    "Sitio.intervenido", "Sitio.propiedad_tierra", "Sitio.uso_actual",
+    "EcosistemaManual.proteccion_legal",
+    "ValorClasificacionTipo.valor__Disturbio", "DisturbioManual.es_dominante",
+    "DisturbioManual.anios_disturbio", "DisturbioManual.anios_desde_fin",
+    "ValorClasificacionTipo.valor__Suelo_IPCC",
     "ValorClasificacionEcosistema.valor",
+    "EcosistemaManual.estado_conservacion",
     "ValorClasificacionTipo.valor__IPCC", "ValorClasificacionTipo.valor__CLC", "ValorClasificacionTipo.valor__IGBP",
-    "ValorClasificacionTipo.valor__nombre_comun", "ValorClasificacionTipo.valor__Suelo_IPCC",
-    "Disturbio.nombre", "UnidadMuestreoDisturbio.anios_disturbio", "UnidadMuestreoDisturbio.anios_desde_fin",
-    "Sitio.uso_actual",
-    "UnidadMuestreoDisturbio.estado_conservacion", "UnidadMuestreoDisturbio.proteccion_legal",
-    "UnidadMuestreoDisturbio.es_dominante",
-    "UnidadMuestreo.tipo_muestreo", "UnidadMuestreoTipo.nombre", "UnidadMuestreo.area_cm2",
-    "Parcela.forma",
-    "Microtopografia.nombre", "UnidadMuestreo.diametro_anillo_cm",
-    "UnidadExperimental.tratamiento", "UnidadMuestreo.tiene_pozo_nivel_freatico",
+    "ValorClasificacionTipo.valor__nombre_comun",
     "ValorClasificacionTipo.valor__veg_pri", "CoberturaManual.porcentaje__pri",
     "ValorClasificacionTipo.valor__veg_sec", "CoberturaManual.porcentaje__sec",
     "ValorClasificacionTipo.valor__veg_ter", "CoberturaManual.porcentaje__ter",
@@ -4279,13 +4363,91 @@ def _hojas_plantilla_vacia():
             columnas = _reordenar_columnas(
                 columnas + _COLUMNAS_PIVOTE_METADATO_GEI, _ORDEN_COLUMNAS_METADATO_GEI_PLANTILLA
             )
+        if hoja_def.get("seccion") == "dato":
+            columnas = _reordenar_columnas(
+                columnas + _COLUMNAS_PIVOTE_DATO_GEI, _ORDEN_COLUMNAS_DATO_GEI_PLANTILLA
+            )
         encabezados = [c["verbose_name"] or c["campo"] for c in columnas]
         df = pd.DataFrame(columns=encabezados)
         hojas.append((hoja_def["hoja"][:31], df, columnas))
     return hojas
 
 
-@requiere_nivel("reportador")
+def _sugerir_mapeos_automaticos(carga):
+    """Para cada hoja del archivo subido cuyo nombre coincide EXACTO con una
+    hoja de `_HOJAS_PLANTILLA`, intenta armar el mapeo 1:1 completo
+    comparando los encabezados del archivo contra los de
+    `_hojas_plantilla_vacia()` (misma función que arma la plantilla
+    descargable) -así un archivo que ya sale de esa descarga, sin tocar los
+    encabezados, se puede mapear sin pasar por el asistente manual-.
+
+    Una columna de destino "ambigua" (mismo modelo+campo repetido con
+    distinto `verbose_name`, ej. `ValorClasificacionTipo.valor` para
+    cobertura_IPCC/CLC/IGBP/...) necesita un dato extra (`tipo_cobertura`)
+    que no se puede inferir solo del nombre de columna -esas hojas quedan
+    con `ok: False` y el usuario sigue con el asistente manual-.
+
+    Las hojas del archivo que no matchean ningún nombre de `_HOJAS_PLANTILLA`
+    se omiten del resultado -no es un error, el usuario puede no haber
+    subido todas las metodologías en este archivo-.
+    """
+    hojas_plantilla_def = {h["hoja"]: h for h in _HOJAS_PLANTILLA}
+    columnas_por_hoja_plantilla = {nombre: columnas for nombre, _df, columnas in _hojas_plantilla_vacia()}
+
+    resultado = {}
+    for hoja_archivo, info in (carga.hojas or {}).items():
+        if hoja_archivo not in hojas_plantilla_def:
+            continue
+        columnas_plantilla = columnas_por_hoja_plantilla.get(hoja_archivo, [])
+
+        conteo_modelo_campo = defaultdict(int)
+        por_verbose_name = {}
+        for c in columnas_plantilla:
+            conteo_modelo_campo[(c["modelo"], c["campo"])] += 1
+            por_verbose_name.setdefault((c["verbose_name"] or c["campo"]).strip(), c)
+
+        mapeos = []
+        sin_match = []
+        ambiguas = []
+        for col_raw in info.get("columnas_raw", []):
+            nombre = str(col_raw.get("nombre") or "").strip()
+            columna = por_verbose_name.get(nombre)
+            if columna is None:
+                sin_match.append(nombre)
+                continue
+            if conteo_modelo_campo[(columna["modelo"], columna["campo"])] > 1:
+                ambiguas.append(nombre)
+                continue
+            mapeos.append({
+                "columna_origen": nombre,
+                "modelo_destino": columna["modelo"],
+                "campo_destino": columna["campo"],
+                "transformacion": "directo",
+            })
+
+        if sin_match or ambiguas:
+            resultado[hoja_archivo] = {"ok": False, "columnas_sin_match": sin_match, "columnas_ambiguas": ambiguas}
+        else:
+            resultado[hoja_archivo] = {"ok": True, "mapeos": mapeos}
+    return resultado
+
+
+def mapeo_automatico(request, fuente_id, carga_id):
+    """Sugerencia de mapeo 1:1 por hoja para una carga cuyo archivo ya trae
+    los encabezados exactos de la plantilla descargable -ver
+    `_sugerir_mapeos_automaticos`-. Solo lectura: el frontend decide si
+    aplicarla posteando cada hoja `ok` al endpoint de mapeo normal
+    (`mapeo_carga`) y disparando la importación."""
+    try:
+        carga = CargaArchivo.objects.get(pk=carga_id, fuente_id=fuente_id)
+    except CargaArchivo.DoesNotExist:
+        return JsonResponse({"error": "Carga no encontrada"}, status=404)
+    if request.method != "GET":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+
+    return JsonResponse({"hojas": _sugerir_mapeos_automaticos(carga)}, json_dumps_params={"ensure_ascii": False})
+
+
 def plantilla_vacia(request):
     """Plantilla de Excel para reportar datos: una hoja por metodología
     (Unidad Muestreo-Experimental, Flujos CO2/CH4, MOM, COS, Biomasa) con
@@ -4314,7 +4476,6 @@ def plantilla_vacia(request):
     return response
 
 
-@requiere_nivel("reportador")
 def plantilla_detalle(request):
     """Mismo contenido que la hoja "Diccionario de datos" de `plantilla_vacia`
     (una fila por columna real de cada hoja de la plantilla, con su

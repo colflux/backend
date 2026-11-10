@@ -6,7 +6,7 @@ from app.api.dashboard.views import DashboardView, DataModelView, VisualizerView
 from app.api.datos.views import FuenteDatosViewSet, fuentes_datos_api
 from app.api.etl.views import (
     archivo_fuente, campos_destino, datos_carga, datos_proyecto, estado_importacion, exportar_carga, exportar_proyecto,
-    fk_choices_view, importar_carga, importar_torre, mapeo_carga, plantilla_detalle, plantilla_vacia,
+    fk_choices_view, importar_carga, importar_torre, mapeo_automatico, mapeo_carga, plantilla_detalle, plantilla_vacia,
     previsualizar_carga, regex_sugerido, upload_archivo, validar_carga, verificar_existencia,
 )
 from app.api.geo.views import resumen_categorico, resumen_geografico, series_co2, sitios_geojson, tendencia_instalacion
@@ -60,6 +60,7 @@ urlpatterns = [
     path("api/ia-carga/<int:carga_id>/", columnas_carga_ia, name="ia-carga-columnas"),
     path("api/ia-carga/<int:carga_id>/confirmar/", confirmar_mapeo_ia, name="ia-carga-confirmar"),
     path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/mapeo/", mapeo_carga, name="mapeo-carga"),
+    path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/mapeo-automatico/", mapeo_automatico, name="mapeo-automatico"),
     path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/validar/", validar_carga, name="validar-carga"),
     path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/previsualizar/", previsualizar_carga, name="previsualizar-carga"),
     path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/importar/", importar_carga, name="importar-carga"),

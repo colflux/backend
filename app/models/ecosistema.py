@@ -68,6 +68,22 @@ class EcosistemaManual(TimestampedModel):
         help_text="Texto tal como llegó en el import. Se llena siempre; valor queda vacío si no matcheó ningún catálogo.",
     )
 
+    ESTADO_CONSERVACION_CHOICES = [
+        ("Natural", "Natural (sin manejo humano significativo)"),
+        ("Seminatural", "Seminatural (manejo bajo, regeneración natural dominante)"),
+        ("Manejado", "Manejado (aprovechamiento, ganadería, agroforestería)"),
+        ("Plantacion", "Plantación (vegetación establecida y manejada)"),
+        ("Artificial_Urbano", "Artificial / Urbano (superficie no natural)"),
+    ]
+    estado_conservacion = models.CharField(
+        "estado de conservación", max_length=20, choices=ESTADO_CONSERVACION_CHOICES, blank=True,
+        help_text="Estado del ecosistema frente a la presencia de manejo humano (taxonomía del vocabulario IDEAM).",
+    )
+    proteccion_legal = models.TextField(
+        "protección legal", blank=True,
+        help_text="Si el sitio está bajo alguna figura de reserva, parque, santuario, etc.",
+    )
+
     class Meta:
         verbose_name = "ecosistema (dato digitado)"
         verbose_name_plural = "ecosistemas (dato digitado)"

@@ -126,7 +126,10 @@ class Microtopografia(TimestampedModel):
     unidad de muestreo (no cambia de una lectura a otra), no una medición.
     """
 
-    nombre = models.CharField("nombre", max_length=30, unique=True)
+    nombre = models.CharField(
+        "nombre", max_length=30, unique=True,
+        help_text="Rasgo de microtopografía del terreno en la unidad de muestreo (ej. Hummock, Hollow, Pool, Lawns, Ditch).",
+    )
 
     class Meta:
         verbose_name = "microtopografía"
@@ -283,9 +286,11 @@ class UnidadMuestreo(TimestampedModel):
     # patrón que Parcela._calcular_area().
     diametro_anillo_cm = models.DecimalField(
         "diámetro del anillo (cm)", max_digits=8, decimal_places=2, null=True, blank=True,
+        help_text="Diámetro del anillo/cámara de muestreo de gases, en centímetros. De acá se deriva area_cm2.",
     )
     area_cm2 = models.DecimalField(
         "área del anillo (cm²)", max_digits=10, decimal_places=2, null=True, blank=True, editable=False,
+        help_text="Área del anillo/cámara de muestreo, calculada automáticamente a partir de diametro_anillo_cm.",
     )
     tiene_pozo_nivel_freatico = models.BooleanField(
         "tiene pozo de nivel freático", default=False,
@@ -353,7 +358,10 @@ class Parcela(TimestampedModel):
         UnidadMuestreo, on_delete=models.CASCADE, related_name="parcela",
         null=True, blank=True, verbose_name="unidad de muestreo",
     )
-    forma = models.CharField("forma", max_length=15, choices=FORMA_CHOICES, blank=True)
+    forma = models.CharField(
+        "forma", max_length=15, choices=FORMA_CHOICES, blank=True,
+        help_text="Forma geométrica de la parcela/unidad de muestreo, usada para calcular su área.",
+    )
     medida_largo = models.DecimalField("medida largo (m)", max_digits=10, decimal_places=2, null=True, blank=True)
     medida_ancho = models.DecimalField("medida ancho (m)", max_digits=10, decimal_places=2, null=True, blank=True)
     distancia = models.DecimalField("distancia / lado (m)", max_digits=10, decimal_places=2, null=True, blank=True)

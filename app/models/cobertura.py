@@ -32,7 +32,10 @@ class CoberturaManual(TimestampedModel):
         ("Secundaria", "Secundaria"),
         ("Terciaria", "Terciaria"),
     ]
-    porcentaje = models.DecimalField("% cobertura", max_digits=5, decimal_places=2, null=True, blank=True)
+    porcentaje = models.DecimalField(
+        "% cobertura", max_digits=5, decimal_places=2, null=True, blank=True,
+        help_text="Porcentaje de cobertura que representa este tipo de vegetación dentro de la unidad de muestreo (ver orden_dominancia para distinguir primaria/secundaria/terciaria).",
+    )
     orden_dominancia = models.CharField(
         "orden de dominancia", max_length=12, choices=ORDEN_DOMINANCIA_CHOICES, blank=True,
     )
@@ -110,8 +113,12 @@ class Disturbio(TimestampedModel):
         return self.nombre
 
 
-class UnidadMuestreoDisturbio(TimestampedModel):
-    """Disturbio reportado para una unidad de muestreo (fechas, estado del ecosistema, si es el disturbio dominante)."""
+class DisturbioManual(TimestampedModel):
+    """Disturbio reportado para una unidad de muestreo (fechas, estado del ecosistema, si es el disturbio dominante).
+
+    Mismo patrón de nombre que CoberturaManual/EcosistemaManual ("dato
+    digitado" por el equipo de campo); antes se llamaba
+    UnidadMuestreoDisturbio."""
 
     ESTADO_CHOICES = [
         ("Intacto", "Intacto"),
@@ -123,19 +130,6 @@ class UnidadMuestreoDisturbio(TimestampedModel):
         ("Estable", "Estable"),
         ("En_transicion", "En transición"),
     ]
-    # Distinto de ESTADO_CHOICES/estado_actual (severidad de degradación):
-    # esta es la taxonomía de manejo del vocabulario IDEAM ("Estado
-    # conservación"), sobre si el ecosistema tiene manejo humano y de qué
-    # tipo -no calza con las opciones de estado_actual, así que va aparte
-    # en vez de forzar una traducción incorrecta entre ambas.
-    ESTADO_CONSERVACION_CHOICES = [
-        ("Natural", "Natural (sin manejo humano significativo)"),
-        ("Seminatural", "Seminatural (manejo bajo, regeneración natural dominante)"),
-        ("Manejado", "Manejado (aprovechamiento, ganadería, agroforestería)"),
-        ("Plantacion", "Plantación (vegetación establecida y manejada)"),
-        ("Artificial_Urbano", "Artificial / Urbano (superficie no natural)"),
-    ]
-
     unidad_muestreo = models.ForeignKey(
         "app.UnidadMuestreo", on_delete=models.CASCADE, related_name="disturbios",
         verbose_name="unidad de muestreo",
@@ -158,18 +152,19 @@ class UnidadMuestreoDisturbio(TimestampedModel):
     fecha_fin = models.DateField("fecha de fin", null=True, blank=True)
     incertidumbre_anios = models.PositiveIntegerField("incertidumbre (años)", null=True, blank=True)
     fecha_reporte = models.DateField("fecha de reporte", null=True, blank=True)
-    anios_disturbio = models.PositiveIntegerField("años de disturbio", null=True, blank=True)
-    anios_desde_fin = models.PositiveIntegerField("años desde fin del disturbio", null=True, blank=True)
+    anios_disturbio = models.PositiveIntegerField(
+        "años de disturbio", null=True, blank=True,
+        help_text="Cantidad de años que duró o lleva el disturbio.",
+    )
+    anios_desde_fin = models.PositiveIntegerField(
+        "años desde fin del disturbio", null=True, blank=True,
+        help_text="Cantidad de años transcurridos desde que terminó el disturbio (vacío si sigue activo).",
+    )
     estado_actual = models.CharField("estado actual", max_length=30, choices=ESTADO_CHOICES, blank=True)
-    estado_conservacion = models.CharField(
-        "estado de conservación", max_length=20, choices=ESTADO_CONSERVACION_CHOICES, blank=True,
-        help_text="Estado del ecosistema frente a la presencia de manejo humano (taxonomía del vocabulario IDEAM).",
+    es_dominante = models.BooleanField(
+        "es el disturbio dominante", default=False,
+        help_text="Si es el disturbio/manejo principal reportado para la unidad de muestreo, cuando hay varios registrados.",
     )
-    proteccion_legal = models.TextField(
-        "protección legal", blank=True,
-        help_text="Si el sitio está bajo alguna figura de reserva, parque, santuario, etc.",
-    )
-    es_dominante = models.BooleanField("es el disturbio dominante", default=False)
 
     class Meta:
         verbose_name = "disturbio de unidad de muestreo"
@@ -205,7 +200,10 @@ class ExposicionExterna(TimestampedModel):
         FuenteExterna, on_delete=models.PROTECT, related_name="exposiciones",
         verbose_name="fuente externa",
     )
-    distancia_m = models.DecimalField("distancia (m)", max_digits=10, decimal_places=2, null=True, blank=True)
+    distancia_m = models.DecimalField(
+        "distancia (m)", max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Distancia en metros desde la unidad de muestreo hasta la fuente externa indicada (ver fuente).",
+    )
 
     class Meta:
         verbose_name = "exposición externa"

@@ -127,7 +127,10 @@ class SistemaReferencia(TimestampedModel):
         (OTRO, "Otro"),
     ]
 
-    nombre = models.CharField(max_length=20, choices=SISTEMA_CHOICES, unique=True)
+    nombre = models.CharField(
+        max_length=20, choices=SISTEMA_CHOICES, unique=True,
+        help_text="Sistema de referencia de coordenadas en el que están expresadas latitud/longitud del sitio.",
+    )
 
     class Meta:
         verbose_name = "sistema de referencia"

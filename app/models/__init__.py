@@ -6,7 +6,7 @@ from .clasificacion import ClasificacionArea, ClasificacionTipo, ValorClasificac
 
 from .cobertura import (
     CoberturaManual, Disturbio, ExposicionExterna, FuenteExterna,
-    UnidadMuestreoDisturbio, Vegetacion,
+    DisturbioManual, Vegetacion,
 )
 
 from .ecosistema import EcosistemaManual, TipoClasificacionEcosistema, ValorClasificacionEcosistema
@@ -55,7 +55,7 @@ __all__ = [
     # Cobertura / Disturbio / Vegetación
     "CoberturaManual",
     "Disturbio",
-    "UnidadMuestreoDisturbio",
+    "DisturbioManual",
     "Vegetacion",
     "FuenteExterna",
     "ExposicionExterna",

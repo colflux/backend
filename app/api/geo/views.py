@@ -6,8 +6,8 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 
 from app.models import (
-    CoberturaManual, Departamento, Municipio, MuestraBiomasa, Region, Sitio, SubmuestraGEI, SubmuestraSuelo,
-    UnidadMuestreo, UnidadMuestreoDisturbio, Vereda,
+    CoberturaManual, Departamento, EcosistemaManual, Municipio, MuestraBiomasa, Region, Sitio, SubmuestraGEI,
+    SubmuestraSuelo, UnidadMuestreo, Vereda,
 )
 
 # Config por categoría de dato: qué modelo agregar y por qué cadena de FKs
@@ -688,7 +688,7 @@ def resumen_geografico(request):
 _DIMENSIONES_CATEGORICAS = ("proyecto", "ecosistema", "estado_conservacion", "analizador", "condicion_luz")
 
 _CONDICION_LUZ_LABELS = dict(SubmuestraGEI.CONDICION_LUZ_CHOICES)
-_ESTADO_CONSERVACION_LABELS = dict(UnidadMuestreoDisturbio.ESTADO_CONSERVACION_CHOICES)
+_ESTADO_CONSERVACION_LABELS = dict(EcosistemaManual.ESTADO_CONSERVACION_CHOICES)
 
 # Config por dimensión: campo por el que se agrupa. "ecosistema" no es un
 # campo directo -se anota vía Subquery antes de agregar-.
@@ -696,7 +696,7 @@ _CAMPO_ID_POR_DIMENSION = {
     "proyecto": "muestra__unidad_muestreo__unidad_experimental__proyecto_id",
     "analizador": "muestra__analizador_id",
     "condicion_luz": "condicion_luz",
-    "estado_conservacion": "muestra__unidad_muestreo__disturbios__estado_conservacion",
+    "estado_conservacion": "muestra__unidad_muestreo__ecosistemas_manuales__estado_conservacion",
     "ecosistema": "ecosistema",
 }
 
