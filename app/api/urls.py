@@ -5,9 +5,10 @@ from app.api.auth.views import ForgotPasswordView, LoginView, LogoutView, MeView
 from app.api.dashboard.views import DashboardView, DataModelView, VisualizerView, chart_data
 from app.api.datos.views import FuenteDatosViewSet, fuentes_datos_api
 from app.api.etl.views import (
-    archivo_fuente, campos_destino, datos_carga, datos_proyecto, estado_importacion, exportar_carga, exportar_proyecto,
-    fk_choices_view, importar_carga, importar_torre, mapeo_automatico, mapeo_carga, plantilla_detalle, plantilla_vacia,
-    previsualizar_carga, regex_sugerido, upload_archivo, validar_carga, verificar_existencia,
+    archivo_fuente, campos_destino, datos_carga, datos_proyecto, editar_celda_bronce, estado_importacion,
+    exportar_bronce, exportar_carga, exportar_proyecto, fk_choices_view, importar_carga, importar_torre,
+    listar_bronce, mapeo_automatico, mapeo_carga, plantilla_detalle, plantilla_vacia, previsualizar_carga,
+    procesar_bronce, regex_sugerido, upload_archivo, validar_carga, valores_columna_bronce, verificar_existencia,
 )
 from app.api.geo.views import resumen_categorico, resumen_geografico, series_co2, sitios_geojson, tendencia_instalacion
 from app.api.ia_carga.views import columnas_carga_ia, confirmar_mapeo_ia, iniciar_carga_ia
@@ -65,6 +66,11 @@ urlpatterns = [
     path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/previsualizar/", previsualizar_carga, name="previsualizar-carga"),
     path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/importar/", importar_carga, name="importar-carga"),
     path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/importar/estado/", estado_importacion, name="estado-importacion"),
+    path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/bronce/procesar/", procesar_bronce, name="procesar-bronce"),
+    path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/bronce/celda/", editar_celda_bronce, name="editar-celda-bronce"),
+    path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/bronce/valores-columna/", valores_columna_bronce, name="valores-columna-bronce"),
+    path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/bronce/exportar/", exportar_bronce, name="exportar-bronce"),
+    path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/bronce/", listar_bronce, name="listar-bronce"),
     path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/datos/", datos_carga, name="datos-carga"),
     path("api/fuentes-datos/<int:fuente_id>/carga/<int:carga_id>/exportar/", exportar_carga, name="exportar-carga"),
     path("api/proyectos/<int:proyecto_id>/datos/", datos_proyecto, name="datos-proyecto"),
