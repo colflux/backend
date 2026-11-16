@@ -24,8 +24,8 @@ from django.views.decorators.csrf import csrf_exempt
 
 from app.api.permisos import requiere_nivel
 from app.models import (
-    CargaArchivo, ClasificacionTipo, FuenteDatos, MapeoColumna, MuestraTorre, Proyecto, SubMuestraTorre,
-    TorreEc, ValorClasificacionEcosistema, ValorClasificacionTipo,
+    CargaArchivo, CeldaBronce, ClasificacionTipo, FilaBronce, FuenteDatos, MapeoColumna, MuestraTorre, Proyecto,
+    SubMuestraTorre, TorreEc, ValorClasificacionEcosistema, ValorClasificacionTipo,
 )
 
 from app.catalogo.generator import COLOR_POR_MODELO, GRUPOS_CATALOGO, campo_to_catalogo, fk_choices
@@ -1483,12 +1483,23 @@ def _validar_columna(df, mapeo, dfs_por_hoja=None):
 
     errores = []
 
+    # CoberturaManual.valor es una FK a ValorClasificacionTipo, pero el
+    # texto de origen es el valor reportado (ej. "4.1.2. Turberas"), no el
+    # pk de una fila ya existente: _procesar_fila_cobertura lo resuelve/crea
+    # a partir de ese texto al momento de escribir (ver _procesar_filas),
+    # igual que ya lo trata `campos_destino` de cara al frontend (es_fk:
+    # False). Sin este mismo trato acá, la validación genérica de FK usa
+    # los pks de ValorClasificacionTipo como "choices" y el texto de origen
+    # nunca matchea -ningún valor pasaría nunca, mapeo "directo" o con
+    # mapeo_valores-.
+    es_cobertura_valor_texto = modelo_destino == "CoberturaManual" and campo_destino == "valor"
+
     campo_requerido = not getattr(field, "blank", True) and not getattr(field, "null", True)
-    max_length = getattr(field, "max_length", None)
-    choices = _choices_de_campo(field)
+    max_length = 160 if es_cobertura_valor_texto else getattr(field, "max_length", None)
+    choices = None if es_cobertura_valor_texto else _choices_de_campo(field)
     choices_valores = {v for v, _ in choices} if choices else None
 
-    tipo_campo = type(field).__name__
+    tipo_campo = "CharField" if es_cobertura_valor_texto else type(field).__name__
 
     for idx, val_crudo in serie.items():
         fila = int(idx) + 2
@@ -4446,6 +4457,580 @@ def mapeo_automatico(request, fuente_id, carga_id):
         return JsonResponse({"error": "Método no permitido"}, status=405)
 
     return JsonResponse({"hojas": _sugerir_mapeos_automaticos(carga)}, json_dumps_params={"ensure_ascii": False})
+
+
+# ---------------------------------------------------------------------------
+# Capa bronce/staging (Flujos CO2 por ahora — ver
+# tasks/inprogress/rediseno-carga-flujos-co2-staging-bronce.md en el repo
+# `context`): el archivo se vuelca completo a FilaBronce/CeldaBronce sin
+# bloquear por errores de validación; un paso posterior valida columna por
+# columna (reusando _validar_seccion, igual que el asistente manual) y
+# promueve selectivamente al modelo estructurado las filas sin errores,
+# dejando las demás marcadas (no bloqueadas) para corregir in situ.
+# ---------------------------------------------------------------------------
+
+def _poblar_bronce(carga):
+    """Vuelca cada hoja de `carga.hojas` a FilaBronce/CeldaBronce, literal,
+    sin tipar. Idempotente: si la carga ya tiene filas bronce no repite el
+    trabajo (correcciones posteriores van por `editar_celda_bronce`, no por
+    volver a poblar)."""
+    if FilaBronce.objects.filter(carga=carga).exists():
+        return
+
+    for hoja in (carga.hojas or {}).keys():
+        df = _leer_dataframe_carga(carga, hoja)
+        filas = FilaBronce.objects.bulk_create(
+            [FilaBronce(carga=carga, hoja=hoja, fila_idx=idx) for idx in range(len(df))]
+        )
+        celdas = [
+            CeldaBronce(
+                fila=fila_obj,
+                columna=str(columna),
+                valor=None if pd.isna(valor) else str(valor),
+            )
+            for fila_obj, (_, fila_valores) in zip(filas, df.iterrows())
+            for columna, valor in fila_valores.items()
+        ]
+        CeldaBronce.objects.bulk_create(celdas, batch_size=2000)
+
+
+def _sugerir_mapeos_columnas_bronce(carga):
+    """Como `_sugerir_mapeos_automaticos` (mismo match exacto contra
+    `_hojas_plantilla_vacia()`), pero sin el todo-o-nada por hoja: devuelve
+    los mapeos de las columnas que SÍ matchean 1:1 aunque la hoja tenga
+    columnas sin match o ambiguas -esas quedan listadas aparte
+    (`columnas_sin_match`/`columnas_ambiguas`) para resolver con un selector
+    inline en la vista tipo Excel, sin bloquear la promoción de las columnas
+    que sí se pudieron mapear."""
+    hojas_plantilla_def = {h["hoja"]: h for h in _HOJAS_PLANTILLA}
+    columnas_por_hoja_plantilla = {nombre: columnas for nombre, _df, columnas in _hojas_plantilla_vacia()}
+
+    resultado = {}
+    for hoja_archivo, info in (carga.hojas or {}).items():
+        if hoja_archivo not in hojas_plantilla_def:
+            continue
+        columnas_plantilla = columnas_por_hoja_plantilla.get(hoja_archivo, [])
+
+        conteo_modelo_campo = defaultdict(int)
+        por_verbose_name = {}
+        for c in columnas_plantilla:
+            conteo_modelo_campo[(c["modelo"], c["campo"])] += 1
+            por_verbose_name.setdefault((c["verbose_name"] or c["campo"]).strip(), c)
+
+        mapeos, sin_match, ambiguas = [], [], []
+        for col_raw in info.get("columnas_raw", []):
+            nombre = str(col_raw.get("nombre") or "").strip()
+            columna = por_verbose_name.get(nombre)
+            if columna is None:
+                sin_match.append(nombre)
+                continue
+            if conteo_modelo_campo[(columna["modelo"], columna["campo"])] > 1:
+                ambiguas.append(nombre)
+                continue
+            mapeos.append({
+                "columna_origen": nombre,
+                "modelo_destino": columna["modelo"],
+                "campo_destino": columna["campo"],
+                "transformacion": "directo",
+            })
+        resultado[hoja_archivo] = {"mapeos": mapeos, "columnas_sin_match": sin_match, "columnas_ambiguas": ambiguas}
+    return resultado
+
+
+def _crear_mapeos_automaticos_bronce(carga):
+    """Crea los `MapeoColumna` de las columnas que matchean exacto contra la
+    plantilla (ver `_sugerir_mapeos_columnas_bronce`). No toca las columnas
+    sin match/ambiguas -quedan para el selector inline de la vista tipo
+    Excel-. Idempotente: no duplica mapeos ya creados (ej. por una corrida
+    anterior, o por el asistente manual si el usuario ya resolvió algo a
+    mano antes de llegar acá)."""
+    sugerencias = _sugerir_mapeos_columnas_bronce(carga)
+    existentes = {
+        (m.hoja, m.columna_origen, m.modelo_destino, m.campo_destino)
+        for m in carga.mapeos.all()
+    }
+    nuevos = [
+        MapeoColumna(
+            carga=carga, hoja=hoja,
+            columna_origen=m["columna_origen"],
+            modelo_destino=m["modelo_destino"],
+            campo_destino=m["campo_destino"],
+            transformacion=m["transformacion"],
+        )
+        for hoja, info in sugerencias.items()
+        for m in info["mapeos"]
+        if (hoja, m["columna_origen"], m["modelo_destino"], m["campo_destino"]) not in existentes
+    ]
+    if nuevos:
+        MapeoColumna.objects.bulk_create(nuevos)
+
+
+def _escribir_errores_en_celdas(carga, resultados_por_hoja):
+    """Vuelca cada error de `resultados_por_hoja` (mismo shape que devuelve
+    `_validar_seccion`) a la `CeldaBronce` que lo originó (hoja + fila + 2 =
+    número de fila que ya usa `_validar_columna` + columna). Un error con
+    `fila=None` es de sección completa (ej. "campo obligatorio sin mapear":
+    falta una columna entera, no un valor puntual) -no se puede atribuir a
+    una celda, así que esa hoja queda marcada "bloqueada" (ver llamador) en
+    vez de forzar la fila a inválida. Limpia errores previos antes de
+    escribir los nuevos, para que una corrección (columna recién mapeada o
+    celda editada) no deje errores viejos colgando."""
+    CeldaBronce.objects.filter(fila__carga=carga).update(error=None)
+
+    celdas_por_clave = {}
+    for fila in FilaBronce.objects.filter(carga=carga).prefetch_related("celdas"):
+        for celda in fila.celdas.all():
+            celdas_por_clave[(fila.hoja, fila.fila_idx, celda.columna)] = celda
+
+    hojas_bloqueadas = set()
+    celdas_a_actualizar = []
+    for hoja, resultados in resultados_por_hoja.items():
+        for resultado in resultados:
+            if "advertencia" in resultado:
+                continue
+            for error in resultado["errores"]:
+                if error["fila"] is None:
+                    hojas_bloqueadas.add(hoja)
+                    continue
+                celda = celdas_por_clave.get((hoja, error["fila"] - 2, resultado["columna"]))
+                if celda is None:
+                    continue
+                celda.error = error["mensaje"]
+                celdas_a_actualizar.append(celda)
+    if celdas_a_actualizar:
+        CeldaBronce.objects.bulk_update(celdas_a_actualizar, ["error"])
+    return hojas_bloqueadas
+
+
+def _actualizar_estados_filas_bronce(carga, hojas_bloqueadas):
+    """Marca cada FilaBronce (de una hoja no bloqueada) como `valido` o
+    `invalido` según si alguna de sus celdas quedó con error -ver
+    `_escribir_errores_en_celdas`-. Las filas de una hoja bloqueada
+    (columna obligatoria sin mapear todavía) quedan tal cual, sin tocar: no
+    hay suficiente mapeo para evaluarlas. Devuelve la lista de filas
+    `valido`, listas para promover."""
+    filas = (
+        FilaBronce.objects.filter(carga=carga)
+        .exclude(estado="promovido")
+        .exclude(hoja__in=hojas_bloqueadas)
+        .prefetch_related("celdas")
+    )
+    validas, invalidas = [], []
+    for fila in filas:
+        if any(celda.error for celda in fila.celdas.all()):
+            fila.estado = "invalido"
+            invalidas.append(fila)
+        else:
+            fila.estado = "valido"
+            validas.append(fila)
+    if validas or invalidas:
+        FilaBronce.objects.bulk_update(validas + invalidas, ["estado"])
+    return validas
+
+
+def _promover_filas_bronce(carga, mapeos, dfs_por_hoja, validas):
+    """Promueve al modelo estructurado solo las filas `valido` (ver
+    `_actualizar_estados_filas_bronce`), reusando `_procesar_filas_multihoja`
+    tal cual -sin reescribir la lógica de creación/vínculo de FK- sobre un
+    DataFrame filtrado a esas filas por hoja (`.iloc` + `reset_index`: el
+    resto del pipeline accede por posición, no por índice original, así que
+    renumerar es seguro). Las hojas de origen de columnas cruzadas
+    (`hoja_origen`) que no tienen filas propias a promover esta vez se dejan
+    SIN filtrar -siguen completas en `dfs_por_hoja`-, porque el cruce es por
+    valor (clave común), no por posición, y puede necesitar filas que en su
+    propia hoja no estén `valido` todavía.
+
+    `promovido_a` queda igual para todas las filas de esta corrida (los pk
+    creados/reutilizados por hoja, no por fila individual) -simplificación
+    aceptada: separar por fila requeriría exponer el detalle por-fila que
+    hoy `_procesar_filas` no devuelve, y no es necesario para el uso que le
+    da el diseño (bookkeeping, no dato de la fuente)."""
+    if not validas:
+        return {}
+
+    indices_por_hoja = defaultdict(list)
+    for fila in validas:
+        indices_por_hoja[fila.hoja].append(fila.fila_idx)
+
+    dfs_filtrados = dict(dfs_por_hoja)
+    for hoja, indices in indices_por_hoja.items():
+        dfs_filtrados[hoja] = dfs_por_hoja[hoja].iloc[sorted(indices)].reset_index(drop=True)
+
+    mapeos_filtrados = [m for m in mapeos if m.hoja in indices_por_hoja]
+    modelos_incluidos = sorted({m.modelo_destino for m in mapeos_filtrados})
+    orden = _orden_topologico(modelos_incluidos)
+    resumen_modelos = {m: {"creados": 0, "reutilizados": 0} for m in modelos_incluidos}
+
+    with transaction.atomic():
+        _detalle, pks_combinado = _procesar_filas_multihoja(
+            carga, mapeos_filtrados, orden, resumen_modelos, dfs_filtrados,
+            es_correccion=carga.estado == "importado",
+        )
+
+    pks_por_modelo = {modelo: sorted(pks) for modelo, pks in pks_combinado.items()}
+    for fila in validas:
+        fila.estado = "promovido"
+        fila.promovido_a = pks_por_modelo
+    FilaBronce.objects.bulk_update(validas, ["estado", "promovido_a"])
+
+    acumulado = carga.pks_importados or {}
+    for modelo, pks in pks_por_modelo.items():
+        acumulado[modelo] = sorted(set(acumulado.get(modelo, [])) | set(pks))
+    carga.pks_importados = acumulado
+    carga.save(update_fields=["pks_importados"])
+    return pks_por_modelo
+
+
+def _aplicar_ediciones_bronce(carga, dfs_por_hoja):
+    """Sobreescribe, en los DataFrames recién leídos del archivo, cada celda
+    marcada `editado=True` (corregida desde `editar_celda_bronce`) con su
+    valor actual de `CeldaBronce` -así una corrección manual se refleja en
+    la próxima validación/promoción, sin tener que reconstruir toda la hoja
+    desde bronce (que perdería los tipos nativos que ya resuelve bien
+    `pd.read_excel`/`pd.read_csv` para las celdas sin tocar)."""
+    editadas = CeldaBronce.objects.filter(fila__carga=carga, editado=True).select_related("fila")
+    for celda in editadas:
+        df = dfs_por_hoja.get(celda.fila.hoja)
+        if df is None or celda.columna not in df.columns or celda.fila.fila_idx not in df.index:
+            continue
+        df.at[celda.fila.fila_idx, celda.columna] = celda.valor
+
+
+def _validar_y_promover_bronce(carga):
+    """Corre después de poblar bronce (o después de editar una celda, ver
+    `editar_celda_bronce`): valida las columnas ya mapeadas -automático
+    (`_crear_mapeos_automaticos_bronce`) o manual, vía el selector inline
+    pendiente en frontend-, escribe cada error en su `CeldaBronce` en vez de
+    cortar la carga completa (a diferencia de `_ejecutar_importacion_async`),
+    y promueve selectivamente las filas que quedaron sin ningún error."""
+    mapeos = list(carga.mapeos.exclude(modelo_destino=""))
+    if not mapeos:
+        return {"ok": True, "mensaje": "Sin columnas mapeadas todavía.", "filas_promovidas": 0}
+
+    mapeos_por_hoja = defaultdict(list)
+    for m in mapeos:
+        mapeos_por_hoja[m.hoja].append(m)
+
+    hojas_mapeadas = sorted(mapeos_por_hoja.keys())
+    mapeos_cruzados = [m for m in mapeos if m.hoja_origen and m.hoja_origen != m.hoja]
+    hojas_origen_extra = sorted({m.hoja_origen for m in mapeos_cruzados} - set(hojas_mapeadas))
+    todas_hojas = [*hojas_mapeadas, *hojas_origen_extra]
+
+    dfs_por_hoja = {hoja: _leer_dataframe_carga(carga, hoja) for hoja in todas_hojas}
+    _aplicar_ediciones_bronce(carga, dfs_por_hoja)
+    for hoja in hojas_mapeadas:
+        _aplicar_estrategia_nulos(dfs_por_hoja[hoja], mapeos_por_hoja[hoja])
+    for hoja_origen in {m.hoja_origen for m in mapeos_cruzados}:
+        _aplicar_estrategia_nulos(
+            dfs_por_hoja[hoja_origen], [m for m in mapeos_cruzados if m.hoja_origen == hoja_origen],
+        )
+
+    resultados_por_hoja = {
+        hoja: _validar_seccion(
+            carga, dfs_por_hoja[hoja], mapeos_por_hoja[hoja], hoja=hoja, dfs_por_hoja=dfs_por_hoja,
+        )[0]
+        for hoja in hojas_mapeadas
+    }
+
+    hojas_bloqueadas = _escribir_errores_en_celdas(carga, resultados_por_hoja)
+    validas = _actualizar_estados_filas_bronce(carga, hojas_bloqueadas)
+    pks_por_modelo = _promover_filas_bronce(carga, mapeos, dfs_por_hoja, validas)
+
+    return {
+        "ok": True,
+        "hojas_bloqueadas": sorted(hojas_bloqueadas),
+        "filas_promovidas": len(validas),
+        "modelos": pks_por_modelo,
+    }
+
+
+def _ejecutar_bronce_async(carga_id):
+    """Corre en background (mismo patrón sin worker/Celery que
+    `_ejecutar_importacion_async`, reusando los campos `CargaArchivo.progreso_*`
+    para que el frontend haga polling con el mismo endpoint
+    `estado_importacion` ya existente): poblar bronce → mapeo automático de
+    columnas → validar y promover. Si el proceso se reinicia a mitad de
+    camino, igual que la importación clásica, el job se pierde sin
+    recuperación automática."""
+    from django.db import connections
+
+    carga = CargaArchivo.objects.get(pk=carga_id)
+    try:
+        _guardar_progreso(carga, estado="en_progreso", actual=0, total=3, mensaje="Cargando filas a la capa bronce…")
+        _poblar_bronce(carga)
+        _guardar_progreso(carga, actual=1, mensaje="Sugiriendo mapeo automático de columnas…")
+        _crear_mapeos_automaticos_bronce(carga)
+        _guardar_progreso(carga, actual=2, mensaje="Validando y promoviendo filas sin errores…")
+        resultado = _validar_y_promover_bronce(carga)
+        _guardar_progreso(carga, estado="completado", actual=3, mensaje="Completado.", resultado=resultado)
+    except Exception as exc:
+        logger.exception("Error al procesar bronce de la carga %s en background", carga_id)
+        _guardar_progreso(carga, estado="error", mensaje=str(exc), resultado={"error": str(exc)})
+    finally:
+        connections.close_all()
+
+
+@csrf_exempt
+@requiere_nivel("reportador")
+def procesar_bronce(request, fuente_id, carga_id):
+    """Dispara el pipeline bronce completo (poblar → mapear automático →
+    validar/promover) para esta carga, en background. Reemplaza, para el
+    archivo que ya trae la plantilla, al asistente manual de mapeo
+    (`EtlUpload.tsx` paso 4) con la vista tipo Excel -ver
+    tasks/inprogress/rediseno-carga-flujos-co2-staging-bronce.md-. Lo llama
+    el frontend cuando el usuario entra al nuevo paso 4, no `upload_archivo`
+    automáticamente: así el flujo manual existente (otras metodologías, o
+    Flujos sin la vista nueva todavía) sigue sin tocarse."""
+    if request.method != "POST":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+    try:
+        carga = CargaArchivo.objects.get(pk=carga_id, fuente_id=fuente_id)
+    except CargaArchivo.DoesNotExist:
+        return JsonResponse({"error": "Carga no encontrada"}, status=404)
+
+    if carga.progreso_estado == "en_progreso":
+        return JsonResponse({"error": "Ya hay un proceso en curso para esta carga."}, status=409)
+
+    carga.progreso_estado = "en_progreso"
+    carga.progreso_actual = 0
+    carga.progreso_total = 0
+    carga.progreso_mensaje = "Iniciando…"
+    carga.progreso_resultado = None
+    carga.save(update_fields=["progreso_estado", "progreso_actual", "progreso_total", "progreso_mensaje", "progreso_resultado"])
+
+    threading.Thread(target=_ejecutar_bronce_async, args=(carga.id,), daemon=True).start()
+    return JsonResponse({"job_iniciado": True}, status=202)
+
+
+_BRONCE_PAGE_SIZE_DEFAULT = 50
+_BRONCE_PAGE_SIZE_MAX = 500
+
+
+@requiere_nivel("reportador")
+def listar_bronce(request, fuente_id, carga_id):
+    """Lista paginada de `FilaBronce` de una hoja, con sus celdas (columna →
+    valor/error) y filtros por valor de columna -ej. `?hoja=Flujos+CO2+-+Dato
+    &hora_toma=25:70&offset=0&limit=50`-. Gracias al esquema EAV, filtrar por
+    columna es un `CeldaBronce.objects.filter(columna=..., valor__icontains=...)`
+    normal, sin tocar JSON ni traer todas las celdas de la carga de una sola
+    vez (alimenta la vista tipo Excel del nuevo paso 4)."""
+    try:
+        carga = CargaArchivo.objects.get(pk=carga_id, fuente_id=fuente_id)
+    except CargaArchivo.DoesNotExist:
+        return JsonResponse({"error": "Carga no encontrada"}, status=404)
+
+    hoja = (request.GET.get("hoja") or "").strip()
+    if not hoja:
+        return JsonResponse({"error": "Falta el parámetro 'hoja'."}, status=400)
+
+    reservados = {"hoja", "offset", "limit"}
+    filtros = {k: v for k, v in request.GET.items() if k not in reservados and v.strip()}
+
+    qs = FilaBronce.objects.filter(carga=carga, hoja=hoja)
+    for columna, valor in filtros.items():
+        fila_ids_match = CeldaBronce.objects.filter(
+            fila__carga=carga, fila__hoja=hoja, columna=columna, valor__icontains=valor,
+        ).values_list("fila_id", flat=True)
+        qs = qs.filter(pk__in=fila_ids_match)
+
+    try:
+        offset = max(0, int(request.GET.get("offset") or 0))
+        limit = int(request.GET.get("limit") or _BRONCE_PAGE_SIZE_DEFAULT)
+    except ValueError:
+        return JsonResponse({"error": "offset/limit inválidos."}, status=400)
+    limit = max(1, min(limit, _BRONCE_PAGE_SIZE_MAX))
+
+    total = qs.count()
+    pagina = list(qs.order_by("fila_idx")[offset:offset + limit].prefetch_related("celdas"))
+
+    # `fila.celdas.all()` no trae las celdas en el orden original de la
+    # plantilla -son filas de una tabla EAV sin relación de orden con la
+    # posición de la columna en el archivo-, así que el dict se arma
+    # iterando el orden de columnas guardado en `CargaArchivo.hojas` (ver
+    # `_columnas_desde_dataframe`), que sí preserva el orden del archivo.
+    orden_columnas = [c["nombre"] for c in (carga.hojas.get(hoja) or {}).get("columnas_raw", [])]
+
+    filas_json = []
+    for fila in pagina:
+        celdas_por_columna = {celda.columna: {"valor": celda.valor, "error": celda.error} for celda in fila.celdas.all()}
+        celdas_ordenadas = {col: celdas_por_columna[col] for col in orden_columnas if col in celdas_por_columna}
+        for col, celda in celdas_por_columna.items():
+            celdas_ordenadas.setdefault(col, celda)
+        filas_json.append({"fila_idx": fila.fila_idx, "estado": fila.estado, "celdas": celdas_ordenadas})
+
+    columnas_con_error = (
+        CeldaBronce.objects.filter(fila__carga=carga, fila__hoja=hoja, error__isnull=False)
+        .values("columna")
+        .annotate(total=models.Count("id", distinct=True))
+    )
+    errores_por_columna = {c["columna"]: c["total"] for c in columnas_con_error}
+
+    mapeadas = {
+        m.columna_origen: {"modelo_destino": m.modelo_destino, "campo_destino": m.campo_destino}
+        for m in carga.mapeos.filter(hoja=hoja).exclude(modelo_destino="")
+    }
+
+    return JsonResponse({
+        "hoja": hoja,
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "filas": filas_json,
+        "errores_por_columna": errores_por_columna,
+        "columnas_mapeadas": mapeadas,
+    }, json_dumps_params={"ensure_ascii": False})
+
+
+@requiere_nivel("reportador")
+def exportar_bronce(request, fuente_id, carga_id):
+    """Descarga en un único Excel la capa bronce completa de esta carga, tal
+    cual se ve en la vista tipo Excel: una pestaña por `hoja`, columnas en
+    el orden de la plantilla (mismo criterio que `listar_bronce`) y el valor
+    literal de cada celda -sin tipar, incluidas las filas con error-."""
+    try:
+        carga = CargaArchivo.objects.get(pk=carga_id, fuente_id=fuente_id)
+    except CargaArchivo.DoesNotExist:
+        return JsonResponse({"error": "Carga no encontrada"}, status=404)
+
+    hojas_nombres = list(carga.hojas.keys()) if carga.hojas else list(
+        FilaBronce.objects.filter(carga=carga).values_list("hoja", flat=True).distinct()
+    )
+
+    hojas_excel = []
+    for hoja in hojas_nombres:
+        orden_columnas = [c["nombre"] for c in (carga.hojas.get(hoja) or {}).get("columnas_raw", [])]
+        filas = list(FilaBronce.objects.filter(carga=carga, hoja=hoja).order_by("fila_idx").prefetch_related("celdas"))
+        if not filas:
+            continue
+        if not orden_columnas:
+            # Snapshot ausente (carga antigua): se arma el orden a partir del
+            # orden de aparición de las columnas en las celdas.
+            for fila in filas:
+                for celda in fila.celdas.all():
+                    if celda.columna not in orden_columnas:
+                        orden_columnas.append(celda.columna)
+        valores = []
+        for fila in filas:
+            celdas = {c.columna: c.valor for c in fila.celdas.all()}
+            valores.append([celdas.get(col, "") for col in orden_columnas])
+        df = pd.DataFrame(valores, columns=orden_columnas)
+
+        mapeos = {m.columna_origen: m.modelo_destino for m in carga.mapeos.filter(hoja=hoja).exclude(modelo_destino="")}
+        columnas_color = [{"modelo": mapeos.get(col)} for col in orden_columnas]
+        hojas_excel.append((hoja[:31], df, columnas_color))
+
+    if not hojas_excel:
+        return JsonResponse({"error": "Esta carga todavía no tiene datos en la capa bronce."}, status=404)
+
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        for nombre_hoja, df, columnas_color in hojas_excel:
+            df.to_excel(writer, sheet_name=nombre_hoja, index=False)
+            _colorear_encabezados(writer.sheets[nombre_hoja], columnas_color)
+
+    buffer.seek(0)
+    response = HttpResponse(
+        buffer.read(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = f'attachment; filename="bronce_carga_{carga_id}.xlsx"'
+    return response
+
+
+_VALORES_UNICOS_MAX = 200
+
+
+@requiere_nivel("reportador")
+def valores_columna_bronce(request, fuente_id, carga_id):
+    """Valores únicos (con conteo) de UNA columna bronce de UNA hoja, para
+    armar el selector "valor de origen → choice destino" (`mapeo_valores`)
+    al mapear una columna a un campo con choices/FK -ej. `CoberturaManual.valor`
+    (FK a `ValorClasificacionTipo`): el archivo trae el texto literal
+    ("4.1.2. Turberas"), no el pk, así que el mapeo "directo" simple no
+    alcanza; hace falta traducir cada valor único, igual que `ChoicesPanel.tsx`
+    hace en el asistente manual. Se capa a `_VALORES_UNICOS_MAX` valores
+    distintos para no mandar un selector gigante si la columna es casi
+    continua (en ese caso no es candidata a mapeo por choices de todos
+    modos)."""
+    try:
+        carga = CargaArchivo.objects.get(pk=carga_id, fuente_id=fuente_id)
+    except CargaArchivo.DoesNotExist:
+        return JsonResponse({"error": "Carga no encontrada"}, status=404)
+
+    hoja = (request.GET.get("hoja") or "").strip()
+    columna = (request.GET.get("columna") or "").strip()
+    if not hoja or not columna:
+        return JsonResponse({"error": "Faltan los parámetros 'hoja' y 'columna'."}, status=400)
+
+    conteos = (
+        CeldaBronce.objects.filter(fila__carga=carga, fila__hoja=hoja, columna=columna, valor__isnull=False)
+        .values("valor")
+        .annotate(total=models.Count("id"))
+        .order_by("-total")[:_VALORES_UNICOS_MAX]
+    )
+    return JsonResponse(
+        {"valores": [{"valor": c["valor"], "total": c["total"]} for c in conteos]},
+        json_dumps_params={"ensure_ascii": False},
+    )
+
+
+@csrf_exempt
+@requiere_nivel("reportador")
+def editar_celda_bronce(request, fuente_id, carga_id):
+    """Corrige el valor de UNA celda bronce (`{hoja, fila_idx, columna,
+    valor}`), limpia su error, y re-corre validación/promoción de bronce
+    para TODA la carga -a los volúmenes actuales, revalidar todo en vez de
+    solo la hoja/fila tocada es aceptable y evita mantener un camino de
+    validación "de una celda sola" aparte del que ya existe-. Si la fila
+    queda sin errores, se promueve en el mismo paso y la respuesta ya
+    refleja `estado=\"promovido\"`.
+
+    La corrección se escribe en `CeldaBronce.valor` con `editado=True`;
+    `_validar_y_promover_bronce` sobreescribe con ese valor el DataFrame
+    leído del archivo original antes de validar (ver
+    `_aplicar_ediciones_bronce`), así que la corrección sí se tiene en
+    cuenta en la revalidación, no solo en lo que se muestra en pantalla."""
+    if request.method != "PATCH":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+    try:
+        carga = CargaArchivo.objects.get(pk=carga_id, fuente_id=fuente_id)
+    except CargaArchivo.DoesNotExist:
+        return JsonResponse({"error": "Carga no encontrada"}, status=404)
+
+    try:
+        body = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "JSON inválido"}, status=400)
+
+    hoja = (body.get("hoja") or "").strip()
+    columna = (body.get("columna") or "").strip()
+    fila_idx = body.get("fila_idx")
+    valor = body.get("valor")
+    if not hoja or not columna or fila_idx is None:
+        return JsonResponse({"error": "Faltan 'hoja', 'fila_idx' o 'columna'."}, status=400)
+
+    try:
+        fila = FilaBronce.objects.get(carga=carga, hoja=hoja, fila_idx=int(fila_idx))
+    except (FilaBronce.DoesNotExist, ValueError, TypeError):
+        return JsonResponse({"error": "Fila bronce no encontrada."}, status=404)
+
+    celda, _creada = CeldaBronce.objects.get_or_create(fila=fila, columna=columna)
+    celda.valor = None if valor is None else str(valor)
+    celda.error = None
+    celda.editado = True
+    celda.save(update_fields=["valor", "error", "editado"])
+
+    resultado = _validar_y_promover_bronce(carga)
+    fila.refresh_from_db()
+    return JsonResponse({
+        "ok": True,
+        "fila": {
+            "fila_idx": fila.fila_idx,
+            "estado": fila.estado,
+            "celdas": {c.columna: {"valor": c.valor, "error": c.error} for c in fila.celdas.all()},
+        },
+        "resumen": resultado,
+    }, json_dumps_params={"ensure_ascii": False})
 
 
 def plantilla_vacia(request):

@@ -36,7 +36,10 @@ from .co2 import (
 
 from .publicacion import Autor, Publicacion, PublicacionAutor, PublicacionSitio, PublicacionType, ResultadoPublicacion
 
-from .datos import CargaArchivo, FuenteDatos, MapeoColumna, PasswordResetToken, RolUsuario, SolicitudNivel, Usuario
+from .datos import (
+    CargaArchivo, CeldaBronce, FilaBronce, FuenteDatos, MapeoColumna,
+    PasswordResetToken, RolUsuario, SolicitudNivel, Usuario,
+)
 
 from .reglas import AplicacionRegla, ReglaAutollenado
 
@@ -105,6 +108,8 @@ __all__ = [
     "FuenteDatos",
     "CargaArchivo",
     "MapeoColumna",
+    "FilaBronce",
+    "CeldaBronce",
     "ReglaAutollenado",
     "AplicacionRegla",
     # Publicaciones

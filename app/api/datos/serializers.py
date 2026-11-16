@@ -37,6 +37,7 @@ class FuenteDatosSerializer(serializers.ModelSerializer):
     fecha_datos = serializers.DateField(source="fecha_recepcion", read_only=True)
     sitio = serializers.SerializerMethodField()
     ultima_carga_importada_id = serializers.SerializerMethodField()
+    carga_bronce_pendiente_id = serializers.SerializerMethodField()
 
     class Meta:
         model = FuenteDatos
@@ -63,6 +64,7 @@ class FuenteDatosSerializer(serializers.ModelSerializer):
             "notas",
             "created_at",
             "ultima_carga_importada_id",
+            "carga_bronce_pendiente_id",
         ]
         read_only_fields = ["created_at"]
 
@@ -71,6 +73,20 @@ class FuenteDatosSerializer(serializers.ModelSerializer):
 
     def get_ultima_carga_importada_id(self, obj):
         carga = obj.cargas.filter(estado="importado").order_by("-created_at").first()
+        return carga.pk if carga else None
+
+    def get_carga_bronce_pendiente_id(self, obj):
+        # Carga ya cargada completa a la capa bronce (ver
+        # tasks/inprogress/rediseno-carga-flujos-co2-staging-bronce.md en el
+        # repo `context`) con filas que todavía no se promovieron al modelo
+        # estructurado: para esto no hace falta re-analizar el archivo, solo
+        # ir directo a la vista de validación.
+        carga = (
+            obj.cargas.filter(filas_bronce__estado__in=["pendiente", "valido", "invalido"])
+            .order_by("-created_at")
+            .distinct()
+            .first()
+        )
         return carga.pk if carga else None
 
     def create(self, validated_data):

@@ -396,3 +396,85 @@ class MapeoColumna(TimestampedModel):
     def __str__(self):
         destino = f"{self.modelo_destino}.{self.campo_destino}" if self.modelo_destino else "ignorar"
         return f"{self.columna_origen} → {destino}"
+
+
+class FilaBronce(TimestampedModel):
+    """Una fila del archivo fuente, cargada literal (ver `CeldaBronce`) antes de validar/promover al modelo estructurado.
+
+    Ver tasks/inprogress/rediseno-carga-flujos-co2-staging-bronce.md (context repo)
+    para el diseño completo: por qué EAV en vez de JSON o columnas fijas.
+    """
+
+    ESTADO_CHOICES = [
+        ("pendiente", "Pendiente de validar"),
+        ("valido", "Válido — listo para promover"),
+        ("invalido", "Con errores — necesita corrección"),
+        ("promovido", "Promovido al modelo estructurado"),
+    ]
+
+    carga = models.ForeignKey(
+        CargaArchivo, on_delete=models.CASCADE,
+        related_name="filas_bronce", verbose_name="carga",
+    )
+    hoja = models.CharField(
+        "hoja", max_length=255,
+        help_text='Hoja de origen, ej. "Flujos CO2 - Metadato" / "Flujos CO2 - Dato".',
+    )
+    fila_idx = models.IntegerField(
+        "posición en el archivo",
+        help_text="Índice original de la fila en el archivo fuente, para orden y trazabilidad.",
+    )
+    estado = models.CharField("estado", max_length=20, choices=ESTADO_CHOICES, default="pendiente")
+    promovido_a = models.JSONField(
+        "modelos creados/reusados al promover", null=True, blank=True,
+        help_text='Bookkeeping del resultado de la promoción, no dato de la fuente. '
+                   'Ej: {"SubmuestraGEI": 123, "UnidadMuestreo": 45}.',
+    )
+
+    class Meta:
+        verbose_name = "fila bronce"
+        verbose_name_plural = "filas bronce"
+        ordering = ["hoja", "fila_idx"]
+        unique_together = [("carga", "hoja", "fila_idx")]
+
+    def __str__(self):
+        return f"Carga #{self.carga_id} — {self.hoja} fila {self.fila_idx} ({self.estado})"
+
+
+class CeldaBronce(TimestampedModel):
+    """Valor literal de una columna de una `FilaBronce`, con su error de validación si lo tiene.
+
+    Una fila por celda (no por fila de Excel) para poder consultar/filtrar
+    directo por columna (`CeldaBronce.objects.filter(columna=..., error__isnull=False)`)
+    sin depender de JSON ni de un esquema fijo por plantilla.
+    """
+
+    fila = models.ForeignKey(
+        FilaBronce, on_delete=models.CASCADE,
+        related_name="celdas", verbose_name="fila",
+    )
+    columna = models.CharField(
+        "columna", max_length=255, db_index=True,
+        help_text="Encabezado literal del archivo, ej. 'hora_toma'.",
+    )
+    valor = models.TextField("valor", blank=True, null=True)
+    error = models.TextField(
+        "error de validación", blank=True, null=True,
+        help_text="Mensaje de validación de esta celda, si lo tiene. Vacío = sin error.",
+    )
+    editado = models.BooleanField(
+        "editado manualmente", default=False,
+        help_text="True si este valor se corrigió desde la vista tipo Excel (editar_celda_bronce), "
+                   "distinto del literal que trajo el archivo original. Permite que la validación "
+                   "sobreescriba puntualmente el DataFrame leído del archivo con el valor corregido, "
+                   "sin tener que reconstruir toda la hoja desde bronce.",
+    )
+
+    class Meta:
+        verbose_name = "celda bronce"
+        verbose_name_plural = "celdas bronce"
+        ordering = ["fila", "columna"]
+        unique_together = [("fila", "columna")]
+
+    def __str__(self):
+        return f"{self.columna} = {self.valor!r}"
