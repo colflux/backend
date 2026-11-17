@@ -3387,14 +3387,16 @@ _VISTAS_DESNORMALIZADAS = {
             # opcional para cuando una misma parcela se subdivide por
             # reservorio de carbono) — se excluye de la hoja Metadato por
             # decisión de equipo (2026-11-09), el campo del modelo no se toca.
-            "UnidadMuestreo": {"excluir": ["compartimento"], "alias": {
+            # fecha_instalacion: se excluye de la hoja Metadato por pedido del
+            # equipo (Andrea Chaparro, 2026-11-13) — el campo del modelo no se
+            # toca, ver context/tasks/inprogress/ajustes-plantilla-flujos-co2-feedback-andrea.md.
+            "UnidadMuestreo": {"excluir": ["compartimento", "fecha_instalacion"], "alias": {
                 "nombre": "nombre_unidad_muestreo",
                 "codigo_metadato": "codigo_metadato",
                 "tipo_muestreo": "tipo_muestreo",
                 "diametro_anillo_cm": "diametro_anillo",
                 "area_cm2": "tamano_unidad_muestreo_cm2",
                 "tiene_pozo_nivel_freatico": "pozo_nivel_freatico",
-                "fecha_instalacion": "fecha_instalacion_unidad_muestreo",
             }},
             "UnidadExperimental": {"alias": {
                 "nombre": "nombre_unidad_experimental",
@@ -3409,7 +3411,10 @@ _VISTAS_DESNORMALIZADAS = {
             "Proyecto": {"incluir": []},
             "UnidadMedida": {"incluir": ["simbolo"], "alias": {"simbolo": "unidad_flujo"}},
             "Equipo": {"incluir": ["modelo"]},
-            "MuestraGEI": {"alias": {"chamber_vol": "volumen_camara"}},
+            # tubo: se excluye de la hoja Dato por pedido del equipo (Andrea
+            # Chaparro, 2026-11-13) — el campo del modelo no se toca, ver
+            # context/tasks/inprogress/ajustes-plantilla-flujos-co2-feedback-andrea.md.
+            "MuestraGEI": {"excluir": ["tubo"], "alias": {"chamber_vol": "volumen_camara"}},
             # n_toma: nunca llega poblado desde IDEAM (100% NULL, confirmado
             # en CO2 y CH4) — se queda en el modelo (lo usa el orden interno
             # y la regla de autollenado de horas) pero no aporta nada visible
@@ -4304,7 +4309,6 @@ _ORDEN_COLUMNAS_DATO_GEI_PLANTILLA = [
     "MuestraGEI.gas",
     "MuestraGEI.chamber_vol",
     "UnidadMuestreo.diametro_anillo_cm",
-    "MuestraGEI.tubo",
     "SubmuestraGEI.fecha",
     "SubmuestraGEI.hora",
     "SubmuestraGEI.momento",
@@ -4330,7 +4334,6 @@ _ORDEN_COLUMNAS_METADATO_GEI_PLANTILLA = [
     "UnidadMuestreo.nombre",
     "Sitio.latitud", "Sitio.longitud", "SistemaReferencia.nombre", "Sitio.tipo_localizacion",
     "Sitio.altitud", "Sitio.pendiente", "Sitio.topografia",
-    "UnidadMuestreo.fecha_instalacion",
     "UnidadMuestreo.tipo_muestreo", "UnidadMuestreoTipo.nombre", "Parcela.forma", "UnidadMuestreo.area_cm2",
     "Microtopografia.nombre",
     "UnidadMuestreo.diametro_anillo_cm", "UnidadMuestreo.tiene_pozo_nivel_freatico",
@@ -4917,16 +4920,27 @@ def exportar_bronce(request, fuente_id, carga_id):
 
         mapeos = {m.columna_origen: m.modelo_destino for m in carga.mapeos.filter(hoja=hoja).exclude(modelo_destino="")}
         columnas_color = [{"modelo": mapeos.get(col)} for col in orden_columnas]
+        df, columnas_color = _quitar_columnas_vacias(df, columnas_color)
         hojas_excel.append((hoja[:31], df, columnas_color))
 
     if not hojas_excel:
         return JsonResponse({"error": "Esta carga todavía no tiene datos en la capa bronce."}, status=404)
+
+    fuente = carga.fuente
+    responsable = fuente.reportador
+    hoja_responsables = pd.DataFrame([{
+        "nombre_proyecto": fuente.proyecto.nombre if fuente.proyecto else "",
+        "entidad_encargada": fuente.institucion.nombre if fuente.institucion else "",
+        "persona_responsable": responsable.nombre if responsable else "",
+        "correo_responsable": (responsable.correo_institucional or responsable.correo) if responsable else "",
+    }])
 
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         for nombre_hoja, df, columnas_color in hojas_excel:
             df.to_excel(writer, sheet_name=nombre_hoja, index=False)
             _colorear_encabezados(writer.sheets[nombre_hoja], columnas_color)
+        hoja_responsables.to_excel(writer, sheet_name="Responsables", index=False)
 
     buffer.seek(0)
     response = HttpResponse(
