@@ -14,9 +14,11 @@ class MuestraBiomasa(TimestampedModel):
     fecha = models.DateField("fecha", null=True, blank=True, help_text="Fecha de la medición.")
     prod_biomasa_g = models.DecimalField(
         "producción de biomasa (g)", max_digits=12, decimal_places=4, null=True, blank=True,
+        help_text="Producción de biomasa aérea medida en la parcela, en gramos.",
     )
     contenido_carbono = models.DecimalField(
         "contenido de carbono", max_digits=12, decimal_places=4, null=True, blank=True,
+        help_text="Contenido de carbono de la muestra de biomasa, usado para calcular el carbono por hectárea.",
     )
     prom_tonc_ha = models.DecimalField(
         "promedio (TonC/ha)", max_digits=10, decimal_places=4, null=True, blank=True,
@@ -24,12 +26,15 @@ class MuestraBiomasa(TimestampedModel):
     )
     sd_tonc_ha = models.DecimalField(
         "desviación estándar (TonC/ha)", max_digits=10, decimal_places=4, null=True, blank=True,
+        help_text="Desviación estándar del carbono en biomasa aérea de la parcela, en toneladas de carbono por hectárea.",
     )
     min_tonc_ha = models.DecimalField(
         "mínimo (TonC/ha)", max_digits=10, decimal_places=4, null=True, blank=True,
+        help_text="Valor mínimo de carbono en biomasa aérea de la parcela, en toneladas de carbono por hectárea.",
     )
     max_tonc_ha = models.DecimalField(
         "máximo (TonC/ha)", max_digits=10, decimal_places=4, null=True, blank=True,
+        help_text="Valor máximo de carbono en biomasa aérea de la parcela, en toneladas de carbono por hectárea.",
     )
 
     class Meta:

@@ -418,7 +418,7 @@ class FilaBronce(TimestampedModel):
     )
     hoja = models.CharField(
         "hoja", max_length=255,
-        help_text='Hoja de origen, ej. "Flujos CO2 - Metadato" / "Flujos CO2 - Dato".',
+        help_text='Hoja de origen, ej. "Flujos Metadato" / "Flujos Dato".',
     )
     fila_idx = models.IntegerField(
         "posición en el archivo",

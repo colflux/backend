@@ -1,30 +1,34 @@
 from django.db import models
 
 from .base import TimestampedModel
-from .sitio import Sitio, UnidadMuestreo
+from .sitio import UnidadMuestreo
 
 
 class CaracterizacionMuestreoSuelo(TimestampedModel):
-    """Caracterización de un muestreo de suelo en un sitio: tipo de suelo, profundidad e intervalos del perfil."""
+    """Caracterización de un muestreo de suelo en una unidad de muestreo: profundidad e intervalos del perfil.
 
-    TIPO_SUELO_CHOICES = [
-        ("Mineral", "Mineral"),
-        ("Organico", "Orgánico"),
-    ]
+    El tipo de suelo (Mineral/Orgánico, clasificación IPCC) no vive acá: se
+    reporta como cualquier otra clasificación de UnidadMuestreo, vía
+    CoberturaManual con ClasificacionTipo(nombre="Suelo_IPCC") — mismo dato
+    que ya usan Flujos/Biomasa (columna "uso_suelo_IPCC"/"Suelo IPCC"), no
+    tiene sentido duplicarlo en un campo propio de este modelo (ver
+    context/docs/arquitectura/plantilla-metadato-dato-cos.md).
+    """
 
-    sitio = models.ForeignKey(Sitio, on_delete=models.PROTECT, related_name="caracterizaciones_suelo")
-    muestreo_id = models.PositiveIntegerField("ID de muestreo")
-    tipo_de_suelo = models.CharField("tipo de suelo", max_length=10, choices=TIPO_SUELO_CHOICES, blank=True)
+    unidad_muestreo = models.ForeignKey(
+        UnidadMuestreo, on_delete=models.PROTECT, related_name="caracterizaciones_suelo",
+        verbose_name="unidad de muestreo",
+    )
     profundidad_perfil = models.DecimalField("profundidad del perfil (cm)", max_digits=8, decimal_places=2, null=True, blank=True)
     intervalos_perfil = models.DecimalField("intervalos del perfil (cm)", max_digits=8, decimal_places=2, null=True, blank=True)
 
     class Meta:
         verbose_name = "caracterización muestreo suelo"
         verbose_name_plural = "caracterizaciones muestreo suelo"
-        ordering = ["sitio", "muestreo_id"]
+        ordering = ["unidad_muestreo"]
 
     def __str__(self):
-        return f"Muestreo {self.muestreo_id} — {self.sitio}"
+        return f"Caracterización suelo — {self.unidad_muestreo}"
 
 
 class MonitoreoSuelo(TimestampedModel):
