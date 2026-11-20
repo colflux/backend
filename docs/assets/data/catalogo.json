@@ -2797,12 +2797,12 @@
           "nombre": "CaracterizacionMuestreoSuelo",
           "verbose_name": "caracterización muestreo suelo",
           "verbose_name_plural": "caracterizaciones muestreo suelo",
-          "descripcion": "Caracterización de un muestreo de suelo en un sitio: tipo de suelo, profundidad e intervalos del perfil.",
-          "total_campos": 5,
+          "descripcion": "Caracterización de un muestreo de suelo en una unidad de muestreo: profundidad e intervalos del perfil. El tipo de suelo (Mineral/Orgánico, clasificación IPCC) no vive acá: se reporta como cualquier otra clasificación de UnidadMuestreo, vía CoberturaManual con ClasificacionTipo(nombre=\"Suelo_IPCC\") — mismo dato que ya usan Flujos/Biomasa (columna \"uso_suelo_IPCC\"/\"Suelo IPCC\"), no tiene sentido duplicarlo en un campo propio de este modelo (ver context/docs/arquitectura/plantilla-metadato-dato-cos.md).",
+          "total_campos": 3,
           "campos": [
             {
-              "nombre": "sitio",
-              "verbose_name": "sitio",
+              "nombre": "unidad_muestreo",
+              "verbose_name": "unidad de muestreo",
               "help_text": "",
               "tipo": "FK (relación)",
               "tipo_raw": "ForeignKey",
@@ -2811,42 +2811,7 @@
               "max_length": null,
               "choices": [],
               "es_fk": true,
-              "modelo_fk": "Sitio"
-            },
-            {
-              "nombre": "muestreo_id",
-              "verbose_name": "ID de muestreo",
-              "help_text": "",
-              "tipo": "PositiveIntegerField",
-              "tipo_raw": "PositiveIntegerField",
-              "requerido": true,
-              "automatico": false,
-              "max_length": null,
-              "choices": [],
-              "es_fk": false,
-              "modelo_fk": null
-            },
-            {
-              "nombre": "tipo_de_suelo",
-              "verbose_name": "tipo de suelo",
-              "help_text": "",
-              "tipo": "Texto",
-              "tipo_raw": "CharField",
-              "requerido": false,
-              "automatico": false,
-              "max_length": 10,
-              "choices": [
-                {
-                  "valor": "Mineral",
-                  "etiqueta": "Mineral"
-                },
-                {
-                  "valor": "Organico",
-                  "etiqueta": "Orgánico"
-                }
-              ],
-              "es_fk": false,
-              "modelo_fk": null
+              "modelo_fk": "UnidadMuestreo"
             },
             {
               "nombre": "profundidad_perfil",
@@ -3195,7 +3160,7 @@
             {
               "nombre": "prod_biomasa_g",
               "verbose_name": "producción de biomasa (g)",
-              "help_text": "",
+              "help_text": "Producción de biomasa aérea medida en la parcela, en gramos.",
               "tipo": "Decimal",
               "tipo_raw": "DecimalField",
               "requerido": false,
@@ -3208,7 +3173,7 @@
             {
               "nombre": "contenido_carbono",
               "verbose_name": "contenido de carbono",
-              "help_text": "",
+              "help_text": "Contenido de carbono de la muestra de biomasa, usado para calcular el carbono por hectárea.",
               "tipo": "Decimal",
               "tipo_raw": "DecimalField",
               "requerido": false,
@@ -3234,7 +3199,7 @@
             {
               "nombre": "sd_tonc_ha",
               "verbose_name": "desviación estándar (TonC/ha)",
-              "help_text": "",
+              "help_text": "Desviación estándar del carbono en biomasa aérea de la parcela, en toneladas de carbono por hectárea.",
               "tipo": "Decimal",
               "tipo_raw": "DecimalField",
               "requerido": false,
@@ -3247,7 +3212,7 @@
             {
               "nombre": "min_tonc_ha",
               "verbose_name": "mínimo (TonC/ha)",
-              "help_text": "",
+              "help_text": "Valor mínimo de carbono en biomasa aérea de la parcela, en toneladas de carbono por hectárea.",
               "tipo": "Decimal",
               "tipo_raw": "DecimalField",
               "requerido": false,
@@ -3260,7 +3225,7 @@
             {
               "nombre": "max_tonc_ha",
               "verbose_name": "máximo (TonC/ha)",
-              "help_text": "",
+              "help_text": "Valor máximo de carbono en biomasa aérea de la parcela, en toneladas de carbono por hectárea.",
               "tipo": "Decimal",
               "tipo_raw": "DecimalField",
               "requerido": false,

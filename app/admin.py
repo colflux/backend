@@ -195,9 +195,8 @@ class SubMuestraTorreAdmin(admin.ModelAdmin):
 
 @admin.register(CaracterizacionMuestreoSuelo)
 class CaracterizacionMuestreoSueloAdmin(admin.ModelAdmin):
-    list_display = ("muestreo_id", "sitio", "tipo_de_suelo", "profundidad_perfil")
-    list_filter = ("tipo_de_suelo",)
-    raw_id_fields = ("sitio",)
+    list_display = ("unidad_muestreo", "profundidad_perfil")
+    raw_id_fields = ("unidad_muestreo",)
 
 
 @admin.register(MonitoreoSuelo)

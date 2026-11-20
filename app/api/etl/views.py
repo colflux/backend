@@ -3343,6 +3343,147 @@ _ORDEN_COLUMNAS_METODOLOGIA = [
     "UnidadExperimental.nombre", "UnidadMuestreo.nombre", "Sitio.latitud", "Sitio.longitud",
 ]
 
+# Orden de las hojas "Biomasa - Metadato"/"Biomasa - Dato" de la plantilla
+# descargable (ver context/docs/arquitectura/plantilla-metadato-dato-biomasa.md,
+# releva el Excel real de IDEAM) — mismas claves de pivoteo
+# (cobertura/disturbio/ecosistema/exposición externa) que usa Flujos CO2
+# (`_COLUMNAS_PIVOTE_METADATO_GEI`, definida más abajo en este archivo), que
+# son genéricas a cualquier `UnidadMuestreo`, no específicas de GEI.
+_ORDEN_COLUMNAS_METADATO_BIOMASA_PLANTILLA = [
+    "UnidadMuestreo.codigo_metadato",
+    "UnidadExperimental.nombre", "UnidadMuestreo.nombre",
+    "Region.nombre", "Departamento.nombre", "Municipio.nombre", "Vereda.nombre",
+    "Sitio.tipo_localizacion", "Sitio.latitud", "Sitio.longitud", "SistemaReferencia.nombre",
+    "Sitio.altitud", "Sitio.pendiente", "Sitio.topografia", "Sitio.uso_actual",
+    "UnidadMuestreo.tipo_muestreo", "UnidadMuestreoTipo.nombre",
+    "Parcela.forma", "Parcela.medida_largo", "Parcela.medida_ancho", "Parcela.distancia", "Parcela.diametro", "Parcela.area",
+    "ValorClasificacionTipo.valor__Disturbio", "DisturbioManual.es_dominante",
+    "DisturbioManual.anios_disturbio", "DisturbioManual.anios_desde_fin",
+    "ValorClasificacionTipo.valor__Suelo_IPCC",
+    "ValorClasificacionEcosistema.valor",
+    "EcosistemaManual.estado_conservacion",
+    "EcosistemaManual.proteccion_legal",
+    "ValorClasificacionTipo.valor__IPCC", "ValorClasificacionTipo.valor__CLC", "ValorClasificacionTipo.valor__IGBP",
+    "ValorClasificacionTipo.valor__nombre_comun",
+    "ValorClasificacionTipo.valor__veg_pri", "CoberturaManual.porcentaje__pri",
+    "ValorClasificacionTipo.valor__veg_sec", "CoberturaManual.porcentaje__sec",
+    "ValorClasificacionTipo.valor__veg_ter", "CoberturaManual.porcentaje__ter",
+    "ExposicionExterna.distancia_m__drenaje", "ExposicionExterna.distancia_m__fuego",
+    "ExposicionExterna.distancia_m__pastoreo", "ExposicionExterna.distancia_m__cultivo",
+]
+_ORDEN_COLUMNAS_DATO_BIOMASA_PLANTILLA = [
+    "UnidadMuestreo.codigo_metadato",
+    "MuestraBiomasa.fecha",
+    "MuestraBiomasa.prod_biomasa_g",
+    "MuestraBiomasa.contenido_carbono",
+    "MuestraBiomasa.prom_tonc_ha",
+    "MuestraBiomasa.sd_tonc_ha",
+    "MuestraBiomasa.min_tonc_ha",
+    "MuestraBiomasa.max_tonc_ha",
+]
+
+# Orden de las hojas "COS Metadato"/"COS Dato" de la plantilla descargable
+# (ver context/docs/arquitectura/plantilla-metadato-dato-cos.md, releva el
+# Excel real de IDEAM "Metadatos y BD COS.xlsx") — mismas claves de pivoteo
+# de cobertura/disturbio/ecosistema/Suelo_IPCC que Flujos/Biomasa, más las
+# propias de COS (CaracterizacionMuestreoSuelo/MonitoreoSuelo, ver
+# `_COLUMNAS_PIVOTE_METADATO_COS_MONITOREO` más abajo).
+_ORDEN_COLUMNAS_METADATO_COS_PLANTILLA = [
+    "UnidadMuestreo.codigo_metadato",
+    "Region.nombre", "Departamento.nombre", "Municipio.nombre", "Vereda.nombre",
+    "Sitio.nombre", "Sitio.tipo_localizacion",
+    "Sitio.latitud", "Sitio.longitud", "SistemaReferencia.nombre",
+    "Sitio.altitud", "Sitio.pendiente", "Sitio.topografia",
+    "ValorClasificacionEcosistema.valor",
+    "ValorClasificacionTipo.valor__IPCC", "ValorClasificacionTipo.valor__CLC",
+    "ValorClasificacionTipo.valor__IGBP", "ValorClasificacionTipo.valor__nombre_comun",
+    "ValorClasificacionTipo.valor__Suelo_IPCC",
+    "ValorClasificacionTipo.valor__Disturbio",
+    "DisturbioManual.anios_disturbio", "DisturbioManual.anios_desde_fin",
+    "Sitio.uso_actual",
+    "EcosistemaManual.estado_conservacion",
+    "EcosistemaManual.proteccion_legal",
+    "DisturbioManual.es_dominante",
+    "UnidadMuestreo.compartimento",
+    "CaracterizacionMuestreoSuelo.profundidad_perfil", "CaracterizacionMuestreoSuelo.intervalos_perfil",
+    "MonitoreoSuelo.activo__macrofosiles", "MonitoreoSuelo.protocolo__macrofosiles",
+    "MonitoreoSuelo.activo__datacion", "MonitoreoSuelo.protocolo__datacion",
+    "MonitoreoSuelo.activo__densidad_aparente", "MonitoreoSuelo.protocolo__densidad_aparente",
+    "MonitoreoSuelo.activo__cos", "MonitoreoSuelo.protocolo__cos",
+]
+_ORDEN_COLUMNAS_DATO_COS_PLANTILLA = [
+    "UnidadMuestreo.codigo_metadato",
+    "UnidadMuestreo.nombre",
+    "SubmuestraSuelo.barreno_vol",
+    "SubmuestraSuelo.profundidad_desde_cm", "SubmuestraSuelo.profundidad_hasta_cm",
+    "SubmuestraSuelo.densidad_aparente_g_cm3",
+    "SubmuestraSuelo.carbono_pct",
+    "SubmuestraSuelo.soil_chem_c_org",
+    "SubmuestraSuelo.medida_error",
+    "SubmuestraSuelo.metodologia_tipo_muestreo",
+    "SubmuestraSuelo.metodologia_distancia_m",
+    "SubmuestraSuelo.metodologia_azimut",
+    "SubmuestraSuelo.metodologia_analisis",
+]
+
+# Orden de las hojas "MOM Metadato"/"MOM Dato" de la plantilla descargable
+# (ver context/docs/arquitectura/plantilla-metadato-dato-mom.md, releva el
+# Excel real de IDEAM "MOM.xlsx") — mismas claves de pivoteo de
+# cobertura/disturbio/ecosistema/exposición externa que Flujos/Biomasa
+# (`_COLUMNAS_PIVOTE_METADATO_GEI`), más las propias de MOM (MonitoreoParcela,
+# ver `_COLUMNAS_PIVOTE_METADATO_MOM_MONITOREO` más abajo).
+_ORDEN_COLUMNAS_METADATO_MOM_PLANTILLA = [
+    "UnidadMuestreo.codigo_metadato",
+    "UnidadExperimental.nombre", "UnidadMuestreo.nombre",
+    "Region.nombre", "Departamento.nombre", "Municipio.nombre", "Vereda.nombre",
+    "Sitio.tipo_localizacion", "Sitio.latitud", "Sitio.longitud", "SistemaReferencia.nombre",
+    "Sitio.altitud", "Sitio.pendiente", "Sitio.topografia",
+    "ValorClasificacionEcosistema.valor",
+    "ValorClasificacionTipo.valor__IPCC", "ValorClasificacionTipo.valor__CLC", "ValorClasificacionTipo.valor__IGBP",
+    "ValorClasificacionTipo.valor__nombre_comun",
+    "ValorClasificacionTipo.valor__Suelo_IPCC",
+    "ValorClasificacionTipo.valor__Disturbio",
+    "DisturbioManual.anios_disturbio", "DisturbioManual.anios_desde_fin",
+    "Sitio.uso_actual",
+    "EcosistemaManual.estado_conservacion",
+    "EcosistemaManual.proteccion_legal",
+    "DisturbioManual.es_dominante",
+    "UnidadMuestreo.tipo_muestreo", "UnidadMuestreoTipo.nombre",
+    "Parcela.area", "Parcela.forma",
+    "MonitoreoParcela.activo__biomasa_aerea", "MonitoreoParcela.protocolo__biomasa_aerea",
+    "MonitoreoParcela.activo__biomasa_subterranea", "MonitoreoParcela.protocolo__biomasa_subterranea",
+    "MonitoreoParcela.activo__flora", "MonitoreoParcela.protocolo__flora",
+    "MonitoreoParcela.activo__rasgos_funcionales", "MonitoreoParcela.protocolo__rasgos_funcionales",
+    "ValorClasificacionTipo.valor__veg_pri", "CoberturaManual.porcentaje__pri",
+    "ValorClasificacionTipo.valor__veg_sec", "CoberturaManual.porcentaje__sec",
+    "ValorClasificacionTipo.valor__veg_ter", "CoberturaManual.porcentaje__ter",
+    "ExposicionExterna.distancia_m__drenaje", "ExposicionExterna.distancia_m__fuego",
+    "ExposicionExterna.distancia_m__pastoreo", "ExposicionExterna.distancia_m__cultivo",
+]
+_ORDEN_COLUMNAS_DATO_MOM_PLANTILLA = [
+    "UnidadMuestreo.codigo_metadato",
+    "UnidadMuestreo.nombre",
+    "UnidadMuestreo.fecha_instalacion",
+    "Sitio.nombre",
+    "MuestraMOM.carbono_mom_valor_reportado",
+    "MuestraMOM.carbono_mom_tc_ha",
+    "MuestraMOM.error_mom",
+    "MuestraMOM.carbono_amp_tm_tc_ha",
+    "MuestraMOM.error_amp_tm",
+    "MuestraMOM.carbono_dfm_tc_ha",
+    "MuestraMOM.error_dfm",
+    "MuestraMOM.carbono_dgm_tc_ha",
+    "MuestraMOM.error_dgm",
+    "MuestraMOM.carbono_hojarasca_g_m2",
+    "MuestraMOM.carbono_hojarasca_tc_ha",
+    "MuestraMOM.error_hojarasca",
+    "MuestraMOM.metodologia_muestreo_mom",
+    "MuestraMOM.metodologia_muestreo_dfm_dgm",
+    "MuestraMOM.metodologia_tamano",
+    "MuestraMOM.metodologia_amp_to",
+    "MuestraMOM.metodologia_hojarasca",
+]
+
 
 _VISTAS_DESNORMALIZADAS = {
     "submuestra_gei": {
@@ -3556,6 +3697,311 @@ _VISTAS_DESNORMALIZADAS = {
         ],
         "campos": _CAMPOS_METODOLOGIA,
         "orden_columnas": _ORDEN_COLUMNAS_METODOLOGIA,
+    },
+    # Plantilla separada Metadato/Dato para Biomasa (ver
+    # context/docs/arquitectura/plantilla-metadato-dato-biomasa.md), mismo
+    # ejercicio ya hecho para Flujos CO2/CH4
+    # (plantilla-metadato-dato-co2-camaras.md). A diferencia de "biomasa"
+    # (arriba, vista genérica compartida con MOM/COS, solo 4 columnas de
+    # contexto), estas dos vistas traen el detalle completo relevado del
+    # Excel real de IDEAM (`context/data/Biomasa.xlsx`).
+    #
+    # Decisiones tomadas sin volver a preguntar al equipo (documentadas en la
+    # tarea [[plantilla-metadato-dato-biomasa]] de `context`, pendientes de
+    # validar después):
+    # - Se excluyen `nombre_proyecto` (Proyecto solo queda para el join),
+    #   `fecha_instalacion` y "Periodicidad de muestreo" — mismo criterio ya
+    #   aplicado a Flujos.
+    # - `DOM_DIST_MGMT` y los 4 pares `monitoreo_*`/`protocolo_*` (biomasa
+    #   subterránea, flora, rasgos funcionales) no se incluyen: no está claro
+    #   qué representa el primero y los segundos no tienen campo en el
+    #   modelo — agregarlos requeriría una metodología/migración nueva, fuera
+    #   de alcance de esta plantilla.
+    # - La hoja Dato queda a nivel de parcela (`MuestraBiomasa`), sin el
+    #   detalle por individuo arbóreo (`IndividuoArboreo`): es FK inversa,
+    #   mismo problema de aplanado ya documentado para Cobertura/Disturbio en
+    #   Flujos, y en los datos reales de IDEAM siempre viene vacío (ver
+    #   comentario en la vista "biomasa" arriba).
+    "biomasa_metadato": {
+        "modelo_base": "UnidadMuestreo",
+        "orden": ["unidad_experimental__nombre", "nombre"],
+        "cadena": [
+            ("UnidadMuestreo", []),
+            ("UnidadExperimental", ["unidad_experimental"]),
+            ("Proyecto", ["unidad_experimental", "proyecto"]),
+            ("UnidadMuestreoTipo", ["tipo"]),
+            ("Parcela", ["parcela"]),
+            ("Sitio", ["sitio"]),
+            ("SistemaReferencia", ["sitio", "sistema_referencia"]),
+            ("Vereda", ["sitio", "vereda"]),
+            ("Municipio", ["sitio", "vereda", "municipio"]),
+            ("Departamento", ["sitio", "vereda", "municipio", "departamento"]),
+            ("Region", ["sitio", "vereda", "municipio", "departamento", "region"]),
+        ],
+        "campos": {
+            "UnidadMuestreo": {"incluir": ["nombre", "codigo_metadato", "tipo_muestreo"], "alias": {
+                "nombre": "nombre_unidad_muestreo",
+                "codigo_metadato": "codigo_metadato",
+                "tipo_muestreo": "tipo_muestreo",
+            }},
+            "UnidadExperimental": {"incluir": ["nombre"], "alias": {"nombre": "nombre_unidad_experimental"}},
+            "Proyecto": {"incluir": []},
+            "UnidadMuestreoTipo": {"incluir": ["nombre"], "alias": {"nombre": "tipo_unidad_muestreo"}},
+            "Parcela": {"incluir": ["forma", "medida_largo", "medida_ancho", "distancia", "diametro", "area"], "alias": {
+                "forma": "forma_unidad_muestreo",
+                "medida_largo": "medida_largo_m",
+                "medida_ancho": "medida_ancho_m",
+                "distancia": "distancia_lado_m",
+                "diametro": "diametro_m",
+                "area": "tamano_unidad_muestreo_m2",
+            }},
+            # snake_case de punta a punta (sin espacios/acentos salvo siglas),
+            # mismo criterio ya aplicado a Flujos CO2 el 2026-11-06.
+            "Sitio": {"excluir": ["nombre"], "alias": {
+                "tipo_localizacion": "tipo_localizacion",
+                "altitud": "altitud_msnm",
+                "topografia": "topografia",
+                "uso_actual": "uso_actual",
+                "propiedad_tierra": "propiedad_tierra",
+            }},
+            "SistemaReferencia": {"incluir": ["nombre"], "alias": {"nombre": "sistema_referencia"}},
+            # Alias explícito en las 4: sin él, las 4 salen con verbose_name
+            # "nombre" (el de cada modelo), indistinguibles en el Excel —
+            # mismo problema ya documentado para la vista "unidad_muestreo".
+            "Vereda": {"incluir": ["nombre"], "alias": {"nombre": "vereda"}},
+            "Municipio": {"incluir": ["nombre"], "alias": {"nombre": "municipio"}},
+            "Departamento": {"incluir": ["nombre"], "alias": {"nombre": "departamento"}},
+            "Region": {"incluir": ["nombre"], "alias": {"nombre": "region_natural"}},
+        },
+        "orden_columnas": _ORDEN_COLUMNAS_METADATO_BIOMASA_PLANTILLA,
+    },
+    "biomasa_dato": {
+        "modelo_base": "MuestraBiomasa",
+        "orden": ["unidad_muestreo__unidad_experimental__nombre", "fecha"],
+        "cadena": [
+            ("MuestraBiomasa", []),
+            ("UnidadMuestreo", ["unidad_muestreo"]),
+        ],
+        "campos": {
+            "MuestraBiomasa": {"alias": {
+                "fecha": "fecha_toma",
+                "prod_biomasa_g": "prod_biomasa_g",
+                "contenido_carbono": "contenido_carbono",
+                "prom_tonc_ha": "prom_tonc_ha",
+                "sd_tonc_ha": "sd_tonc_ha",
+                "min_tonc_ha": "min_tonc_ha",
+                "max_tonc_ha": "max_tonc_ha",
+            }},
+            "UnidadMuestreo": {"incluir": ["codigo_metadato"], "alias": {"codigo_metadato": "codigo_metadato"}},
+        },
+        "orden_columnas": _ORDEN_COLUMNAS_DATO_BIOMASA_PLANTILLA,
+    },
+    # Plantilla separada Metadato/Dato para COS (ver
+    # context/docs/arquitectura/plantilla-metadato-dato-cos.md), mismo
+    # ejercicio que Flujos/Biomasa. A diferencia de "cos" (arriba, vista
+    # genérica compartida con MOM/Biomasa), estas dos vistas traen el
+    # detalle completo relevado del Excel real de IDEAM (`context/data/
+    # Metadatos y BD COS.xlsx`).
+    #
+    # Base "CaracterizacionMuestreoSuelo" (no "UnidadMuestreo" como
+    # biomasa_metadato): es 1:1 con la unidad de muestreo en los datos
+    # reales (una caracterización por unidad), y así la hoja también trae
+    # directo `profundidad_perfil`/`intervalos_perfil` sin pivoteo. Decisión
+    # tomada con la usuaria (2026-11-19): se agregó la FK directa
+    # `unidad_muestreo` a este modelo (antes `sitio`+`muestreo_id`, artefacto
+    # histórico del import de `colfux-db` — ver nota en el doc de arriba) y
+    # se depreció `tipo_de_suelo` (mismo dato que `Suelo IPCC`, se resuelve
+    # con `ValorClasificacionTipo`/`CoberturaManual`, no columna propia).
+    #
+    # `monitoreo_*`/`protocolo_*` (MonitoreoSuelo) cuelgan de
+    # CaracterizacionMuestreoSuelo por FK inversa (hasta 4 filas, una por
+    # tipo_monitoreo) — mismo problema de aplanado que cobertura/disturbio/
+    # ecosistema en Flujos/Biomasa: van como columnas fijas en
+    # `_COLUMNAS_PIVOTE_METADATO_COS_MONITOREO` (headers para la plantilla
+    # descargable), la lógica para que `exportar_carga`/`datos_carga`
+    # también las completen con datos reales queda pendiente.
+    "cos_metadato": {
+        "modelo_base": "CaracterizacionMuestreoSuelo",
+        "orden": ["unidad_muestreo__unidad_experimental__nombre", "unidad_muestreo__nombre"],
+        "cadena": [
+            ("CaracterizacionMuestreoSuelo", []),
+            ("UnidadMuestreo", ["unidad_muestreo"]),
+            ("UnidadExperimental", ["unidad_muestreo", "unidad_experimental"]),
+            ("Proyecto", ["unidad_muestreo", "unidad_experimental", "proyecto"]),
+            ("Sitio", ["unidad_muestreo", "sitio"]),
+            ("SistemaReferencia", ["unidad_muestreo", "sitio", "sistema_referencia"]),
+            ("Vereda", ["unidad_muestreo", "sitio", "vereda"]),
+            ("Municipio", ["unidad_muestreo", "sitio", "vereda", "municipio"]),
+            ("Departamento", ["unidad_muestreo", "sitio", "vereda", "municipio", "departamento"]),
+            ("Region", ["unidad_muestreo", "sitio", "vereda", "municipio", "departamento", "region"]),
+        ],
+        "campos": {
+            "CaracterizacionMuestreoSuelo": {"incluir": ["profundidad_perfil", "intervalos_perfil"], "alias": {
+                "profundidad_perfil": "profundidad_perfil",
+                "intervalos_perfil": "intervalos_perfil",
+            }},
+            "UnidadMuestreo": {"incluir": ["codigo_metadato", "compartimento"], "alias": {
+                "codigo_metadato": "codigo_metadato",
+                "compartimento": "compartimento",
+            }},
+            "UnidadExperimental": {"incluir": []},
+            "Proyecto": {"incluir": []},
+            "Sitio": {"incluir": [
+                "nombre", "tipo_localizacion", "latitud", "longitud", "altitud", "pendiente", "topografia", "uso_actual",
+            ], "alias": {
+                "nombre": "sitio",
+                "tipo_localizacion": "tipo_localizacion",
+                "altitud": "altitud_msnm",
+                "topografia": "topografia",
+                "uso_actual": "uso_actual",
+            }},
+            "SistemaReferencia": {"incluir": ["nombre"], "alias": {"nombre": "sistema_referencia"}},
+            "Vereda": {"incluir": ["nombre"], "alias": {"nombre": "vereda"}},
+            "Municipio": {"incluir": ["nombre"], "alias": {"nombre": "municipio"}},
+            "Departamento": {"incluir": ["nombre"], "alias": {"nombre": "departamento"}},
+            "Region": {"incluir": ["nombre"], "alias": {"nombre": "region_natural"}},
+        },
+        "orden_columnas": _ORDEN_COLUMNAS_METADATO_COS_PLANTILLA,
+    },
+    "cos_dato": {
+        "modelo_base": "SubmuestraSuelo",
+        "orden": ["unidad_muestreo__unidad_experimental__nombre", "profundidad_desde_cm"],
+        "cadena": [
+            ("SubmuestraSuelo", []),
+            ("UnidadMuestreo", ["unidad_muestreo"]),
+        ],
+        "campos": {
+            # fecha/hora excluidas: en el Excel real la única columna de fecha
+            # ("Fecha instalación unidad de muestreo") estaba mal rotulada y
+            # se quitó de la plantilla (decisión de la usuaria, 2026-11-19,
+            # ver context/docs/arquitectura/plantilla-metadato-dato-cos.md) —
+            # el campo del modelo no se toca, solo no se expone columna.
+            "SubmuestraSuelo": {"excluir": ["fecha", "hora"], "alias": {
+                "barreno_vol": "barreno_vol",
+                "profundidad_desde_cm": "profundidad_desde_cm",
+                "profundidad_hasta_cm": "profundidad_hasta_cm",
+                "densidad_aparente_g_cm3": "densidad_aparente_g_cm3",
+                "carbono_pct": "carbono_pct",
+                "medida_error": "medida_error",
+                "metodologia_tipo_muestreo": "metodologia_tipo_muestreo",
+                "metodologia_distancia_m": "metodologia_distancia_m",
+                "metodologia_azimut": "metodologia_azimut",
+                "metodologia_analisis": "metodologia_analisis",
+            }},
+            "UnidadMuestreo": {"incluir": ["codigo_metadato", "nombre"], "alias": {
+                "codigo_metadato": "codigo_metadato",
+                "nombre": "no_unidad_muestreo",
+            }},
+        },
+        "orden_columnas": _ORDEN_COLUMNAS_DATO_COS_PLANTILLA,
+    },
+    # Plantilla separada Metadato/Dato para MOM (ver
+    # context/docs/arquitectura/plantilla-metadato-dato-mom.md), mismo
+    # ejercicio que Flujos/Biomasa/COS. A diferencia de "mom" (arriba, vista
+    # genérica compartida con Biomasa/COS, solo 4 columnas de contexto), estas
+    # dos vistas traen el detalle completo relevado del Excel real de IDEAM
+    # (`context/data/MOM.xlsx`).
+    #
+    # Decisiones tomadas sin volver a preguntar al equipo, mismo criterio ya
+    # aplicado a Flujos/Biomasa: se excluyen `nombre_proyecto` (Proyecto solo
+    # queda para el join) y "Periodicidad de muestreo" (sin campo en el
+    # modelo, mismo gap pendiente que en Flujos). A diferencia de Biomasa,
+    # acá sí se incluyen `DOM_DIST_MGMT` (confirmado con la usuaria el
+    # 2026-11-19: mismo campo que `disturbio_dominante` de Flujos,
+    # `DisturbioManual.es_dominante`) y los 4 pares `monitoreo_*`/
+    # `protocolo_*` (`MonitoreoParcela`, FK inversa desde `UnidadMuestreo` —
+    # mismo tratamiento de "columna fija de pivoteo" que
+    # `MonitoreoSuelo` en COS, ver `_COLUMNAS_PIVOTE_METADATO_MOM_MONITOREO`
+    # más abajo).
+    "mom_metadato": {
+        "modelo_base": "UnidadMuestreo",
+        "orden": ["unidad_experimental__nombre", "nombre"],
+        "cadena": [
+            ("UnidadMuestreo", []),
+            ("UnidadExperimental", ["unidad_experimental"]),
+            ("Proyecto", ["unidad_experimental", "proyecto"]),
+            ("UnidadMuestreoTipo", ["tipo"]),
+            ("Parcela", ["parcela"]),
+            ("Sitio", ["sitio"]),
+            ("SistemaReferencia", ["sitio", "sistema_referencia"]),
+            ("Vereda", ["sitio", "vereda"]),
+            ("Municipio", ["sitio", "vereda", "municipio"]),
+            ("Departamento", ["sitio", "vereda", "municipio", "departamento"]),
+            ("Region", ["sitio", "vereda", "municipio", "departamento", "region"]),
+        ],
+        "campos": {
+            "UnidadMuestreo": {"incluir": ["nombre", "codigo_metadato", "tipo_muestreo"], "alias": {
+                "nombre": "nombre_unidad_muestreo",
+                "codigo_metadato": "codigo_metadato",
+                "tipo_muestreo": "tipo_muestreo",
+            }},
+            "UnidadExperimental": {"incluir": ["nombre"], "alias": {"nombre": "nombre_unidad_experimental"}},
+            "Proyecto": {"incluir": []},
+            "UnidadMuestreoTipo": {"incluir": ["nombre"], "alias": {"nombre": "tipo_unidad_muestreo"}},
+            # Solo forma/área: a diferencia de Biomasa, el Excel real de MOM
+            # no trae medida_largo/medida_ancho/distancia/diametro.
+            "Parcela": {"incluir": ["forma", "area"], "alias": {
+                "forma": "forma_unidad_muestreo",
+                # Ojo con la unidad: el Excel la rotula "área en cm2" pero
+                # `Parcela.area` está en m² (ver nota en el diccionario de
+                # datos) — alias refleja la unidad real del modelo, no la
+                # del rótulo original de la fuente.
+                "area": "tamano_unidad_muestreo_m2",
+            }},
+            "Sitio": {"excluir": ["nombre"], "alias": {
+                "tipo_localizacion": "tipo_localizacion",
+                "altitud": "altitud_msnm",
+                "topografia": "topografia",
+                "uso_actual": "uso_actual",
+                "propiedad_tierra": "propiedad_tierra",
+            }},
+            "SistemaReferencia": {"incluir": ["nombre"], "alias": {"nombre": "sistema_referencia"}},
+            "Vereda": {"incluir": ["nombre"], "alias": {"nombre": "vereda"}},
+            "Municipio": {"incluir": ["nombre"], "alias": {"nombre": "municipio"}},
+            "Departamento": {"incluir": ["nombre"], "alias": {"nombre": "departamento"}},
+            "Region": {"incluir": ["nombre"], "alias": {"nombre": "region_natural"}},
+        },
+        "orden_columnas": _ORDEN_COLUMNAS_METADATO_MOM_PLANTILLA,
+    },
+    "mom_dato": {
+        "modelo_base": "MuestraMOM",
+        "orden": ["unidad_muestreo__unidad_experimental__nombre", "fecha"],
+        "cadena": [
+            ("MuestraMOM", []),
+            ("UnidadMuestreo", ["unidad_muestreo"]),
+            ("Sitio", ["unidad_muestreo", "sitio"]),
+        ],
+        "campos": {
+            # fecha (de la medición) excluida: no tiene columna equivalente
+            # en el Excel real de MOM (ver nota en el diccionario de datos) —
+            # el campo del modelo no se toca, solo no se expone columna.
+            "MuestraMOM": {"excluir": ["fecha"], "alias": {
+                "carbono_mom_valor_reportado": "carbono_mom_valor_reportado",
+                "carbono_mom_tc_ha": "carbono_mom_tc_ha",
+                "error_mom": "error_mom",
+                "carbono_amp_tm_tc_ha": "carbono_amp_tm_tc_ha",
+                "error_amp_tm": "error_amp_tm",
+                "carbono_dfm_tc_ha": "carbono_dfm_tc_ha",
+                "error_dfm": "error_dfm",
+                "carbono_dgm_tc_ha": "carbono_dgm_tc_ha",
+                "error_dgm": "error_dgm",
+                "carbono_hojarasca_g_m2": "carbono_hojarasca_g_m2",
+                "carbono_hojarasca_tc_ha": "carbono_hojarasca_tc_ha",
+                "error_hojarasca": "error_hojarasca",
+                "metodologia_muestreo_mom": "metodologia_muestreo_mom",
+                "metodologia_muestreo_dfm_dgm": "metodologia_muestreo_dfm_dgm",
+                "metodologia_tamano": "metodologia_tamano",
+                "metodologia_amp_to": "metodologia_amp_to",
+                "metodologia_hojarasca": "metodologia_hojarasca",
+            }},
+            "UnidadMuestreo": {"incluir": ["codigo_metadato", "nombre", "fecha_instalacion"], "alias": {
+                "codigo_metadato": "codigo_metadato",
+                "nombre": "nombre_unidad_muestreo",
+                "fecha_instalacion": "fecha_instalacion_unidad_muestreo",
+            }},
+            "Sitio": {"incluir": ["nombre"], "alias": {"nombre": "sitio"}},
+        },
+        "orden_columnas": _ORDEN_COLUMNAS_DATO_MOM_PLANTILLA,
     },
     # Base "SubMuestraTorre" (una fila por torre+variable+día), mismo rol que
     # "submuestra_gei" pero para torres EC — no pasa por UnidadExperimental
@@ -4188,9 +4634,9 @@ def exportar_proyecto(request, proyecto_id):
 # puede cargar fila por fila vía ETL.
 #
 # Alcance acotado a propósito (decisión de equipo, 2026-11-02): por ahora la
-# plantilla descargable solo cubre Flujos CO2 (ni CH4 ni MOM/COS/Biomasa),
-# que es la metodología/gas que ya se validó end-to-end con el equipo de
-# datos. Para agregar CH4 o las demás metodologías, sumar sus entradas acá.
+# plantilla descargable cubre Flujos CO2 y, desde 2026-11-19, Biomasa (ver
+# docs/arquitectura/plantilla-metadato-dato-biomasa.md en el repo `context`).
+# Faltan CH4, MOM, COS y torre EC. Para agregarlas, sumar sus entradas acá.
 #
 # No hay hoja aparte de "Unidad Muestreo-Experimental": el contexto de dónde
 # y qué unidad (identificador, sitio) es información de cómo se midió, así
@@ -4205,10 +4651,24 @@ def exportar_proyecto(request, proyecto_id):
 # (2026-11-09, revierte el criterio anterior "varía por toma vs. fijo por
 # instalación" usado hasta esa fecha), ver
 # docs/arquitectura/plantilla-metadato-dato-co2-camaras.md en el repo
-# `context`.
+# `context`. Biomasa usa el mismo criterio, pero como sus vistas
+# ("biomasa_metadato"/"biomasa_dato") ya nacen separadas en
+# `_VISTAS_DESNORMALIZADAS` (no es una sola vista con `seccion` como GEI), no
+# necesitan la clave "seccion" acá.
+# "metodologia" identifica a qué tarjeta de `/participacion` pertenece cada
+# hoja (mismo `key` que `METODOLOGIAS` en Participacion.tsx) — permite que
+# "Descargar plantilla"/"Ver detalle" por tarjeta traigan solo sus propias
+# hojas en vez de las de todas las metodologías juntas (pedido de la usuaria,
+# 2026-11-19: separar la descarga de Flujos de la de Biomasa).
 _HOJAS_PLANTILLA = [
-    {"nombre_vista": "submuestra_gei", "hoja": "Flujos CO2 - Metadato", "seccion": "metadato"},
-    {"nombre_vista": "submuestra_gei", "hoja": "Flujos CO2 - Dato", "seccion": "dato"},
+    {"nombre_vista": "submuestra_gei", "hoja": "Flujos Metadato", "seccion": "metadato", "metodologia": "flujos"},
+    {"nombre_vista": "submuestra_gei", "hoja": "Flujos Dato", "seccion": "dato", "metodologia": "flujos"},
+    {"nombre_vista": "biomasa_metadato", "hoja": "Biomasa Metadato", "metodologia": "biomasa"},
+    {"nombre_vista": "biomasa_dato", "hoja": "Biomasa Dato", "metodologia": "biomasa"},
+    {"nombre_vista": "cos_metadato", "hoja": "COS Metadato", "metodologia": "cos"},
+    {"nombre_vista": "cos_dato", "hoja": "COS Dato", "metodologia": "cos"},
+    {"nombre_vista": "mom_metadato", "hoja": "MOM Metadato", "metodologia": "mom"},
+    {"nombre_vista": "mom_dato", "hoja": "MOM Dato", "metodologia": "mom"},
 ]
 
 # Modelos cuyas columnas describen cómo se midió (van en la hoja Metadato) en
@@ -4267,8 +4727,56 @@ _COLUMNAS_PIVOTE_METADATO_GEI = [
     {"clave": "ExposicionExterna.distancia_m__cultivo", "modelo": "ExposicionExterna", "campo": "distancia_m", "verbose_name": "distancia_cultivo"},
 ]
 
+# Subconjunto de `_COLUMNAS_PIVOTE_METADATO_GEI` relevante para COS (sin
+# cobertura_vegetal_pri/sec/ter ni exposición externa — no están en el Excel
+# real de COS, ver context/docs/arquitectura/plantilla-metadato-dato-cos.md),
+# más las columnas propias de COS (MonitoreoSuelo, FK inversa desde
+# CaracterizacionMuestreoSuelo, hasta 4 filas por tipo_monitoreo — mismo
+# tratamiento de "columna fija para la plantilla" que cobertura/disturbio).
+_CLAVES_PIVOTE_METADATO_COS = {
+    "ValorClasificacionEcosistema.valor",
+    "ValorClasificacionTipo.valor__IPCC", "ValorClasificacionTipo.valor__CLC",
+    "ValorClasificacionTipo.valor__IGBP", "ValorClasificacionTipo.valor__nombre_comun",
+    "ValorClasificacionTipo.valor__Suelo_IPCC", "ValorClasificacionTipo.valor__Disturbio",
+    "DisturbioManual.anios_disturbio", "DisturbioManual.anios_desde_fin", "DisturbioManual.es_dominante",
+    "EcosistemaManual.estado_conservacion", "EcosistemaManual.proteccion_legal",
+}
+_COLUMNAS_PIVOTE_METADATO_COS_MONITOREO = [
+    {"clave": "MonitoreoSuelo.activo__macrofosiles", "modelo": "MonitoreoSuelo", "campo": "activo", "verbose_name": "monitoreo_macrofosiles"},
+    {"clave": "MonitoreoSuelo.protocolo__macrofosiles", "modelo": "MonitoreoSuelo", "campo": "protocolo", "verbose_name": "protocolo_macrofosiles"},
+    {"clave": "MonitoreoSuelo.activo__datacion", "modelo": "MonitoreoSuelo", "campo": "activo", "verbose_name": "monitoreo_datacion"},
+    {"clave": "MonitoreoSuelo.protocolo__datacion", "modelo": "MonitoreoSuelo", "campo": "protocolo", "verbose_name": "protocolo_datacion"},
+    {"clave": "MonitoreoSuelo.activo__densidad_aparente", "modelo": "MonitoreoSuelo", "campo": "activo", "verbose_name": "monitoreo_densidad_aparente"},
+    {"clave": "MonitoreoSuelo.protocolo__densidad_aparente", "modelo": "MonitoreoSuelo", "campo": "protocolo", "verbose_name": "protocolo_densidad_aparente"},
+    {"clave": "MonitoreoSuelo.activo__cos", "modelo": "MonitoreoSuelo", "campo": "activo", "verbose_name": "monitoreo_COS"},
+    {"clave": "MonitoreoSuelo.protocolo__cos", "modelo": "MonitoreoSuelo", "campo": "protocolo", "verbose_name": "protocolo_cos"},
+]
+_COLUMNAS_PIVOTE_METADATO_COS = (
+    [c for c in _COLUMNAS_PIVOTE_METADATO_GEI if c["clave"] in _CLAVES_PIVOTE_METADATO_COS]
+    + _COLUMNAS_PIVOTE_METADATO_COS_MONITOREO
+)
+
+# Columnas propias de MOM: `MonitoreoParcela` cuelga por FK inversa desde
+# `UnidadMuestreo` (hasta 4 filas, una por tipo_monitoreo), mismo tratamiento
+# de "columna fija para la plantilla" que `MonitoreoSuelo` en COS — la lógica
+# para que `exportar_carga`/`datos_carga` también las completen con datos
+# reales queda pendiente. A diferencia de COS, MOM reutiliza
+# `_COLUMNAS_PIVOTE_METADATO_GEI` completo (sí usa cobertura_vegetal
+# primaria/secundaria/terciaria y exposición externa, igual que Flujos/Biomasa).
+_COLUMNAS_PIVOTE_METADATO_MOM_MONITOREO = [
+    {"clave": "MonitoreoParcela.activo__biomasa_aerea", "modelo": "MonitoreoParcela", "campo": "activo", "verbose_name": "monitoreo_biomasa_aerea"},
+    {"clave": "MonitoreoParcela.protocolo__biomasa_aerea", "modelo": "MonitoreoParcela", "campo": "protocolo", "verbose_name": "protocolo_biomasa_aerea"},
+    {"clave": "MonitoreoParcela.activo__biomasa_subterranea", "modelo": "MonitoreoParcela", "campo": "activo", "verbose_name": "monitoreo_biomasa_subterranea"},
+    {"clave": "MonitoreoParcela.protocolo__biomasa_subterranea", "modelo": "MonitoreoParcela", "campo": "protocolo", "verbose_name": "protocolo_biomasa_subterranea"},
+    {"clave": "MonitoreoParcela.activo__flora", "modelo": "MonitoreoParcela", "campo": "activo", "verbose_name": "monitoreo_flora"},
+    {"clave": "MonitoreoParcela.protocolo__flora", "modelo": "MonitoreoParcela", "campo": "protocolo", "verbose_name": "protocolo_flora"},
+    {"clave": "MonitoreoParcela.activo__rasgos_funcionales", "modelo": "MonitoreoParcela", "campo": "activo", "verbose_name": "monitoreo_rasgos_funcionales"},
+    {"clave": "MonitoreoParcela.protocolo__rasgos_funcionales", "modelo": "MonitoreoParcela", "campo": "protocolo", "verbose_name": "protocolo_rasgos_funcionales"},
+]
+_COLUMNAS_PIVOTE_METADATO_MOM = _COLUMNAS_PIVOTE_METADATO_GEI + _COLUMNAS_PIVOTE_METADATO_MOM_MONITOREO
+
 # Columnas de clima (MuestraAmbiental) agregadas como atributos opcionales de la
-# hoja "Flujos CO2 - Dato" (2026-11-09, ver
+# hoja "Flujos Dato" (2026-11-09, ver
 # context/tasks/backlog/plantilla-flujos-co2-clima-misma-hoja.md): solo encabezados
 # por ahora — MuestraAmbiental tiene su propia FK a UnidadMuestreo (paralela a
 # MuestraGEI, no cuelga de SubmuestraGEI), así que no la trae la cadena de FKs hacia
@@ -4299,7 +4807,7 @@ _COLUMNAS_PIVOTE_DATO_GEI = [
     {"clave": "MuestraAmbiental.ph", "modelo": "MuestraAmbiental", "campo": "ph", "verbose_name": "pH"},
 ]
 
-# Orden completo de la hoja "Flujos CO2 - Dato" en la plantilla descargable, según
+# Orden completo de la hoja "Flujos Dato" en la plantilla descargable, según
 # el listado de 20 atributos acordado con el equipo de datos (2026-11-09) —
 # reemplaza `nombre_unidad_muestreo` por `codigo_metadato` como columna de
 # referencia hacia Metadato (ver `_LLAVE_REFERENCIA_GEI`).
@@ -4324,7 +4832,7 @@ _ORDEN_COLUMNAS_DATO_GEI_PLANTILLA = [
     "MuestraAmbiental.ph",
 ]
 
-# Orden completo de la hoja "Flujos CO2 - Metadato" en la plantilla
+# Orden completo de la hoja "Flujos Metadato" en la plantilla
 # descargable: combina las columnas reales (ver `orden_columnas` de la vista
 # "submuestra_gei") con las columnas de pivoteo de arriba, en el orden del
 # listado de 44 atributos acordado con el equipo de datos (2026-11-09).
@@ -4361,26 +4869,64 @@ def _columnas_seccion_gei(columnas, seccion):
     return [c for c in columnas if c["modelo"] not in _MODELOS_METADATO_GEI or c["clave"] in _LLAVE_REFERENCIA_GEI]
 
 
-def _hojas_plantilla_vacia():
+# Columnas de pivoteo (FK inversa, cobertura/disturbio/ecosistema/exposición
+# externa) y orden final por vista, para las vistas que no son GEI pero
+# también necesitan ese mismo tratamiento en la plantilla descargable
+# (`_hojas_plantilla_vacia`). Las columnas de pivoteo son genéricas a
+# cualquier `UnidadMuestreo` (ver `_COLUMNAS_PIVOTE_METADATO_GEI`, pese al
+# nombre no es específica de GEI), así que Biomasa las reutiliza tal cual.
+_PIVOTE_EXTRA_POR_VISTA = {
+    "biomasa_metadato": _COLUMNAS_PIVOTE_METADATO_GEI,
+    "cos_metadato": _COLUMNAS_PIVOTE_METADATO_COS,
+    "mom_metadato": _COLUMNAS_PIVOTE_METADATO_MOM,
+}
+_ORDEN_EXTRA_POR_VISTA = {
+    "biomasa_metadato": _ORDEN_COLUMNAS_METADATO_BIOMASA_PLANTILLA,
+    "biomasa_dato": _ORDEN_COLUMNAS_DATO_BIOMASA_PLANTILLA,
+    "cos_metadato": _ORDEN_COLUMNAS_METADATO_COS_PLANTILLA,
+    "cos_dato": _ORDEN_COLUMNAS_DATO_COS_PLANTILLA,
+    "mom_metadato": _ORDEN_COLUMNAS_METADATO_MOM_PLANTILLA,
+    "mom_dato": _ORDEN_COLUMNAS_DATO_MOM_PLANTILLA,
+}
+
+
+def _hojas_plantilla_vacia(metodologia=None):
     """Arma la lista `[(nombre_hoja, df, columnas), ...]` de la plantilla
     descargable (una hoja por metodología, solo encabezados), reutilizada
     tanto por `plantilla_vacia` (descarga el .xlsx) como por
     `plantilla_detalle` (devuelve el mismo contenido como JSON para mostrarlo
-    en pantalla sin descargar nada)."""
+    en pantalla sin descargar nada).
+
+    `metodologia`: si se pasa (ej. "flujos", "biomasa"), filtra a solo las
+    hojas de esa metodología — usado para separar la descarga/detalle por
+    tarjeta en `/participacion`. `None` (default) trae todas, que es lo que
+    necesitan `_sugerir_mapeos_automaticos`/`mapeo_automatico` para poder
+    reconocer un archivo subido sea cual sea su metodología."""
     hojas = []
     for hoja_def in _HOJAS_PLANTILLA:
-        vista = _VISTAS_DESNORMALIZADAS[hoja_def["nombre_vista"]]
+        if metodologia and hoja_def.get("metodologia") != metodologia:
+            continue
+        nombre_vista = hoja_def["nombre_vista"]
+        vista = _VISTAS_DESNORMALIZADAS[nombre_vista]
         columnas = _columnas_de_vista(vista)
         if hoja_def.get("seccion"):
             columnas = _columnas_seccion_gei(columnas, hoja_def["seccion"])
-        if hoja_def.get("seccion") == "metadato":
-            columnas = _reordenar_columnas(
-                columnas + _COLUMNAS_PIVOTE_METADATO_GEI, _ORDEN_COLUMNAS_METADATO_GEI_PLANTILLA
-            )
-        if hoja_def.get("seccion") == "dato":
-            columnas = _reordenar_columnas(
-                columnas + _COLUMNAS_PIVOTE_DATO_GEI, _ORDEN_COLUMNAS_DATO_GEI_PLANTILLA
-            )
+
+        pivote = (
+            _COLUMNAS_PIVOTE_METADATO_GEI if hoja_def.get("seccion") == "metadato"
+            else _COLUMNAS_PIVOTE_DATO_GEI if hoja_def.get("seccion") == "dato"
+            else _PIVOTE_EXTRA_POR_VISTA.get(nombre_vista)
+        )
+        orden = (
+            _ORDEN_COLUMNAS_METADATO_GEI_PLANTILLA if hoja_def.get("seccion") == "metadato"
+            else _ORDEN_COLUMNAS_DATO_GEI_PLANTILLA if hoja_def.get("seccion") == "dato"
+            else _ORDEN_EXTRA_POR_VISTA.get(nombre_vista)
+        )
+        if pivote:
+            columnas = columnas + pivote
+        if orden:
+            columnas = _reordenar_columnas(columnas, orden)
+
         encabezados = [c["verbose_name"] or c["campo"] for c in columnas]
         df = pd.DataFrame(columns=encabezados)
         hojas.append((hoja_def["hoja"][:31], df, columnas))
@@ -4476,11 +5022,23 @@ def _poblar_bronce(carga):
     """Vuelca cada hoja de `carga.hojas` a FilaBronce/CeldaBronce, literal,
     sin tipar. Idempotente: si la carga ya tiene filas bronce no repite el
     trabajo (correcciones posteriores van por `editar_celda_bronce`, no por
-    volver a poblar)."""
+    volver a poblar).
+
+    Ignora las hojas del archivo que no coinciden con `_HOJAS_PLANTILLA`
+    (ej. "Responsables", agregada por `exportar_bronce` a todo archivo
+    descargado desde la vista tipo Excel): si el usuario re-sube ese mismo
+    archivo, esa hoja extra no se puede mapear a ningún modelo y quedaría
+    sin promover para siempre -no tiene sentido cargarla a bronce-. Esto
+    también cubre el caso de que el usuario renombre o agregue una hoja
+    propia: solo importan las dos hojas válidas de la plantilla, sin
+    importar qué más traiga el archivo."""
     if FilaBronce.objects.filter(carga=carga).exists():
         return
 
+    hojas_validas = {h["hoja"] for h in _HOJAS_PLANTILLA}
     for hoja in (carga.hojas or {}).keys():
+        if hoja not in hojas_validas:
+            continue
         df = _leer_dataframe_carga(carga, hoja)
         filas = FilaBronce.objects.bulk_create(
             [FilaBronce(carga=carga, hoja=hoja, fila_idx=idx) for idx in range(len(df))]
@@ -5056,8 +5614,14 @@ def plantilla_vacia(request):
     usa el resto del ETL (`exportar_carga`, el wizard), así que la plantilla
     queda sincronizada con el modelo de datos real sin mantenimiento aparte:
     si un campo se agrega/renombra/cambia de tipo en Django, la próxima
-    descarga ya sale actualizada."""
-    hojas = _hojas_plantilla_vacia()
+    descarga ya sale actualizada.
+
+    Acepta `?metodologia=<key>` (ej. "flujos", "biomasa") para descargar solo
+    las hojas de esa metodología en vez de todas juntas."""
+    metodologia = request.GET.get("metodologia") or None
+    hojas = _hojas_plantilla_vacia(metodologia=metodologia)
+    if not hojas:
+        return JsonResponse({"error": "Metodología desconocida o sin plantilla propia."}, status=404)
 
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
@@ -5071,7 +5635,8 @@ def plantilla_vacia(request):
         buffer.read(),
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
-    response["Content-Disposition"] = 'attachment; filename="plantilla_colflux.xlsx"'
+    nombre_archivo = f"plantilla_{metodologia}.xlsx" if metodologia else "plantilla_colflux.xlsx"
+    response["Content-Disposition"] = f'attachment; filename="{nombre_archivo}"'
     return response
 
 
@@ -5082,8 +5647,12 @@ def plantilla_detalle(request):
     hoja, para mostrarlo en una vista de detalle sin tener que descargar el
     Excel. Reutiliza `_hojas_plantilla_vacia`/`_dataframe_diccionario_datos`,
     así que queda sincronizado con la plantilla descargable sin mantenimiento
-    aparte."""
-    hojas = _hojas_plantilla_vacia()
+    aparte.
+
+    Acepta `?metodologia=<key>` igual que `plantilla_vacia`, para mostrar
+    solo las hojas de esa metodología."""
+    metodologia = request.GET.get("metodologia") or None
+    hojas = _hojas_plantilla_vacia(metodologia=metodologia)
     df, colores = _dataframe_diccionario_datos(hojas)
 
     resultado = []
