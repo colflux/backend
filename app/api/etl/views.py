@@ -1606,6 +1606,19 @@ def _validar_columna(df, mapeo, dfs_por_hoja=None):
     }
     if advertencia_cruce is not None:
         resultado["advertencia_cruce"] = advertencia_cruce["mensaje"]
+    # Aviso no bloqueante cuando esta columna tiene un default de catálogo
+    # (`_DEFAULTS_CAMPOS_CATALOGO_BRONCE`, ver `_crear_mapeos_automaticos_bronce`):
+    # `_aplicar_estrategia_nulos` ya relleno los vacíos ANTES de esta validación
+    # (por eso acá no aparecen como "Campo requerido vacío"), así que se cuenta
+    # cuántas filas quedaron en el valor default para dejarlo visible igual,
+    # sin bloquear la fila.
+    if mapeo.estrategia_nulos == "manual" and not _es_vacio(mapeo.valor_relleno_manual):
+        rellenadas = sum(1 for v in serie if str(v) == mapeo.valor_relleno_manual)
+        if rellenadas:
+            resultado["advertencia_relleno"] = (
+                f"{rellenadas} fila(s) sin valor completadas automáticamente con "
+                f"'{mapeo.valor_relleno_manual}'"
+            )
     return resultado
 
 
@@ -1678,7 +1691,7 @@ def _valores_fila_modelo(df, mapeos_modelo, fila_idx):
     return valores
 
 
-def _validar_obligatorios_unidad_muestreo(mapeos, modelos_incluidos, total_filas, hoja=None):
+def _validar_obligatorios_unidad_muestreo(mapeos, modelos_incluidos, total_filas, hoja=None, mapeos_todas_hojas=None):
     """Reglas de negocio de UnidadMuestreo que no se derivan de blank/null del
     modelo (por eso _validar_columna/_validar_constante no las cubren):
     - 'nombre' es obligatorio para toda unidad de muestreo, así que debe
@@ -1689,17 +1702,23 @@ def _validar_obligatorios_unidad_muestreo(mapeos, modelos_incluidos, total_filas
     - 'unidad_experimental' debe quedar resuelto sí o sí: mapeado explícito,
       o heredado automáticamente porque 'UnidadExperimental' se importa en la
       misma tanda (ver el vínculo automático por fila en importar_carga).
-    Se llama UNA VEZ POR HOJA (no una vez por sección): cada hoja escribe sus
-    propias filas de UnidadMuestreo con sus propios mapeos (`mapeos` acá ya
-    viene acotado a una hoja por `_leer_y_validar_multihoja`) -si el campo
-    está mapeado en otra hoja de la misma sección pero no en esta, las filas
-    de ESTA hoja igual fallarían al guardar (constraint not-null en la BD)-,
-    así que `hoja` se usa solo para dejar explícito en el mensaje a qué hoja
-    le falta el campo, evitando el error crudo de Postgres."""
+    `modelos_incluidos`/`mapeos` siguen acotados a ESTA hoja (`hoja` solo es
+    para el mensaje), pero los campos en sí se buscan en `mapeos_todas_hojas`
+    -todas las hojas de la misma carga/sección, no solo esta- porque un
+    archivo típico trae Metadato (con nombre/tipo/unidad_experimental) y
+    Dato (solo con la columna de referencia `codigo_metadato`) como hojas
+    separadas de la MISMA carga: sin esto, la hoja Dato se bloqueaba siempre
+    aunque Metadato ya tuviera esos campos resueltos (bug encontrado
+    2026-11-24 probando la carga real de Biomasa, ver
+    tasks/inprogress/plantilla-metadato-dato-biomasa.md en el repo `context`).
+    Si no se pasa `mapeos_todas_hojas`, cae a `mapeos` (comportamiento previo,
+    usado por `validar_carga` que sí es genuinamente una hoja a la vez)."""
     if "UnidadMuestreo" not in modelos_incluidos:
         return None
 
-    campos_um = {m.campo_destino for m in mapeos if m.modelo_destino == "UnidadMuestreo"}
+    mapeos_ref = mapeos_todas_hojas if mapeos_todas_hojas is not None else mapeos
+    campos_um = {m.campo_destino for m in mapeos_ref if m.modelo_destino == "UnidadMuestreo"}
+    modelos_incluidos_ref = {m.modelo_destino for m in mapeos_ref}
     errores = []
     contexto = f" en la hoja '{hoja}'" if hoja else ""
 
@@ -1713,7 +1732,16 @@ def _validar_obligatorios_unidad_muestreo(mapeos, modelos_incluidos, total_filas
             ),
         })
 
-    if "tipo" not in campos_um:
+    # El mapeo manual (asistente sección por sección) apunta directo a
+    # UnidadMuestreo.tipo (FK de solo selección, ver comentario junto a
+    # SECCIONES_ETL "Detalles de muestreo"). El mapeo AUTOMÁTICO (bronce,
+    # `_crear_mapeos_automaticos_bronce`) en cambio apunta a
+    # UnidadMuestreoTipo.nombre -resuelto por get_or_create en
+    # `_procesar_filas`/`_procesar_filas_multihoja`-: ambas formas resuelven
+    # el mismo campo, así que cualquiera de las dos cuenta acá (bug
+    # encontrado 2026-11-24: el auto-mapeo nunca pasaba este check porque
+    # solo se reconocía la forma manual).
+    if "tipo" not in campos_um and not any(m.modelo_destino == "UnidadMuestreoTipo" for m in mapeos_ref):
         errores.append({
             "fila": None, "valor": None, "tipo": "campo_obligatorio_sin_mapear",
             "mensaje": (
@@ -1723,7 +1751,7 @@ def _validar_obligatorios_unidad_muestreo(mapeos, modelos_incluidos, total_filas
             ),
         })
 
-    if "unidad_experimental" not in campos_um and "UnidadExperimental" not in modelos_incluidos:
+    if "unidad_experimental" not in campos_um and "UnidadExperimental" not in modelos_incluidos_ref:
         errores.append({
             "fila": None, "valor": None, "tipo": "campo_obligatorio_sin_mapear",
             "mensaje": (
@@ -1744,17 +1772,19 @@ def _validar_obligatorios_unidad_muestreo(mapeos, modelos_incluidos, total_filas
     }
 
 
-def _validar_obligatorios_unidad_experimental(mapeos, modelos_incluidos, total_filas, hoja=None):
+def _validar_obligatorios_unidad_experimental(mapeos, modelos_incluidos, total_filas, hoja=None, mapeos_todas_hojas=None):
     """'nombre' es obligatorio para toda unidad experimental (es, junto con
     'proyecto', su clave de unicidad). Si no queda mapeado, get_or_create()
     terminaría buscando solo por 'proyecto' y podría devolver más de una
     fila cuando el proyecto ya tiene varias unidades experimentales. Se llama
     una vez por hoja, igual que `_validar_obligatorios_unidad_muestreo` (ver
-    su docstring): cada hoja escribe sus propias filas."""
+    su docstring, incluyendo por qué `mapeos_todas_hojas` busca el campo en
+    todas las hojas de la carga en vez de solo en esta)."""
     if "UnidadExperimental" not in modelos_incluidos:
         return None
 
-    campos_ue = {m.campo_destino for m in mapeos if m.modelo_destino == "UnidadExperimental"}
+    mapeos_ref = mapeos_todas_hojas if mapeos_todas_hojas is not None else mapeos
+    campos_ue = {m.campo_destino for m in mapeos_ref if m.modelo_destino == "UnidadExperimental"}
     errores = []
     contexto = f" en la hoja '{hoja}'" if hoja else ""
 
@@ -1778,7 +1808,7 @@ def _validar_obligatorios_unidad_experimental(mapeos, modelos_incluidos, total_f
     }
 
 
-def _validar_obligatorios_muestra_ambiental(mapeos, modelos_incluidos, total_filas, hoja=None):
+def _validar_obligatorios_muestra_ambiental(mapeos, modelos_incluidos, total_filas, hoja=None, mapeos_todas_hojas=None):
     """MuestraAmbiental.unidad_muestreo es NOT NULL en el modelo (a
     diferencia de MuestraGEI.unidad_muestreo, que es opcional) — sin este
     check, una hoja donde solo se mapeó algún campo de Muestra Ambiental
@@ -1787,11 +1817,13 @@ def _validar_obligatorios_muestra_ambiental(mapeos, modelos_incluidos, total_fil
     IntegrityError crudo de Postgres al momento de guardar en vez de un
     mensaje entendible. Pasa sobre todo cuando la sección "Muestra
     Ambiental" se marcó "sin datos" u opcional: eso no borra mapeos sueltos
-    que ya se hayan guardado para este modelo en esta hoja."""
+    que ya se hayan guardado para este modelo en esta hoja. `mapeos_todas_hojas`:
+    ver docstring de `_validar_obligatorios_unidad_muestreo`."""
     if "MuestraAmbiental" not in modelos_incluidos:
         return None
 
-    campos_ma = {m.campo_destino for m in mapeos if m.modelo_destino == "MuestraAmbiental"}
+    mapeos_ref = mapeos_todas_hojas if mapeos_todas_hojas is not None else mapeos
+    campos_ma = {m.campo_destino for m in mapeos_ref if m.modelo_destino == "MuestraAmbiental"}
     errores = []
     contexto = f" en la hoja '{hoja}'" if hoja else ""
 
@@ -2854,25 +2886,28 @@ def _preparar_importacion(carga, hasta_grupo_solicitado):
     return mapeos, hasta_grupo, grupo_maximo, None
 
 
-def _validar_seccion(carga, df, mapeos, hoja=None, dfs_por_hoja=None):
+def _validar_seccion(carga, df, mapeos, hoja=None, dfs_por_hoja=None, mapeos_todas_hojas=None):
     """Corre todas las validaciones de ESTA hoja (por columna + reglas de
     negocio) sobre el subconjunto `mapeos` -ya acotado a UNA hoja por el
     llamador (`_leer_y_validar_multihoja`), así que `df` y `mapeos` siempre
-    se corresponden entre sí-. Los chequeos de "campo obligatorio sin
-    mapear" se corren acá TAMBIÉN por hoja (no solo a nivel de sección):
-    cada hoja escribe sus propias filas con sus propios mapeos
-    (`_procesar_filas_multihoja` procesa hoja por hoja), así que si a ESTA
-    hoja en particular le falta 'nombre'/'tipo' de UnidadMuestreo, sus filas
-    van a fallar al guardar (constraint not-null en la BD) aunque el campo
-    esté mapeado en otra hoja de la misma sección -de ahí que el mensaje
-    incluya el nombre de la hoja, para que quede claro que el problema es
-    de ESTA hoja y no de la sección completa-. Las constantes (`transformacion
-    == "constante"`) no se validan acá: `_leer_y_validar_multihoja` las
-    valida una sola vez por sección, deduplicadas, porque su formato/tipo no
-    depende de la hoja. `dfs_por_hoja` (todas las hojas ya leídas de esta
-    carga) se pasa a `_validar_columna` para resolver los mapeos con
-    `hoja_origen` seteado (columna que viene de otra hoja). Devuelve
-    (resultados, total_errores, filas_con_error)."""
+    se corresponden entre sí-. Los chequeos de columna (`_validar_columna`,
+    `_validar_unicidad_unidad_experimental`) siguen por hoja: cada hoja
+    escribe sus propias filas (`_procesar_filas_multihoja` procesa hoja por
+    hoja). Pero los chequeos de "campo obligatorio sin mapear" (nombre/tipo/
+    unidad_experimental de UnidadMuestreo, etc.) reciben además
+    `mapeos_todas_hojas` -todas las hojas de la carga/sección, no solo
+    esta- porque esos campos SÍ pueden venir resueltos en otra hoja de la
+    misma carga (típicamente: Metadato trae nombre/tipo/unidad_experimental,
+    Dato solo trae la columna de referencia `codigo_metadato`) sin que eso
+    sea un problema real al promover -`_procesar_filas_multihoja` ya junta
+    las hojas de la carga en la misma transacción-. Si no se pasa
+    `mapeos_todas_hojas`, cada función cae a `mapeos` (comportamiento previo).
+    Las constantes (`transformacion == "constante"`) no se validan acá:
+    `_leer_y_validar_multihoja` las valida una sola vez por sección,
+    deduplicadas, porque su formato/tipo no depende de la hoja. `dfs_por_hoja`
+    (todas las hojas ya leídas de esta carga) se pasa a `_validar_columna`
+    para resolver los mapeos con `hoja_origen` seteado (columna que viene de
+    otra hoja). Devuelve (resultados, total_errores, filas_con_error)."""
     resultados = []
     filas_con_error = set()
     for mapeo in mapeos:
@@ -2891,19 +2926,25 @@ def _validar_seccion(carga, df, mapeos, hoja=None, dfs_por_hoja=None):
         resultados.append(resultado_ue)
 
     modelos_incluidos = {m.modelo_destino for m in mapeos}
-    resultado_ue_obl = _validar_obligatorios_unidad_experimental(mapeos, modelos_incluidos, len(df), hoja=hoja)
+    resultado_ue_obl = _validar_obligatorios_unidad_experimental(
+        mapeos, modelos_incluidos, len(df), hoja=hoja, mapeos_todas_hojas=mapeos_todas_hojas,
+    )
     if resultado_ue_obl is not None:
         for e in resultado_ue_obl["errores"]:
             filas_con_error.add(e["fila"])
         resultados.append(resultado_ue_obl)
 
-    resultado_um = _validar_obligatorios_unidad_muestreo(mapeos, modelos_incluidos, len(df), hoja=hoja)
+    resultado_um = _validar_obligatorios_unidad_muestreo(
+        mapeos, modelos_incluidos, len(df), hoja=hoja, mapeos_todas_hojas=mapeos_todas_hojas,
+    )
     if resultado_um is not None:
         for e in resultado_um["errores"]:
             filas_con_error.add(e["fila"])
         resultados.append(resultado_um)
 
-    resultado_ma = _validar_obligatorios_muestra_ambiental(mapeos, modelos_incluidos, len(df), hoja=hoja)
+    resultado_ma = _validar_obligatorios_muestra_ambiental(
+        mapeos, modelos_incluidos, len(df), hoja=hoja, mapeos_todas_hojas=mapeos_todas_hojas,
+    )
     if resultado_ma is not None:
         for e in resultado_ma["errores"]:
             filas_con_error.add(e["fila"])
@@ -2978,7 +3019,7 @@ def _leer_y_validar_multihoja(carga, mapeos, on_progreso=None):
             mapeos_hoja = [m for m in mapeos if m.hoja == hoja]
             df = dfs_por_hoja[hoja]
             resultados_hoja, errores_hoja, filas_hoja = _validar_seccion(
-                carga, df, mapeos_hoja, hoja=hoja, dfs_por_hoja=dfs_por_hoja,
+                carga, df, mapeos_hoja, hoja=hoja, dfs_por_hoja=dfs_por_hoja, mapeos_todas_hojas=mapeos,
             )
             return hoja, resultados_hoja, errores_hoja, len(df), len(filas_hoja)
         finally:
@@ -3025,10 +3066,30 @@ def _leer_y_validar_multihoja(carga, mapeos, on_progreso=None):
 def _procesar_filas_multihoja(carga, mapeos, orden, resumen_modelos, dfs_por_hoja, capturar_detalle=False, on_progreso=None, es_correccion=False):
     """Como `_procesar_filas`, pero corriendo una vez por cada hoja presente
     en `mapeos` (con su propio DataFrame) y fusionando detalle/pks — una
-    misma sección puede tener columnas mapeadas desde más de una hoja."""
+    misma sección puede tener columnas mapeadas desde más de una hoja.
+
+    `_procesar_filas` arranca con un `resueltos` vacío CADA VEZ que se llama
+    (una vez por hoja, acá abajo): no hay memoria entre hojas más que lo que
+    ya quedó escrito en la BD. Para un modelo con identidad propia que varias
+    hojas comparten (típicamente UnidadMuestreo, vía `codigo_metadato`:
+    Metadato trae nombre/tipo/unidad_experimental, Dato solo la columna de
+    referencia), la hoja que se procese PRIMERO es la que efectivamente crea
+    esa fila -la(s) siguiente(s) la encuentran por identidad y solo
+    actualizan los campos que sí traen-. Si la hoja "pobre" (Dato) se
+    procesa antes que la "rica" (Metadato), crea la fila sin los campos
+    obligatorios que solo Metadato mapea -not-null constraint de la BD,
+    bug encontrado 2026-11-24 probando la carga real de Biomasa, ver
+    tasks/inprogress/plantilla-metadato-dato-biomasa.md en el repo
+    `context`-. `sorted()` alfabético no garantiza esto ("Dato" < "Metadato"
+    para CUALQUIER metodología de este repo) así que se ordena por cantidad
+    de modelos distintos mapeados en la hoja, de mayor a menor -la hoja más
+    completa primero-, alfabético solo para desempatar."""
     detalle_combinado = {} if capturar_detalle else None
     pks_combinado = {}
-    hojas = sorted({m.hoja for m in mapeos})
+    modelos_por_hoja_todas = defaultdict(set)
+    for m in mapeos:
+        modelos_por_hoja_todas[m.hoja].add(m.modelo_destino)
+    hojas = sorted({m.hoja for m in mapeos}, key=lambda h: (-len(modelos_por_hoja_todas[h]), h))
     for i, hoja in enumerate(hojas, start=1):
         if on_progreso:
             on_progreso(i - 1, len(hojas), hoja)
@@ -3389,8 +3450,10 @@ _ORDEN_COLUMNAS_DATO_BIOMASA_PLANTILLA = [
 # propias de COS (CaracterizacionMuestreoSuelo/MonitoreoSuelo, ver
 # `_COLUMNAS_PIVOTE_METADATO_COS_MONITOREO` más abajo).
 _ORDEN_COLUMNAS_METADATO_COS_PLANTILLA = [
-    "UnidadMuestreo.codigo_metadato",
-    "Region.nombre", "Departamento.nombre", "Municipio.nombre", "Vereda.nombre",
+    "UnidadMuestreo.codigo_metadato", "UnidadMuestreo.nombre",
+    "UnidadExperimental.nombre", "UnidadMuestreoTipo.nombre",
+    # Region/Departamento/Municipio/Vereda: sin columna por ahora (decisión de
+    # la usuaria, 2026-11-24) — ver nota en `cos_metadato["cadena"]` más abajo.
     "Sitio.nombre", "Sitio.tipo_localizacion",
     "Sitio.latitud", "Sitio.longitud", "SistemaReferencia.nombre",
     "Sitio.altitud", "Sitio.pendiente", "Sitio.topografia",
@@ -3413,7 +3476,6 @@ _ORDEN_COLUMNAS_METADATO_COS_PLANTILLA = [
 ]
 _ORDEN_COLUMNAS_DATO_COS_PLANTILLA = [
     "UnidadMuestreo.codigo_metadato",
-    "UnidadMuestreo.nombre",
     "SubmuestraSuelo.barreno_vol",
     "SubmuestraSuelo.profundidad_desde_cm", "SubmuestraSuelo.profundidad_hasta_cm",
     "SubmuestraSuelo.densidad_aparente_g_cm3",
@@ -3435,7 +3497,9 @@ _ORDEN_COLUMNAS_DATO_COS_PLANTILLA = [
 _ORDEN_COLUMNAS_METADATO_MOM_PLANTILLA = [
     "UnidadMuestreo.codigo_metadato",
     "UnidadExperimental.nombre", "UnidadMuestreo.nombre",
-    "Region.nombre", "Departamento.nombre", "Municipio.nombre", "Vereda.nombre",
+    # Region/Departamento/Municipio/Vereda: sin columna por ahora (decisión
+    # de la usuaria, 2026-11-24) — ver nota en `mom_metadato["cadena"]` más
+    # abajo.
     "Sitio.tipo_localizacion", "Sitio.latitud", "Sitio.longitud", "SistemaReferencia.nombre",
     "Sitio.altitud", "Sitio.pendiente", "Sitio.topografia",
     "ValorClasificacionEcosistema.valor",
@@ -3462,9 +3526,6 @@ _ORDEN_COLUMNAS_METADATO_MOM_PLANTILLA = [
 ]
 _ORDEN_COLUMNAS_DATO_MOM_PLANTILLA = [
     "UnidadMuestreo.codigo_metadato",
-    "UnidadMuestreo.nombre",
-    "UnidadMuestreo.fecha_instalacion",
-    "Sitio.nombre",
     "MuestraMOM.carbono_mom_valor_reportado",
     "MuestraMOM.carbono_mom_tc_ha",
     "MuestraMOM.error_mom",
@@ -3826,25 +3887,52 @@ _VISTAS_DESNORMALIZADAS = {
         "cadena": [
             ("CaracterizacionMuestreoSuelo", []),
             ("UnidadMuestreo", ["unidad_muestreo"]),
+            ("UnidadMuestreoTipo", ["unidad_muestreo", "tipo"]),
             ("UnidadExperimental", ["unidad_muestreo", "unidad_experimental"]),
             ("Proyecto", ["unidad_muestreo", "unidad_experimental", "proyecto"]),
             ("Sitio", ["unidad_muestreo", "sitio"]),
             ("SistemaReferencia", ["unidad_muestreo", "sitio", "sistema_referencia"]),
-            ("Vereda", ["unidad_muestreo", "sitio", "vereda"]),
-            ("Municipio", ["unidad_muestreo", "sitio", "vereda", "municipio"]),
-            ("Departamento", ["unidad_muestreo", "sitio", "vereda", "municipio", "departamento"]),
-            ("Region", ["unidad_muestreo", "sitio", "vereda", "municipio", "departamento", "region"]),
+            # Vereda/Municipio/Departamento/Region: fuera de la cadena a propósito
+            # (decisión de la usuaria, 2026-11-24) — el motor de importación
+            # genérico choca con `Vereda.codigo_dane` (único, sin valor en los
+            # datos reales de COS) cuando el archivo toca más de un municipio.
+            # `Sitio.vereda` es nullable, así que simplemente no se resuelve esa
+            # relación por ahora. Ver tasks/inprogress/plantilla-metadato-dato-cos.md.
         ],
         "campos": {
             "CaracterizacionMuestreoSuelo": {"incluir": ["profundidad_perfil", "intervalos_perfil"], "alias": {
                 "profundidad_perfil": "profundidad_perfil",
                 "intervalos_perfil": "intervalos_perfil",
             }},
-            "UnidadMuestreo": {"incluir": ["codigo_metadato", "compartimento"], "alias": {
+            # nombre: obligatorio en el modelo y validado como "campo
+            # obligatorio sin mapear" si no aparece en esta hoja. El Excel
+            # real no distingue un nombre de unidad de muestreo propio del
+            # código de metadato (mismo caso que nombre_unidad_experimental,
+            # más abajo) — decisión tomada con la usuaria, 2026-11-24: se
+            # reusa codigo_metadato como nombre, vía la columna
+            # "nombre_unidad_muestreo" (copia del mismo valor en el archivo
+            # transformado, no una columna nueva en el Excel fuente de IDEAM).
+            "UnidadMuestreo": {"incluir": ["codigo_metadato", "compartimento", "nombre"], "alias": {
                 "codigo_metadato": "codigo_metadato",
                 "compartimento": "compartimento",
+                "nombre": "nombre_unidad_muestreo",
             }},
-            "UnidadExperimental": {"incluir": []},
+            # UnidadMuestreoTipo/UnidadExperimental: el Excel real de IDEAM no
+            # distingue "unidad experimental" de "unidad de muestreo" (solo
+            # trae sitio + No. unidad de muestreo) ni trae un tipo de unidad
+            # -a diferencia de Biomasa-, pero ambos son obligatorios en
+            # `UnidadMuestreo` (ver modelo) y bloquean toda la carga en la
+            # capa bronce si no se mapean. Decisión tomada sin volver a
+            # preguntar al equipo (2026-11-24, ver tarea
+            # plantilla-metadato-dato-cos.md): se expone 1 unidad experimental
+            # por `codigo_metadato` (más granular que por sitio, ya que
+            # codigo_metadato ya identifica sitio+transecto en el Excel real)
+            # y se deja `tipo_unidad_muestreo` como columna manual/constante
+            # sin valor por defecto -el equipo de datos decide qué tipo del
+            # catálogo (conglomerado/parcela/plot/transecto) le corresponde a
+            # las unidades de muestreo de COS, no hay un valor obvio.
+            "UnidadMuestreoTipo": {"incluir": ["nombre"], "alias": {"nombre": "tipo_unidad_muestreo"}},
+            "UnidadExperimental": {"incluir": ["nombre"], "alias": {"nombre": "nombre_unidad_experimental"}},
             "Proyecto": {"incluir": []},
             "Sitio": {"incluir": [
                 "nombre", "tipo_localizacion", "latitud", "longitud", "altitud", "pendiente", "topografia", "uso_actual",
@@ -3856,10 +3944,6 @@ _VISTAS_DESNORMALIZADAS = {
                 "uso_actual": "uso_actual",
             }},
             "SistemaReferencia": {"incluir": ["nombre"], "alias": {"nombre": "sistema_referencia"}},
-            "Vereda": {"incluir": ["nombre"], "alias": {"nombre": "vereda"}},
-            "Municipio": {"incluir": ["nombre"], "alias": {"nombre": "municipio"}},
-            "Departamento": {"incluir": ["nombre"], "alias": {"nombre": "departamento"}},
-            "Region": {"incluir": ["nombre"], "alias": {"nombre": "region_natural"}},
         },
         "orden_columnas": _ORDEN_COLUMNAS_METADATO_COS_PLANTILLA,
     },
@@ -3888,10 +3972,17 @@ _VISTAS_DESNORMALIZADAS = {
                 "metodologia_azimut": "metodologia_azimut",
                 "metodologia_analisis": "metodologia_analisis",
             }},
-            "UnidadMuestreo": {"incluir": ["codigo_metadato", "nombre"], "alias": {
-                "codigo_metadato": "codigo_metadato",
-                "nombre": "no_unidad_muestreo",
-            }},
+            # Solo codigo_metadato (sin "nombre"): mismo patrón que
+            # biomasa_dato. Si esta hoja mapeara también `nombre`, el
+            # get_or_create de la fila filtraría por (nombre, codigo_metadato)
+            # y nunca matchearía la UnidadMuestreo que ya creó "COS Metadato"
+            # (que no mapea `nombre`, queda '') — intentaría crear una
+            # UnidadMuestreo nueva sin `tipo`/`unidad_experimental` y
+            # reventaba con IntegrityError (tipo_id NOT NULL). Decisión
+            # tomada con la usuaria, 2026-11-24: se pierde la columna "No.
+            # unidad de muestreo" de esta hoja (el dato no se guarda), pero
+            # codigo_metadato ya identifica la fila sin ambigüedad.
+            "UnidadMuestreo": {"incluir": ["codigo_metadato"], "alias": {"codigo_metadato": "codigo_metadato"}},
         },
         "orden_columnas": _ORDEN_COLUMNAS_DATO_COS_PLANTILLA,
     },
@@ -3924,10 +4015,13 @@ _VISTAS_DESNORMALIZADAS = {
             ("Parcela", ["parcela"]),
             ("Sitio", ["sitio"]),
             ("SistemaReferencia", ["sitio", "sistema_referencia"]),
-            ("Vereda", ["sitio", "vereda"]),
-            ("Municipio", ["sitio", "vereda", "municipio"]),
-            ("Departamento", ["sitio", "vereda", "municipio", "departamento"]),
-            ("Region", ["sitio", "vereda", "municipio", "departamento", "region"]),
+            # Vereda/Municipio/Departamento/Region: fuera de la cadena a
+            # propósito (mismo bloqueo y misma decisión que en
+            # `cos_metadato`, 2026-11-24) — el motor de importación genérico
+            # choca con `Vereda.codigo_dane` (único, sin valor en los datos
+            # reales de IDEAM) cuando el archivo toca más de un municipio.
+            # `Sitio.vereda` es nullable, así que simplemente no se resuelve
+            # esa relación por ahora. Ver tasks/inprogress/plantilla-metadato-dato-mom.md.
         ],
         "campos": {
             "UnidadMuestreo": {"incluir": ["nombre", "codigo_metadato", "tipo_muestreo"], "alias": {
@@ -3956,20 +4050,23 @@ _VISTAS_DESNORMALIZADAS = {
                 "propiedad_tierra": "propiedad_tierra",
             }},
             "SistemaReferencia": {"incluir": ["nombre"], "alias": {"nombre": "sistema_referencia"}},
-            "Vereda": {"incluir": ["nombre"], "alias": {"nombre": "vereda"}},
-            "Municipio": {"incluir": ["nombre"], "alias": {"nombre": "municipio"}},
-            "Departamento": {"incluir": ["nombre"], "alias": {"nombre": "departamento"}},
-            "Region": {"incluir": ["nombre"], "alias": {"nombre": "region_natural"}},
         },
         "orden_columnas": _ORDEN_COLUMNAS_METADATO_MOM_PLANTILLA,
     },
+    # No se incluye "Sitio" en la cadena (a diferencia de la vista de lectura
+    # genérica "mom"): el motor de importación hace get_or_create por cada
+    # modelo de la cadena con los campos mapeados de esa fila, y Dato solo
+    # trae `Sitio.nombre` sin coordenadas — al promover, intenta crear un
+    # Sitio nuevo con latitud/longitud nulas y choca con el NOT NULL del
+    # modelo (encontrado probando con datos reales de IDEAM, 2026-11-24).
+    # `UnidadMuestreo.codigo_metadato` ya es la llave que cruza con Metadato
+    # (que sí crea/completa el Sitio real), mismo patrón que `biomasa_dato`.
     "mom_dato": {
         "modelo_base": "MuestraMOM",
         "orden": ["unidad_muestreo__unidad_experimental__nombre", "fecha"],
         "cadena": [
             ("MuestraMOM", []),
             ("UnidadMuestreo", ["unidad_muestreo"]),
-            ("Sitio", ["unidad_muestreo", "sitio"]),
         ],
         "campos": {
             # fecha (de la medición) excluida: no tiene columna equivalente
@@ -3994,12 +4091,21 @@ _VISTAS_DESNORMALIZADAS = {
                 "metodologia_amp_to": "metodologia_amp_to",
                 "metodologia_hojarasca": "metodologia_hojarasca",
             }},
-            "UnidadMuestreo": {"incluir": ["codigo_metadato", "nombre", "fecha_instalacion"], "alias": {
+            # Solo `codigo_metadato` (mismo patrón que `biomasa_dato`): es el
+            # único campo que efectivamente identifica la `UnidadMuestreo` ya
+            # creada por Metadato en el motor de importación genérico. Antes
+            # también traía `nombre`/`fecha_instalacion` como columnas, pero
+            # al promover bronce con datos reales de IDEAM (2026-11-24) esos
+            # 2 campos de más entraban al filtro de `get_or_create()` (sin
+            # satisfacer `_CAMPOS_IDENTIDAD["UnidadMuestreo"]`, que necesita
+            # `nombre`+`tipo`+`unidad_experimental`, ausentes en esta vista) y
+            # no matcheaban la fila de Metadato (que no trae
+            # `fecha_instalacion`) — se creaba una `UnidadMuestreo` duplicada
+            # sin `tipo` (FK obligatoria) y la carga fallaba con
+            # `null value in column "tipo_id"`.
+            "UnidadMuestreo": {"incluir": ["codigo_metadato"], "alias": {
                 "codigo_metadato": "codigo_metadato",
-                "nombre": "nombre_unidad_muestreo",
-                "fecha_instalacion": "fecha_instalacion_unidad_muestreo",
             }},
-            "Sitio": {"incluir": ["nombre"], "alias": {"nombre": "sitio"}},
         },
         "orden_columnas": _ORDEN_COLUMNAS_DATO_MOM_PLANTILLA,
     },
@@ -5098,6 +5204,28 @@ def _sugerir_mapeos_columnas_bronce(carga):
     return resultado
 
 
+# Campos obligatorios donde, si la columna viene vacía, tiene más sentido
+# rellenar con un default razonable que bloquear la fila entera -decisiones
+# de la usuaria, 2026-11-24, probando la carga real de MOM-:
+# - `SistemaReferencia.nombre`: EPSG_4326 (WGS84) es el sistema de
+#   referencia por defecto de facto en Colflux (es el srid de `Sitio.geom`),
+#   así que una fila sin este dato casi seguro está en WGS84.
+# - `Sitio.intervenido`: sin dato, se asume "no intervenido" (False) en vez
+#   de bloquear -mismo criterio que dejar un checkbox sin marcar en un
+#   formulario-.
+# Se aplica vía el mecanismo ya existente de `estrategia_nulos='manual'`
+# (ver `_aplicar_estrategia_nulos`) en vez de agregar lógica nueva o tocar
+# el modelo (`Sitio.intervenido`/`SistemaReferencia.nombre` siguen sin
+# `blank=True`): el valor se rellena ANTES de validar, así que la fila
+# nunca llega a marcarse "Campo requerido vacío". El aviso de cuántas filas
+# usaron el default sale en `_validar_columna` vía `advertencia_relleno`,
+# visible en la vista tipo Excel sin bloquear nada.
+_DEFAULTS_CAMPOS_CATALOGO_BRONCE = {
+    ("SistemaReferencia", "nombre"): "EPSG_4326",
+    ("Sitio", "intervenido"): "no",
+}
+
+
 def _crear_mapeos_automaticos_bronce(carga):
     """Crea los `MapeoColumna` de las columnas que matchean exacto contra la
     plantilla (ver `_sugerir_mapeos_columnas_bronce`). No toca las columnas
@@ -5110,18 +5238,21 @@ def _crear_mapeos_automaticos_bronce(carga):
         (m.hoja, m.columna_origen, m.modelo_destino, m.campo_destino)
         for m in carga.mapeos.all()
     }
-    nuevos = [
-        MapeoColumna(
-            carga=carga, hoja=hoja,
-            columna_origen=m["columna_origen"],
-            modelo_destino=m["modelo_destino"],
-            campo_destino=m["campo_destino"],
-            transformacion=m["transformacion"],
-        )
-        for hoja, info in sugerencias.items()
-        for m in info["mapeos"]
-        if (hoja, m["columna_origen"], m["modelo_destino"], m["campo_destino"]) not in existentes
-    ]
+    nuevos = []
+    for hoja, info in sugerencias.items():
+        for m in info["mapeos"]:
+            if (hoja, m["columna_origen"], m["modelo_destino"], m["campo_destino"]) in existentes:
+                continue
+            default_catalogo = _DEFAULTS_CAMPOS_CATALOGO_BRONCE.get((m["modelo_destino"], m["campo_destino"]))
+            nuevos.append(MapeoColumna(
+                carga=carga, hoja=hoja,
+                columna_origen=m["columna_origen"],
+                modelo_destino=m["modelo_destino"],
+                campo_destino=m["campo_destino"],
+                transformacion=m["transformacion"],
+                estrategia_nulos="manual" if default_catalogo else "dejar_null",
+                valor_relleno_manual=default_catalogo or "",
+            ))
     if nuevos:
         MapeoColumna.objects.bulk_create(nuevos)
 
@@ -5289,6 +5420,7 @@ def _validar_y_promover_bronce(carga):
     resultados_por_hoja = {
         hoja: _validar_seccion(
             carga, dfs_por_hoja[hoja], mapeos_por_hoja[hoja], hoja=hoja, dfs_por_hoja=dfs_por_hoja,
+            mapeos_todas_hojas=mapeos,
         )[0]
         for hoja in hojas_mapeadas
     }

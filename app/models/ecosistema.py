@@ -28,7 +28,7 @@ class ValorClasificacionEcosistema(TimestampedModel):
         TipoClasificacionEcosistema, on_delete=models.PROTECT, related_name="valores",
         verbose_name="tipo de clasificación",
     )
-    valor = models.CharField("valor", max_length=120)
+    valor = models.CharField("valor", max_length=120, blank=True)
 
     class Meta:
         verbose_name = "valor de clasificación de ecosistema"
