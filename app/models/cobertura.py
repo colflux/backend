@@ -162,7 +162,7 @@ class DisturbioManual(TimestampedModel):
     )
     estado_actual = models.CharField("estado actual", max_length=30, choices=ESTADO_CHOICES, blank=True)
     es_dominante = models.BooleanField(
-        "es el disturbio dominante", default=False,
+        "es el disturbio dominante", default=False, blank=True,
         help_text="Si es el disturbio/manejo principal reportado para la unidad de muestreo, cuando hay varios registrados.",
     )
 
