@@ -2230,6 +2230,33 @@ def _buscar_existentes_por_identidad(modelo_cls, campos_clave_por_fila):
     return {_clave_identidad_obj(modelo_cls, campos, obj): obj for obj in queryset}
 
 
+def _campos_obligatorios_faltantes(modelo_cls, valores):
+    """Nombres de los campos concretos de `modelo_cls` con null=False y sin
+    default (ni auto_now/auto_now_add) que no tienen valor real en `valores`
+    ({campo: valor}, incluye tanto `campos_clave` como `defaults`). Se usa
+    antes de CREAR un objeto nuevo con identidad propia (ver grupos_identidad
+    en `_procesar_filas`): una fila puede traer la identidad (p. ej.
+    UnidadMuestreo.nombre) desde una hoja y dejar un campo obligatorio (p.
+    ej. tipo) para otra hoja de la misma carga -si esa otra hoja no se
+    procesó antes, o sus filas quedaron inválidas, el objeto nunca recibe ese
+    campo-. Sin este chequeo, el INSERT llegaba a la BD sin el campo y
+    Postgres tiraba un IntegrityError crudo de not-null constraint en vez de
+    que la fila se descartara limpiamente como incompleta (bug real
+    encontrado 2026-11-26 con un archivo de Biomasa donde la hoja Dato
+    referenciaba códigos de Metadato que no matcheaban exacto)."""
+    faltantes = []
+    for field in modelo_cls._meta.get_fields():
+        if not getattr(field, "concrete", False) or field.auto_created:
+            continue
+        if getattr(field, "auto_now", False) or getattr(field, "auto_now_add", False):
+            continue
+        if getattr(field, "null", True) or field.has_default():
+            continue
+        if valores.get(field.name) is None:
+            faltantes.append(field.name)
+    return faltantes
+
+
 def _campos_clave_de_fila(modelo, modelo_cls, kwargs):
     """Mismo criterio de antes para decidir si una fila tiene identidad
     propia: primero un OneToOneField (p. ej. Parcela -> unidad_muestreo), y
@@ -2327,13 +2354,21 @@ def _armar_kwargs_modelo_fila(df, fila_idx, mapeos, modelo_cls, resueltos, cache
     # Vincular automáticamente los FK hacia otros modelos ya resueltos para
     # esta misma fila, aunque el usuario no haya mapeado esa columna
     # explícitamente (p. ej. Parcela se asocia solo a la UnidadMuestreo de
-    # su misma fila).
+    # su misma fila). `fk_modelo in resueltos` distingue "este modelo se
+    # procesa en la misma corrida, pero esta fila puntual no se resolvió"
+    # (p. ej. UnidadMuestreoTipo con el nombre vacío en esta fila -ver bug de
+    # IntegrityError not-null en tipo_id, 2026-11-26-) de "este modelo ni
+    # siquiera forma parte de esta importación" (p. ej. Proyecto/FuenteDatos,
+    # que el caller completa después vía kwargs.setdefault): solo lo primero
+    # debe marcar la fila incompleta si el FK es obligatorio.
     for field in modelo_cls._meta.get_fields():
         if not _es_fk(field) or field.name in kwargs:
             continue
         fk_modelo = field.related_model.__name__
         if fila_idx in resueltos.get(fk_modelo, {}):
             kwargs[field.name] = resueltos[fk_modelo][fila_idx]
+        elif fk_modelo in resueltos and not getattr(field, "null", True) and not field.has_default():
+            incompleto = True
 
     if incompleto or not kwargs:
         return None
@@ -2780,6 +2815,16 @@ def _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos, captur
 
                 obj = pendientes_nuevos.get(clave_hash)
                 if obj is None:
+                    # No existe todavía con esta identidad: antes de crearlo,
+                    # confirmar que esta fila trae TODOS los campos
+                    # obligatorios del modelo -puede faltar alguno que solo
+                    # mapea otra hoja de la misma carga (ver
+                    # _campos_obligatorios_faltantes)-. Si falta algo, la
+                    # fila queda incompleta (no se crea nada, no queda en
+                    # `resueltos`) en vez de llegar a bulk_create sin ese
+                    # campo y romper con un IntegrityError crudo.
+                    if _campos_obligatorios_faltantes(modelo_cls, {**campos_clave, **defaults}):
+                        continue
                     obj = modelo_cls(**campos_clave, **defaults)
                     pendientes_nuevos[clave_hash] = obj
                     accion_por_fila[fila_idx] = "creados"
@@ -2816,19 +2861,33 @@ def _procesar_filas(df, orden, mapeos_por_modelo, carga, resumen_modelos, captur
             if clave is not None and clave in cache_objetos:
                 obj, creado = cache_objetos[clave], False
             else:
-                try:
-                    obj, creado = modelo_cls.objects.get_or_create(**kwargs)
-                except modelo_cls.MultipleObjectsReturned:
-                    # kwargs es un subconjunto parcial de los campos del
-                    # modelo (los que esta fila trae con valor real): si dos
-                    # filas distintas ya crearon variantes que coinciden en
-                    # ese subconjunto pero difieren en un campo que esta fila
-                    # no trae, el filtro parcial matchea a más de uno. No hay
-                    # forma de saber cuál es "el correcto" con la información
-                    # de esta fila, así que se toma cualquiera de los que ya
-                    # matchean en vez de romper la carga entera.
-                    obj = modelo_cls.objects.filter(**kwargs).first()
-                    creado = False
+                # Antes de get_or_create: si no existe todavía un objeto que
+                # matchee este kwargs parcial Y a la fila le falta algún
+                # campo obligatorio del modelo (p. ej. UnidadMuestreo.tipo,
+                # que esta fila no trae porque viene de una hoja -Dato- que
+                # no lo mapea, y la hoja que sí lo mapea -Metadato- no creó
+                # el objeto antes, p. ej. por un codigo_metadato que no
+                # matchea exacto entre hojas), no se puede crear sin romper
+                # un not-null de la BD: la fila queda incompleta en vez de
+                # intentarlo (ver _campos_obligatorios_faltantes).
+                obj = modelo_cls.objects.filter(**kwargs).first()
+                creado = False
+                if obj is None:
+                    if _campos_obligatorios_faltantes(modelo_cls, kwargs):
+                        continue
+                    try:
+                        obj, creado = modelo_cls.objects.get_or_create(**kwargs)
+                    except modelo_cls.MultipleObjectsReturned:
+                        # kwargs es un subconjunto parcial de los campos del
+                        # modelo (los que esta fila trae con valor real): si dos
+                        # filas distintas ya crearon variantes que coinciden en
+                        # ese subconjunto pero difieren en un campo que esta fila
+                        # no trae, el filtro parcial matchea a más de uno. No hay
+                        # forma de saber cuál es "el correcto" con la información
+                        # de esta fila, así que se toma cualquiera de los que ya
+                        # matchean en vez de romper la carga entera.
+                        obj = modelo_cls.objects.filter(**kwargs).first()
+                        creado = False
                 if clave is not None:
                     cache_objetos[clave] = obj
             resueltos[modelo][fila_idx] = obj
